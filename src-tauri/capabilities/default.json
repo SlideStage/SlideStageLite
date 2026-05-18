@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Baseline capabilities: main + audience windows can manage their lifecycle, emit/listen events, and read deck files the user explicitly chose via dialog or file-association.",
+  "windows": ["main", "audience-*"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:webview:default",
+    "core:webview:allow-create-webview-window",
+    "core:event:allow-emit",
+    "core:event:allow-emit-to",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:app:allow-version",
+    "core:app:allow-name",
+    "dialog:allow-open",
+    "fs:allow-read-file",
+    "fs:default",
+    "deep-link:default"
+  ]
+}
