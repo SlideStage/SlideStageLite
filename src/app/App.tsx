@@ -1,14 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
-import {
-  ArrowRight,
-  FolderOpen,
-  KeyRound,
-  PanelsTopLeft,
-  Presentation,
-  ShieldCheck,
-  Sparkles,
-  Wand2,
-} from 'lucide-react';
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { PanelsTopLeft, ShieldCheck, Sparkles, UploadCloud, Wand2 } from 'lucide-react';
 import { loadDeck } from '../deck/loadDeck';
 import {
   BASE_SANDBOX_TOKEN,
@@ -31,27 +22,6 @@ import { ConverterPanel } from './ConverterPanel';
 import { Footer } from './Footer';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { TrustPrompt } from './TrustPrompt';
-
-interface Benefit {
-  icon: typeof Sparkles;
-  /** i18n message key suffix below `landing.benefit.<id>.title`. */
-  id:
-    | 'local'
-    | 'trust'
-    | 'presenter'
-    | 'converter'
-    | 'privacy'
-    | 'twin';
-}
-
-const benefits: Benefit[] = [
-  { icon: FolderOpen, id: 'local' },
-  { icon: ShieldCheck, id: 'trust' },
-  { icon: Presentation, id: 'presenter' },
-  { icon: Wand2, id: 'converter' },
-  { icon: KeyRound, id: 'privacy' },
-  { icon: Sparkles, id: 'twin' },
-];
 
 interface PendingTrust {
   deck: LoadedDeck;
@@ -85,6 +55,7 @@ export function App() {
   const [status, setStatus] = useState<'idle' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showConverter, setShowConverter] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   // Sticky banner shown when a deck was auto-elevated to
   // `same-origin-storage` because it exceeded the inline budget.
   // null when not auto-elevated; a {bytes} formatted message otherwise.
@@ -94,16 +65,6 @@ export function App() {
   // Lazily-resolved SW client. We cache the resolution so every
   // `openDeckFile` only awaits the registration once.
   const transportPromiseRef = useRef<Promise<DeckAssetTransport | null> | null>(null);
-  const localizedBenefits = useMemo(
-    () =>
-      benefits.map(({ icon, id }) => ({
-        icon,
-        id,
-        title: t(`landing.benefit.${id}.title`),
-        description: t(`landing.benefit.${id}.desc`),
-      })),
-    [t],
-  );
 
   useEffect(() => {
     deckRef.current = deck;
@@ -262,6 +223,25 @@ export function App() {
     } finally {
       event.target.value = '';
     }
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    if (!isDragOver) setIsDragOver(true);
+  };
+
+  const handleDragLeave = (event: DragEvent<HTMLLabelElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+    setIsDragOver(false);
+  };
+
+  const handleDrop = async (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    setIsDragOver(false);
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    await openDeckFile(file);
   };
 
   const handleSampleDeck = async () => {
@@ -453,52 +433,62 @@ export function App() {
 
       <main className="app-main">
         <div className="landing" data-testid="landing">
-          <section className="landing-hero" aria-labelledby="hero-title">
-            <span className="landing-eyebrow">
-              <span className="landing-eyebrow-dot" aria-hidden />
-              {t('landing.eyebrow')}
-            </span>
-            <h1 id="hero-title" className="landing-headline">
-              {t('landing.headline.before')}{' '}
-              <em>{t('landing.headline.token')}</em>{' '}
-              {t('landing.headline.after')}
-            </h1>
-            <p className="landing-subhead">{t('landing.subhead')}</p>
-
-            <div className="landing-actions">
-              <label
-                className="btn cta lg file-button"
-                data-testid="open-deck-button"
+          <section
+            className="landing-dropzone-section"
+            aria-labelledby="open-deck-label"
+          >
+            <label
+              className={`landing-dropzone${isDragOver ? ' is-drag-over' : ''}`}
+              data-testid="open-deck-button"
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <span className="landing-dropzone-icon" aria-hidden>
+                <UploadCloud size={28} strokeWidth={1.8} />
+              </span>
+              <span
+                id="open-deck-label"
+                className="landing-dropzone-headline"
               >
-                <span>{t('landing.cta.open')}</span>
-                <ArrowRight className="btn-icon" aria-hidden size={18} />
-                <input
-                  type="file"
-                  accept=".stage,application/zip"
-                  onChange={handleFileChange}
-                />
-              </label>
+                {isDragOver
+                  ? t('landing.dropzone.dragging')
+                  : t('landing.dropzone.idle')}
+              </span>
+              <span className="landing-dropzone-help">
+                {t('landing.dropzone.help')}
+              </span>
+              <input
+                type="file"
+                accept=".stage,application/zip"
+                aria-label={t('landing.cta.open')}
+                onChange={handleFileChange}
+              />
+            </label>
+
+            <div className="landing-secondary-actions">
               <button
                 type="button"
-                className="btn ghost lg"
+                className="btn ghost"
+                onClick={handleSampleDeck}
+                data-testid="open-sample-button"
+              >
+                <Sparkles className="btn-icon" aria-hidden size={14} />
+                {t('landing.cta.sample')}
+              </button>
+              <button
+                type="button"
+                className="btn ghost"
                 onClick={() => setShowConverter((value) => !value)}
                 aria-expanded={showConverter}
                 aria-controls="converter-panel"
                 data-testid="converter-toggle"
               >
-                <Wand2 className="btn-icon" aria-hidden size={16} />
+                <Wand2 className="btn-icon" aria-hidden size={14} />
                 {showConverter
                   ? t('landing.cta.convert.hide')
                   : t('landing.cta.convert.show')}
-              </button>
-              <button
-                type="button"
-                className="btn ghost lg"
-                onClick={handleSampleDeck}
-                data-testid="open-sample-button"
-              >
-                <Sparkles className="btn-icon" aria-hidden size={16} />
-                {t('landing.cta.sample')}
               </button>
             </div>
 
@@ -534,24 +524,6 @@ export function App() {
               />
             </div>
           ) : null}
-
-          <section
-            className="landing-benefits"
-            aria-labelledby="benefits-title"
-          >
-            <h2 id="benefits-title" className="visually-hidden">
-              {t('landing.sectionTitle')}
-            </h2>
-            {localizedBenefits.map(({ icon: Icon, id, title, description }) => (
-              <article className="benefit" key={id}>
-                <span className="benefit-icon" aria-hidden>
-                  <Icon size={18} />
-                </span>
-                <h3>{title}</h3>
-                <p>{description}</p>
-              </article>
-            ))}
-          </section>
         </div>
       </main>
 

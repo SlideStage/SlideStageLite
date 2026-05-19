@@ -26,37 +26,15 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'language.aria': 'Interface language',
     'language.menu': 'Language',
 
-    'landing.eyebrow': 'Twin of SlideStagePro · v0.1',
-    'landing.headline.before': 'Open, present, and convert',
-    'landing.headline.token': '.stage',
-    'landing.headline.after': 'decks — right in your browser.',
-    'landing.subhead':
-      'A pure-frontend runtime for the open .stage container. Sandboxed iframe presentation, presenter tools, annotations, and a live HTML deck converter — no login, no backend, no upload.',
+    'landing.dropzone.idle': 'Open a .stage deck',
+    'landing.dropzone.dragging': 'Release to open',
+    'landing.dropzone.help':
+      'Drop a .stage file here, or click to choose one from disk.',
     'landing.cta.open': 'Open .stage',
     'landing.cta.convert.show': 'Convert from HTML deck',
     'landing.cta.convert.hide': 'Hide converter',
     'landing.cta.sample': 'Open sample deck',
     'landing.status.loading': 'Loading deck…',
-    'landing.sectionTitle': 'Capabilities',
-
-    'landing.benefit.local.title': 'Local .stage loader',
-    'landing.benefit.local.desc':
-      'Open a .stage package straight from disk. Manifest validation, asset extraction, and font warmup all run in your tab — no upload required.',
-    'landing.benefit.trust.title': 'Per-deck trust prompts',
-    'landing.benefit.trust.desc':
-      'Sandboxed iframes by default. Decks that declare extra browser capabilities (storage, BroadcastChannel, popups) ask for explicit per-deck consent.',
-    'landing.benefit.presenter.title': 'PowerPoint-grade presenter tools',
-    'landing.benefit.presenter.desc':
-      'Speaker view, overview grid, annotations, laser/spotlight, persistent ink, and a second-screen audience window. All local, all keyboard-driven.',
-    'landing.benefit.converter.title': 'Live HTML → .stage converter',
-    'landing.benefit.converter.desc':
-      'Drag in an html-ppt-skill / huashu-design / plain HTML deck and the converter packs it into a strict .stage while you watch.',
-    'landing.benefit.privacy.title': 'No server. No accounts.',
-    'landing.benefit.privacy.desc':
-      'Runtime state — notes edits, annotations, trust grants — lives in your browser. Close the tab and your data stays with you.',
-    'landing.benefit.twin.title': 'Twin to SlideStagePro',
-    'landing.benefit.twin.desc':
-      'Same design tokens, same .stage contract, same presenter ergonomics. Lite is the local-first sibling of the self-hosted Pro platform.',
 
     'errors.loadDeckFallback': 'Failed to load the selected deck.',
     'errors.sampleMissing': 'Sample fixture is missing. Run pnpm fixtures and reload.',
@@ -253,6 +231,7 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
       'Pop a new browser window or tab (for presenter / audience splits, external previews, or hand-offs).',
 
     'footer.local': 'Runs locally · no server',
+    'footer.site': 'slidestage.dev',
   },
 
   'zh-CN': {
@@ -264,37 +243,15 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'language.aria': '界面语言',
     'language.menu': '语言',
 
-    'landing.eyebrow': 'SlideStagePro 双子星 · v0.1',
-    'landing.headline.before': '打开、演示、转换',
-    'landing.headline.token': '.stage',
-    'landing.headline.after': '演示包 —— 全程在你的浏览器内完成。',
-    'landing.subhead':
-      '面向开放 .stage 容器的纯前端运行时。沙箱化 iframe 播放、演讲者工具、批注、以及实时 HTML → .stage 转换器 —— 无需登录，无需后端，无需上传。',
+    'landing.dropzone.idle': '打开 .stage 演示包',
+    'landing.dropzone.dragging': '松开以打开',
+    'landing.dropzone.help':
+      '把 .stage 文件拖到此处，或点击从磁盘选择。',
     'landing.cta.open': '打开 .stage',
     'landing.cta.convert.show': '转换 HTML 演示',
     'landing.cta.convert.hide': '收起转换器',
     'landing.cta.sample': '打开示例演示',
     'landing.status.loading': '正在加载演示…',
-    'landing.sectionTitle': '能力一览',
-
-    'landing.benefit.local.title': '本地 .stage 加载',
-    'landing.benefit.local.desc':
-      '直接从磁盘打开 .stage 包。清单校验、资源解包、字体预热全部在本标签页里完成 —— 无需上传。',
-    'landing.benefit.trust.title': '按包询问的信任授权',
-    'landing.benefit.trust.desc':
-      '默认沙箱化 iframe。如果演示声明了额外的浏览器能力（存储、BroadcastChannel、弹窗），会请求针对该演示的显式授权。',
-    'landing.benefit.presenter.title': 'PowerPoint 级演讲者工具',
-    'landing.benefit.presenter.desc':
-      '演讲者视图、概览栅格、批注、激光/聚光、持久墨迹，以及第二屏观众窗口。全部本地运行，全键盘可控。',
-    'landing.benefit.converter.title': '实时 HTML → .stage 转换器',
-    'landing.benefit.converter.desc':
-      '把 html-ppt-skill / huashu-design / 普通 HTML 演示拖进来，转换器即刻打包成严格的 .stage。',
-    'landing.benefit.privacy.title': '无服务端，无账号',
-    'landing.benefit.privacy.desc':
-      '所有运行时状态 —— 备注编辑、批注、信任授权 —— 都留在你的浏览器里。关掉标签页，数据也跟你走。',
-    'landing.benefit.twin.title': 'SlideStagePro 的双子星',
-    'landing.benefit.twin.desc':
-      '相同的设计令牌、相同的 .stage 协议、相同的演讲者手感。Lite 是自托管 Pro 平台的本地优先孪生版本。',
 
     'errors.loadDeckFallback': '无法加载所选演示包。',
     'errors.sampleMissing': '示例 fixture 缺失，请运行 pnpm fixtures 后刷新。',
@@ -483,6 +440,7 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
       '弹出新的浏览器窗口或标签页（用于演讲者/观众分屏、外部预览或交接）。',
 
     'footer.local': '本地运行 · 无服务端',
+    'footer.site': 'slidestage.dev',
   },
 };
 

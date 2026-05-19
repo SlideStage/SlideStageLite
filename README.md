@@ -36,7 +36,7 @@ capability list. Lite is a faithful runtime for that container that:
 
 | Surface | What it does |
 |---|---|
-| **Landing** | One-click deck picker, drag-in HTML→`.stage` converter, six benefit cards, language switcher. |
+| **Landing** | Minimal "instant-tool" surface: a centered dropzone that opens `.stage` files (drop or click), with two secondary actions below (open a sample deck, toggle the HTML→`.stage` converter) and an English / 简体中文 switcher. The full product pitch lives on [slidestage.dev](https://slidestage.dev). |
 | **DeckViewer (single-window)** | Fullscreen black stage with auto-hide presenter toolbar at the bottom — pen, highlighter, eraser, laser, spotlight, blackout/whiteout, undo/clear, persistent color palette. |
 | **PresenterView (multi-window)** | Resizable side panel with up-next thumbnail, timer, audience-window status, plus a resizable speaker-notes drawer. Notes are editable per slide and persist to `localStorage`. |
 | **AudienceView (popup)** | Second-screen output that mirrors strokes, slide index, blackout, spotlight, and pointer in real time via `BroadcastChannel`. |
