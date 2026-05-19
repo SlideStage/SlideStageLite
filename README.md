@@ -3,7 +3,7 @@
 > Open, present, and convert `.hcslides` decks — right in your browser.
 > Zero backend. Zero accounts. Zero upload.
 
-SlidesDeckLite is the **local-first sibling** of [SlidesDeckPro](https://github.com/hcliu/SlidesDeckPro)
+SlidesDeckLite is the **local-first sibling** of [SlidesDeckPro](https://github.com/SlideStage/SlidesDeckPro)
 (self-hosted platform). They share design tokens, the `.hcslides` container
 contract, and the presenter ergonomics — Lite just trades the server for a
 single static bundle you can run from `file://`, GitHub Pages, Netlify,
