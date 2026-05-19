@@ -9,7 +9,7 @@
     "dev": "vite",
     "prebuild": "pnpm fixtures",
     "build": "tsc -b && vite build",
-    "preview": "vite preview",
+    "preview": "pnpm run build && wrangler dev",
     "typecheck": "tsc -b --noEmit",
     "fixtures": "node scripts/build-fixtures.mjs",
     "convert": "tsx bin/convert.ts",
@@ -24,7 +24,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "tauri:smoke": "node scripts/desktop-smoke.mjs"
+    "tauri:smoke": "node scripts/desktop-smoke.mjs",
+    "deploy": "pnpm run build && wrangler deploy"
   },
   "engines": {
     "node": ">=20"
@@ -43,6 +44,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.37.2",
     "@playwright/test": "^1.60.0",
     "@tauri-apps/cli": "^2.11.1",
     "@testing-library/react": "^16.3.2",
@@ -55,6 +57,7 @@
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.12",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.6",
+    "wrangler": "^4.93.0"
   }
 }
