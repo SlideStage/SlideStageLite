@@ -66,10 +66,16 @@ afterEach(() => {
 });
 
 describe('Footer (landing chrome)', () => {
-  it('renders only the local-runtime status when no env is set', () => {
+  it('renders the local-runtime status and slidestage.dev link when no env is set', () => {
     render('en');
     expect(q('app-footer')).not.toBeNull();
     expect(q('app-footer-status')?.textContent).toMatch(/Runs locally/);
+    const site = q('app-footer-site');
+    expect(site).not.toBeNull();
+    expect(site?.getAttribute('href')).toBe('https://slidestage.dev/');
+    expect(site?.getAttribute('target')).toBe('_blank');
+    expect(site?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(site?.textContent).toContain('slidestage.dev');
     expect(q('app-footer-icp')).toBeNull();
     expect(q('app-footer-mps')).toBeNull();
   });

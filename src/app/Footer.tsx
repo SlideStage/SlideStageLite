@@ -19,9 +19,11 @@
  * — the deck-open viewer and the audience window stay pristine so neither
  * the presenter's stage nor the projected audience output gets occluded.
  */
+import { ExternalLink } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 
 const DEFAULT_ICP_URL = 'https://beian.miit.gov.cn/';
+const SLIDESTAGE_SITE_URL = 'https://slidestage.dev/';
 
 function trimmed(value: string | undefined): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -49,6 +51,20 @@ export function Footer() {
           <span className="app-footer-dot" aria-hidden />
           {t('footer.local')}
         </span>
+
+        <span className="app-footer-sep" aria-hidden>
+          ·
+        </span>
+        <a
+          className="app-footer-link"
+          href={SLIDESTAGE_SITE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="app-footer-site"
+        >
+          {t('footer.site')}
+          <ExternalLink size={11} strokeWidth={2.2} aria-hidden />
+        </a>
 
         {showIcp ? (
           <>
