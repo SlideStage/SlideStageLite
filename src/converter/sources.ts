@@ -84,7 +84,7 @@ export function normalizeSource(source: SourceFile): NormalizedSource {
     } catch {
       throw new DeckLoadError(
         'E_NOT_ZIP',
-        'The selected source is not a readable .html or .zip / .hcslides archive.',
+        'The selected source is not a readable .html or .zip / .stage archive.',
       );
     }
     entries = normalizeEntries(raw);

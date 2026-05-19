@@ -34,7 +34,22 @@ export function isExternalReference(value: string): boolean {
   const trimmed = value.trim();
   return (
     trimmed.startsWith('#') ||
-    trimmed.startsWith('//') ||
+    // Any absolute path: `//foo` (scheme-relative URLs) and `/foo`
+    // (host-rooted paths). Both forms cannot be package-relative —
+    // the loader rejects `/`-leading entries in `normalizePackagePath`
+    // — so we treat them as external and leave them alone.
+    //
+    // This matters specifically for the rewriter's @import-inline
+    // pass: after `@import url("../assets/_mirror/css/foo.css")` is
+    // spliced inline, the inner CSS body's `url("../font/x.ttf")`
+    // is recursively rewritten to the package-virtual URL
+    // `/__stage/<id>/assets/_mirror/font/x.ttf`. The outer pass
+    // then walks the spliced text again — without this guard
+    // it would mistakenly treat that absolute URL as a relative
+    // path and double-prefix it to
+    // `/__stage/<id>/shared/__stage/<id>/assets/_mirror/font/x.ttf`,
+    // causing every CJK font to 404.
+    trimmed.startsWith('/') ||
     trimmed.startsWith('data:') ||
     trimmed.startsWith('blob:') ||
     trimmed.startsWith('mailto:') ||

@@ -13,7 +13,7 @@ function manifestForSlides(
   slides: Array<{ index: number; id: string; file: string }>,
 ): Manifest {
   return {
-    schema: 'hcslides@1.0',
+    schema: 'slidestage@1.0',
     id: 'mirror-test',
     version: '1.0.0',
     title: 'Mirror Test',

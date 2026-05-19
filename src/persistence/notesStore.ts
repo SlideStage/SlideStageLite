@@ -1,4 +1,4 @@
-const keyPrefix = 'hcslides-lite:notes:';
+const keyPrefix = 'slidestage-lite:notes:';
 
 export type StoredNotes = Record<number, string>;
 

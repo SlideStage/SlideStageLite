@@ -20,12 +20,37 @@ export interface AudiencePresentationState {
 
 export type SerializedAudienceDeck = Pick<
   LoadedDeck,
-  'fileName' | 'fingerprint' | 'manifest' | 'slideUrls' | 'slideHtml' | 'thumbnailUrls'
+  | 'fileName'
+  | 'fingerprint'
+  | 'deckId'
+  | 'manifest'
+  | 'slideUrls'
+  | 'slideHtml'
+  | 'thumbnailUrls'
+  | 'prefersSrcdoc'
+  // Required so the audience window can apply the same srcdoc-vs-src
+  // decision as the presenter. Without `inlinedHtmlAvailable` the
+  // audience falls back to `undefined` (falsy) which forces `src` even
+  // for small decks that *should* render via srcdoc — and the audience
+  // iframe sandbox lacks `allow-same-origin` for untrusted decks, so
+  // the SW never intercepts and the slide ends up 404'd.
+  | 'inlinedHtmlAvailable'
+  | 'totalAssetBytes'
 >;
 
 export interface AudienceSnapshot {
   deck: SerializedAudienceDeck;
   presentation: AudiencePresentationState;
+  /**
+   * Sandbox token string the presenter is using for its own iframe.
+   * The audience MUST mirror this — otherwise auto-elevated decks
+   * (where the App layer silently granted `same-origin-storage` to
+   * dodge the OOM path) end up with an opaque-origin audience iframe
+   * that the Service Worker can't intercept, yielding an empty
+   * window. Optional only so older clients that didn't ship this
+   * field still produce a parseable snapshot.
+   */
+  iframeSandbox?: string;
 }
 
 export type AudienceMessage =
@@ -35,7 +60,7 @@ export type AudienceMessage =
   | { type: 'snapshot'; snapshot: AudienceSnapshot }
   | { type: 'presentation'; presentation: AudiencePresentationState };
 
-export const DEFAULT_AUDIENCE_CHANNEL = 'hcslides-lite-audience';
+export const DEFAULT_AUDIENCE_CHANNEL = 'slidestage-lite-audience';
 
 export function presentationChannelName(deckFingerprint?: string | null): string {
   if (!deckFingerprint) return DEFAULT_AUDIENCE_CHANNEL;
@@ -60,14 +85,25 @@ export function serializeAudienceDeck(deck: LoadedDeck): SerializedAudienceDeck 
   return {
     fileName: deck.fileName,
     fingerprint: deck.fingerprint,
+    deckId: deck.deckId,
     manifest: deck.manifest,
-    // We must ship `slideHtml` alongside `slideUrls` because the desktop
-    // audience window cannot navigate to a blob URL that was minted in
-    // the presenter window's origin context — it has to render the
-    // slide via srcdoc instead.
+    // We ship both flavors so the audience renderer can match the
+    // presenter's choice:
+    //   - `slideUrls` are same-origin virtual URLs when a Service
+    //     Worker hosts the deck (both presenter and audience tabs
+    //     share the same SW under the same origin, so the URLs Just
+    //     Work in the audience window too).
+    //   - `slideHtml` carries the self-contained data-URL flavor used
+    //     when `prefersSrcdoc` is true (Tauri WKWebView and
+    //     service-worker-unavailable Web hosts).
     slideUrls: deck.slideUrls,
     slideHtml: deck.slideHtml,
     thumbnailUrls: deck.thumbnailUrls,
+    prefersSrcdoc: deck.prefersSrcdoc,
+    // Must travel with the snapshot so the audience window picks the
+    // same src-vs-srcdoc strategy as the presenter. See type above.
+    inlinedHtmlAvailable: deck.inlinedHtmlAvailable,
+    totalAssetBytes: deck.totalAssetBytes,
   };
 }
 

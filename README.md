@@ -1,10 +1,10 @@
-# SlidesDeckLite
+# SlideStageLite
 
-> Open, present, and convert `.hcslides` decks — right in your browser.
+> Open, present, and convert `.stage` decks — right in your browser.
 > Zero backend. Zero accounts. Zero upload.
 
-SlidesDeckLite is the **local-first sibling** of [SlidesDeckPro](https://github.com/SlideStage/SlidesDeckPro)
-(self-hosted platform). They share design tokens, the `.hcslides` container
+SlideStageLite is the **local-first sibling** of [SlideStagePro](https://github.com/SlideStage/SlideStagePro)
+(self-hosted platform). They share design tokens, the `.stage` container
 contract, and the presenter ergonomics — Lite just trades the server for a
 single static bundle you can run from `file://`, GitHub Pages, Netlify,
 Vercel, an internal Nginx, or anywhere else that serves static files.
@@ -13,11 +13,11 @@ Vercel, an internal Nginx, or anywhere else that serves static files.
 
 ---
 
-## Why SlidesDeckLite?
+## Why SlideStageLite?
 
 Most slide tools force a tradeoff between **fidelity** (raw HTML/CSS/JS
 animations) and **portability** (a single file you can hand off). The
-`.hcslides` container resolves that: a zipped folder of static slide HTML
+`.stage` container resolves that: a zipped folder of static slide HTML
 + a strict manifest, signed by a fingerprint and gated by an explicit
 capability list. Lite is a faithful runtime for that container that:
 
@@ -27,7 +27,7 @@ capability list. Lite is a faithful runtime for that container that:
 - ships PowerPoint-grade presenter tools (speaker view, overview grid,
   laser, spotlight, persistent ink, second-screen audience window);
 - converts an `html-ppt-skill` / `huashu-design` deck or a plain HTML
-  file into a `.hcslides` package without leaving the tab;
+  file into a `.stage` package without leaving the tab;
 - speaks both English and 简体中文 out of the box.
 
 ---
@@ -36,12 +36,12 @@ capability list. Lite is a faithful runtime for that container that:
 
 | Surface | What it does |
 |---|---|
-| **Landing** | One-click deck picker, drag-in HTML→`.hcslides` converter, six benefit cards, language switcher. |
+| **Landing** | One-click deck picker, drag-in HTML→`.stage` converter, six benefit cards, language switcher. |
 | **DeckViewer (single-window)** | Fullscreen black stage with auto-hide presenter toolbar at the bottom — pen, highlighter, eraser, laser, spotlight, blackout/whiteout, undo/clear, persistent color palette. |
 | **PresenterView (multi-window)** | Resizable side panel with up-next thumbnail, timer, audience-window status, plus a resizable speaker-notes drawer. Notes are editable per slide and persist to `localStorage`. |
 | **AudienceView (popup)** | Second-screen output that mirrors strokes, slide index, blackout, spotlight, and pointer in real time via `BroadcastChannel`. |
 | **Trust prompts** | If a deck declares `compat.requires`, Lite blocks rendering until you explicitly grant the listed capabilities for *that* fingerprint. |
-| **Converter** | Drop a folder, `.html`, `.zip`, or `.hcslides`; pick a conversion mode (auto / split / wrap / single / passthrough); download a strict `.hcslides`. |
+| **Converter** | Drop a folder, `.html`, `.zip`, or `.stage`; pick a conversion mode (auto / split / wrap / single / passthrough); download a strict `.stage`. |
 | **i18n** | English + Simplified Chinese, full key parity enforced by tests. URL `?lang=` / `localStorage` / `navigator.language*` resolution. |
 
 ---
@@ -51,8 +51,8 @@ capability list. Lite is a faithful runtime for that container that:
 Requirements: **Node ≥ 20**, **pnpm 10.28+**.
 
 ```bash
-git clone https://github.com/<you>/SlidesDeckLite.git
-cd SlidesDeckLite
+git clone https://github.com/SlideStage/SlideStageLite.git
+cd SlideStageLite
 
 pnpm install
 pnpm dev                     # http://localhost:5173/
@@ -74,7 +74,7 @@ pnpm build                   # tsc -b && vite build → dist/
 
 ## Deploy to Production
 
-SlidesDeckLite builds to a vanilla static bundle (`dist/index.html`,
+SlideStageLite builds to a vanilla static bundle (`dist/index.html`,
 `dist/assets/*`). Any static host works.
 
 ### 1. Configure environment (optional)
@@ -108,12 +108,12 @@ Generic recipe:
 
 ```bash
 # Vercel / Netlify drag-and-drop:
-#   Project root: SlidesDeckLite
+#   Project root: SlideStageLite
 #   Build command: pnpm build
 #   Output directory: dist
 
 # Nginx (or any plain webroot):
-rsync -av --delete dist/ user@host:/var/www/slidesdecklite/
+rsync -av --delete dist/ user@host:/var/www/slidestagelite/
 
 # GitHub Pages:
 pnpm build
@@ -144,18 +144,18 @@ contract, the `#` quoting pitfall, and a post-build sanity check.
 ## Architecture (Repo Map)
 
 ```
-SlidesDeckLite/
+SlideStageLite/
 ├── src/
 │   ├── app/                  # Top-level SPA shell (App, Footer, LanguageSwitcher, ConverterPanel, TrustPrompt)
-│   ├── deck/                 # .hcslides loader + capability sandboxing
-│   ├── converter/            # html-ppt-skill / huashu / plain HTML → .hcslides packer
+│   ├── deck/                 # .stage loader + capability sandboxing
+│   ├── converter/            # html-ppt-skill / huashu / plain HTML → .stage packer
 │   ├── viewer/               # DeckViewer + DeckStage + AudienceView
 │   ├── presenter/            # Toolbar, AnnotationOverlay, LaserPointer, Spotlight, Blackout, BroadcastChannel sync hook
 │   ├── persistence/          # localStorage wrappers (notes, annotations, trust grants)
 │   ├── i18n/                 # I18nProvider + en/zh-CN dictionaries
 │   ├── styles/globals.css    # Design tokens + every component class (CSS only, no Tailwind)
 │   └── main.tsx              # ReactDOM bootstrap
-├── bin/convert.ts            # `pnpm convert` CLI (folder/HTML/zip → .hcslides)
+├── bin/convert.ts            # `pnpm convert` CLI (folder/HTML/zip → .stage)
 ├── scripts/build-fixtures.mjs  # Deterministic test fixtures
 ├── public/                   # Static assets (mpslogo.png for 公安备案 chip, fixtures/ generated at predev/prebuild)
 ├── design-system/            # MASTER design spec (tokens, components, anti-patterns)
@@ -164,7 +164,7 @@ SlidesDeckLite/
 └── .env.example              # Beian env template — copy to .env on your deploy
 ```
 
-### Twin Contract with SlidesDeckPro
+### Twin Contract with SlideStagePro
 
 `src/styles/tokens.test.ts` reads `globals.css` on disk and asserts that
 every design token (color, radius, shadow, typography) Lite borrows from
@@ -178,9 +178,9 @@ two products is prevented at CI time.
 
 ```bash
 pnpm dev          # Vite dev server
-pnpm fixtures     # Regenerate deterministic .hcslides fixtures (auto-runs on pre{dev,build,test})
-pnpm convert      # CLI: pack a folder / html / zip into .hcslides
-pnpm mirror       # CLI: pre-download external assets into a .hcslides (offline pass)
+pnpm fixtures     # Regenerate deterministic .stage fixtures (auto-runs on pre{dev,build,test})
+pnpm convert      # CLI: pack a folder / html / zip into .stage
+pnpm mirror       # CLI: pre-download external assets into a .stage (offline pass)
 pnpm typecheck    # tsc -b --noEmit
 pnpm test:unit    # vitest (jsdom + react-dom)
 pnpm test:e2e     # playwright chromium
@@ -191,29 +191,29 @@ pnpm preview      # serve dist/ for a smoke check
 
 ### `pnpm mirror`: pre-download external assets for offline-first decks
 
-`pnpm mirror` takes a `.hcslides` package and folds every reachable
+`pnpm mirror` takes a `.stage` package and folds every reachable
 `https://` image / font / CSS / video / audio into the archive itself,
 rewriting slide HTML so the deck plays back identically with **no network
-access**. The output is a new `.hcslides` that ships a `manifest.offline`
+access**. The output is a new `.stage` that ships a `manifest.offline`
 block — the same structure both Lite and Pro use to render the *"Offline
 ready"* badge.
 
 ```bash
 # Basic usage: write a new package next to the input.
-pnpm mirror ./deck.hcslides -o ./deck.offline.hcslides
+pnpm mirror ./deck.stage -o ./deck.offline.stage
 
 # Allow external <script>/<iframe> too (off by default; only enable for
 # trusted sources because mirrored scripts run inside the deck sandbox).
-pnpm mirror ./deck.hcslides -o ./deck.offline.hcslides \
+pnpm mirror ./deck.stage -o ./deck.offline.stage \
   --include-scripts --include-iframes
 
 # Tighter per-asset and per-pass budgets (defaults: 50 MiB / 500 MiB).
-pnpm mirror ./deck.hcslides -o ./deck.offline.hcslides \
+pnpm mirror ./deck.stage -o ./deck.offline.stage \
   --max-asset-bytes 10485760 --max-total-bytes 209715200
 
 # Emit a sibling Markdown report listing every mirrored URL and every
 # skip reason — handy for security review before publishing.
-pnpm mirror ./deck.hcslides -o ./deck.offline.hcslides \
+pnpm mirror ./deck.stage -o ./deck.offline.stage \
   --report ./mirror-report.md
 ```
 
@@ -257,10 +257,10 @@ pnpm test
 ## Contributing
 
 PRs and issues welcome — please read
-[`design-system/slidesdecklite/MASTER.md`](design-system/slidesdecklite/MASTER.md)
+[`design-system/slidestagelite/MASTER.md`](design-system/slidestagelite/MASTER.md)
 before touching anything visual; Lite intentionally has a **single**
 button system, a fixed token palette, and a "no emoji as icon"
-anti-pattern list. The twin contract with SlidesDeckPro is enforced by
+anti-pattern list. The twin contract with SlideStagePro is enforced by
 unit tests, so design drift fails CI.
 
 For Chinese mainland deploys, follow

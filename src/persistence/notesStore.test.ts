@@ -23,14 +23,14 @@ describe('notesStore', () => {
 
   it('ignores entries with non-integer keys or non-string values', () => {
     window.localStorage.setItem(
-      'hcslides-lite:notes:' + FINGERPRINT,
+      'slidestage-lite:notes:' + FINGERPRINT,
       JSON.stringify({ '0': 'ok', foo: 'bad', '1': 123, '2': null, '3': 'good' }),
     );
     expect(loadNotes(FINGERPRINT)).toEqual({ 0: 'ok', 3: 'good' });
   });
 
   it('returns an empty object when the stored payload is corrupt', () => {
-    window.localStorage.setItem('hcslides-lite:notes:' + FINGERPRINT, '{not json');
+    window.localStorage.setItem('slidestage-lite:notes:' + FINGERPRINT, '{not json');
     expect(loadNotes(FINGERPRINT)).toEqual({});
   });
 

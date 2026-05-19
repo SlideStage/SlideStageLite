@@ -23,10 +23,11 @@ function makePresenterState(overrides: Partial<PresenterState> = {}): PresenterS
 function makeDeck(overrides: Partial<LoadedDeck> = {}): LoadedDeck {
   const revoke = vi.fn();
   return {
-    fileName: 'fixture.hcslides',
+    fileName: 'fixture.stage',
     fingerprint: 'fingerprint-xyz',
+    deckId: 'fingerprintxyz12',
     manifest: {
-      schema: 'hcslides@1.0',
+      schema: 'slidestage@1.0',
       id: 'fixture-deck',
       version: '1.0.0',
       title: 'Fixture',
@@ -52,6 +53,9 @@ function makeDeck(overrides: Partial<LoadedDeck> = {}): LoadedDeck {
     slideUrls: ['blob:fake'],
     slideHtml: ['<!doctype html><html><body>fake</body></html>'],
     thumbnailUrls: [null],
+    prefersSrcdoc: false,
+    inlinedHtmlAvailable: true,
+    totalAssetBytes: 0,
     revoke,
     ...overrides,
   };
@@ -117,7 +121,28 @@ describe('serializeAudienceDeck / deserializeAudienceDeck', () => {
     const restored = deserializeAudienceDeck(snapshot);
     expect(restored.fileName).toBe(deck.fileName);
     expect(restored.manifest).toBe(deck.manifest);
+    // Both oversized-deck guardrails must survive the round trip so
+    // the audience window can mirror the presenter's src-vs-srcdoc
+    // decision instead of redoing the math from the trust store.
+    expect(restored.inlinedHtmlAvailable).toBe(deck.inlinedHtmlAvailable);
+    expect(restored.totalAssetBytes).toBe(deck.totalAssetBytes);
     expect(typeof restored.revoke).toBe('function');
     expect(() => restored.revoke()).not.toThrow();
+  });
+
+  it('accepts an iframeSandbox field on the snapshot envelope', () => {
+    // The presenter ships its resolved sandbox token string so the
+    // audience window doesn't have to re-derive it from
+    // `compat.requires`. Otherwise auto-elevated decks (where the
+    // App layer silently granted `same-origin-storage` to avoid
+    // OOM-via-base64-srcdoc) end up with an opaque-origin audience
+    // iframe that the SW can't intercept, leaving the popup blank.
+    const deck = makeDeck();
+    const snapshot: AudienceSnapshot = {
+      deck: serializeAudienceDeck(deck),
+      presentation: makeAudiencePresentation(0, makePresenterState(), null),
+      iframeSandbox: 'allow-scripts allow-same-origin',
+    };
+    expect(snapshot.iframeSandbox).toBe('allow-scripts allow-same-origin');
   });
 });

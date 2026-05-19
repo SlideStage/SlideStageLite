@@ -2,6 +2,7 @@ import type { Manifest, ManifestSlide, TrustCapability } from '../deck/types';
 import { asPlainUint8 } from './pack';
 import type { ConvertWarning } from './report';
 import type { SniffKind } from './sniffer';
+import { findSlideNotes } from './speakerNotes';
 
 const HEAD_RE = /<head\b[^>]*>([\s\S]*?)<\/head>/i;
 const TITLE_RE = /<title[^>]*>([\s\S]*?)<\/title>/i;
@@ -81,7 +82,7 @@ export function wrapSource(input: WrapInput): WrapResult {
     label: (label ?? defaultLabel(sniffKind, pageTitle)).slice(0, 256),
     file: rootHtmlPath,
     thumbnail: null,
-    notes: null,
+    notes: findSlideNotes(entries, rootHtmlPath),
   };
 
   const trustRequires = requires && requires.length > 0 ? [...requires] : [...DEFAULT_TRUST_REQUIRES];

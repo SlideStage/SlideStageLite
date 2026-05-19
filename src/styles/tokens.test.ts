@@ -1,5 +1,5 @@
 /**
- * Sanity guard for the SlidesDeckLite ↔ SlidesDeckPro "twin" contract.
+ * Sanity guard for the SlideStageLite ↔ SlideStagePro "twin" contract.
  *
  * The UI redesign (docs/UI_REDESIGN.md) pulled Lite's CSS variables, button
  * system, and major layout classes from Pro's globals.css. This test reads

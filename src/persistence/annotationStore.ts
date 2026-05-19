@@ -1,6 +1,6 @@
 import type { Stroke } from '../presenter/types';
 
-const keyPrefix = 'hcslides-lite:annotations:';
+const keyPrefix = 'slidestage-lite:annotations:';
 
 type StoredAnnotations = Record<string, Stroke[]>;
 

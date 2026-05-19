@@ -5,9 +5,20 @@ const srcsetPattern = /\bsrcset=("([^"]*)"|'([^']*)')/gi;
 const srcdocPattern = /<iframe\b([^>]*?)\bsrcdoc=("([^"]*)"|'([^']*)')([^>]*)>/gi;
 const cssUrlPattern = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^'")]*))\s*\)/gi;
 const cssImportStringPattern = /@import\s+(?:"([^"]*)"|'([^']*)')/gi;
+// @import that we recursively inline when the target CSS is bundled in
+// the deck. Both forms (url(...) and bare string) must match; the
+// trailing semicolon is optional because some toolchains strip it.
+// Media-query suffixes (e.g. `@import "foo" screen;`) are not captured
+// here — those still hit the URL-rewrite fallback below and stay as
+// `@import "data:..."` references, accepting the data-URL relative-
+// path loss for the rare media-conditional case.
+const cssImportInlinePattern =
+  /@import\s+(?:url\(\s*(?:"([^"]*)"|'([^']*)'|([^'")]*))\s*\)|"([^"]*)"|'([^']*)')\s*;?/gi;
 const linkTagPattern = /<link\b[^>]*>/gi;
 const baseTagPattern = /<base\b[^>]*>/gi;
-const inlineStyleTagPattern = /<style\s+data-hcslides-inline-css="([^"]+)">([\s\S]*?)<\/style>/gi;
+const inlineStyleTagPattern = /<style\s+data-slidestage-inline-css="([^"]+)">([\s\S]*?)<\/style>/gi;
+
+const IMPORT_INLINE_DEPTH = 8;
 
 type UrlLookup = (path: string) => string | null;
 type TextLookup = (path: string) => string | null;
@@ -36,8 +47,94 @@ function rewriteSrcset(fromPath: string, value: string, lookup: UrlLookup): stri
     .join(', ');
 }
 
-function rewriteCssBody(css: string, fromPath: string, lookup: UrlLookup): string {
-  const afterUrls = css.replace(
+// Recursively inline `@import` references whose targets are
+// package-local CSS files. Why this matters: the rewriteCssBody pass
+// below only rewrites the URL inside `@import url(...)` — i.e.
+// `@import url("../assets/_mirror/css/foo.css")` becomes
+// `@import url("data:text/css;base64,<encoded foo.css>")` — but
+// `data:` URLs have no base URL, so any `url(../font/...ttf)` *inside*
+// `foo.css` resolves against the opaque-origin iframe and silently
+// 404s. Mirrored decks always look like this: `shared/tokens.css`
+// imports `assets/_mirror/css/<hash>.css`, which in turn references
+// `assets/_mirror/font/<hash>.ttf` via a sibling-relative path. We
+// have to splice the imported CSS body *into* the importing CSS so
+// font references resolve relative to where the imported file actually
+// lives — at which point they get rewritten to working data: URLs in
+// the recursive call below.
+function inlineCssImports(
+  css: string,
+  fromPath: string,
+  lookup: UrlLookup,
+  lookupText: TextLookup | undefined,
+  visited: ReadonlySet<string>,
+  depth: number,
+): string {
+  if (!lookupText || depth >= IMPORT_INLINE_DEPTH) {
+    return css;
+  }
+
+  return css.replace(
+    cssImportInlinePattern,
+    (
+      match,
+      urlDouble?: string,
+      urlSingle?: string,
+      urlBare?: string,
+      stringDouble?: string,
+      stringSingle?: string,
+    ) => {
+      const ref =
+        (urlDouble ?? urlSingle ?? urlBare ?? stringDouble ?? stringSingle ?? '').trim();
+      if (!ref) return match;
+
+      const resolved = resolvePackageReference(fromPath, ref);
+      if (!resolved) {
+        // External (https://, data:, etc.) or missing — leave the
+        // @import alone so the URL-rewrite pass downstream gets a
+        // chance to handle it.
+        return match;
+      }
+      if (visited.has(resolved)) {
+        // Cycle break: A → B → A. Drop the inner @import.
+        return '';
+      }
+      const importedCss = lookupText(resolved);
+      if (importedCss === null) {
+        // We don't have the file (e.g. it's an SVG or missing).
+        return match;
+      }
+
+      const nextVisited = new Set(visited);
+      nextVisited.add(resolved);
+      const innerProcessed = rewriteCssBody(
+        importedCss,
+        resolved,
+        lookup,
+        lookupText,
+        nextVisited,
+        depth + 1,
+      );
+      return `/* slidestage:inlined @import ${resolved} */\n${innerProcessed}\n/* slidestage:end @import ${resolved} */\n`;
+    },
+  );
+}
+
+function rewriteCssBody(
+  css: string,
+  fromPath: string,
+  lookup: UrlLookup,
+  lookupText?: TextLookup,
+  visited: ReadonlySet<string> = new Set(),
+  depth: number = 0,
+): string {
+  // Phase 1: splice package-local @import targets into the body so
+  // their sibling-relative url() refs resolve against the right base.
+  const inlined = inlineCssImports(css, fromPath, lookup, lookupText, visited, depth);
+
+  // Phase 2: rewrite url() refs (including the data:/https: ones inside
+  // inlined bodies — those are no-ops because rewriteReference falls
+  // through for external schemes).
+  const afterUrls = inlined.replace(
     cssUrlPattern,
     (_match, doubleValue?: string, singleValue?: string, bareValue?: string) => {
       const value = (doubleValue ?? singleValue ?? bareValue ?? '').trim();
@@ -45,6 +142,9 @@ function rewriteCssBody(css: string, fromPath: string, lookup: UrlLookup): strin
     },
   );
 
+  // Phase 3: any @import string-form survivors (external CDN imports,
+  // missing files) still get their URL rewritten so the loader's
+  // lookup gets a chance to point them at a virtual URL.
   return afterUrls.replace(
     cssImportStringPattern,
     (_match, doubleValue?: string, singleValue?: string) => {
@@ -97,8 +197,15 @@ function inlineStylesheetLinks(
       return tag;
     }
 
-    const rewrittenCss = rewriteCssBody(css, resolved, lookup).replace(/<\/style/gi, '<\\/style');
-    return `<style data-hcslides-inline-css="${resolved}">\n${rewrittenCss}\n</style>`;
+    // Pass `lookupText` and a fresh visited set so the imported CSS
+    // can in turn splice ITS own `@import` targets in (mirrored decks
+    // typically chain `shared/tokens.css` → `assets/_mirror/css/...`).
+    const visited = new Set<string>([resolved]);
+    const rewrittenCss = rewriteCssBody(css, resolved, lookup, lookupText, visited).replace(
+      /<\/style/gi,
+      '<\\/style',
+    );
+    return `<style data-slidestage-inline-css="${resolved}">\n${rewrittenCss}\n</style>`;
   });
 }
 
@@ -164,7 +271,7 @@ function rewriteBaseTag(html: string, fromPath: string, lookup: UrlLookup): stri
     if (!resolved) {
       if (typeof console !== 'undefined') {
         console.warn(
-          `[hcslides] Slide ${fromPath} declares <base href="${href}">; left unchanged because it is external.`,
+          `[slidestage] Slide ${fromPath} declares <base href="${href}">; left unchanged because it is external.`,
         );
       }
       return tag;
@@ -174,7 +281,7 @@ function rewriteBaseTag(html: string, fromPath: string, lookup: UrlLookup): stri
     if (!url) {
       if (typeof console !== 'undefined') {
         console.warn(
-          `[hcslides] Slide ${fromPath} declares <base href="${href}"> pointing at missing ${resolved}; dropping <base>.`,
+          `[slidestage] Slide ${fromPath} declares <base href="${href}"> pointing at missing ${resolved}; dropping <base>.`,
         );
       }
       return '';
@@ -230,20 +337,29 @@ function rewriteSrcsetAttributes(html: string, fromPath: string, lookup: UrlLook
   );
 }
 
-function rewriteRemainingCss(html: string, fromPath: string, lookup: UrlLookup): string {
-  // Protect already-inlined <style data-hcslides-inline-css="X"> blocks. Their
+function rewriteRemainingCss(
+  html: string,
+  fromPath: string,
+  lookup: UrlLookup,
+  lookupText?: TextLookup,
+): string {
+  // Protect already-inlined <style data-slidestage-inline-css="X"> blocks. Their
   // bodies were rewritten against X (the inline source path); re-running the
   // CSS rewriter on them with fromPath as the base would corrupt any url(...)
   // or @import that did not resolve on the first pass.
   const placeholders: string[] = [];
   const protectedHtml = html.replace(inlineStyleTagPattern, (match) => {
     placeholders.push(match);
-    return `\u0000HCSLIDES_INLINE_CSS_${placeholders.length - 1}\u0000`;
+    return `\u0000SLIDESTAGE_INLINE_CSS_${placeholders.length - 1}\u0000`;
   });
 
-  const rewritten = rewriteCssBody(protectedHtml, fromPath, lookup);
+  // Slide-authored <style> blocks can also use @import; pass lookupText
+  // so those get spliced in too. The fromPath is the slide's path —
+  // url() refs in inlined @import bodies still resolve correctly
+  // because rewriteCssBody re-bases against each imported file.
+  const rewritten = rewriteCssBody(protectedHtml, fromPath, lookup, lookupText);
 
-  return rewritten.replace(/\u0000HCSLIDES_INLINE_CSS_(\d+)\u0000/g, (_match, idx: string) => {
+  return rewritten.replace(/\u0000SLIDESTAGE_INLINE_CSS_(\d+)\u0000/g, (_match, idx: string) => {
     return placeholders[Number(idx)] ?? '';
   });
 }
@@ -261,7 +377,7 @@ function applyRewrites(
   const withSrcdoc = rewriteSrcdocAttributes(withDeferredLinks, fromPath, lookup, lookupText, depth);
   const withAttributes = rewriteAttributes(withSrcdoc, fromPath, lookup);
   const withSrcset = rewriteSrcsetAttributes(withAttributes, fromPath, lookup);
-  return rewriteRemainingCss(withSrcset, fromPath, lookup);
+  return rewriteRemainingCss(withSrcset, fromPath, lookup, lookupText);
 }
 
 export function rewriteHtmlAssetReferences(

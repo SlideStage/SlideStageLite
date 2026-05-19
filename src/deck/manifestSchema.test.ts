@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseManifest, type ManifestWarning } from './manifestSchema';
 
 const baseManifest = {
-  schema: 'hcslides@1.0',
+  schema: 'slidestage@1.0',
   id: 'lite-test',
   version: '1.0.0',
   title: 'Test deck',
@@ -204,7 +204,7 @@ describe('parseManifest · provenance and compat', () => {
         sourceKind: 'webcomponent-deck',
         conversionMode: 'wrap',
         sourceEntry: 'index.html',
-        converter: { name: 'slides-deck-converter', version: '0.1.0' },
+        converter: { name: 'slidestage-converter', version: '0.1.0' },
       },
     });
 
@@ -212,7 +212,7 @@ describe('parseManifest · provenance and compat', () => {
       sourceKind: 'webcomponent-deck',
       conversionMode: 'wrap',
       sourceEntry: 'index.html',
-      converter: { name: 'slides-deck-converter', version: '0.1.0' },
+      converter: { name: 'slidestage-converter', version: '0.1.0' },
     });
   });
 
@@ -266,7 +266,7 @@ describe('parseManifest · offline', () => {
       offline: {
         ready: true,
         mirroredAt: '2026-05-15T12:00:00.000Z',
-        mirrorTool: { name: 'hcslides-mirror', version: '0.1.0' },
+        mirrorTool: { name: 'slidestage-mirror', version: '0.1.0' },
         policy: {
           includeScripts: false,
           includeIframes: false,
@@ -302,7 +302,7 @@ describe('parseManifest · offline', () => {
       offline: {
         ready: false,
         mirroredAt: '2026-05-15T12:00:00.000Z',
-        mirrorTool: { name: 'hcslides-mirror' },
+        mirrorTool: { name: 'slidestage-mirror' },
         mirroredAssets: [],
         skippedUrls: [
           { url: 'https://example.com/broken', reason: 'unreachable', detail: 'HTTP 404' },
@@ -320,7 +320,7 @@ describe('parseManifest · offline', () => {
         offline: {
           ready: false,
           mirroredAt: '2026-05-15T12:00:00.000Z',
-          mirrorTool: { name: 'hcslides-mirror' },
+          mirrorTool: { name: 'slidestage-mirror' },
           mirroredAssets: [],
           skippedUrls: [{ url: 'https://example.com', reason: 'mystery' }],
         },

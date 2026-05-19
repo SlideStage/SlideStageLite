@@ -1,9 +1,9 @@
 /* ─────────────────────────────────────────────────────────────────────── */
-/* SlidesDeckLite design tokens — mirrors SlidesDeckPro globals.css.       */
+/* SlideStageLite design tokens — mirrors SlideStagePro globals.css.       */
 /* Twin-product palette: teal primary (#14b8a6), orange CTA (#f97316),     */
 /* Plus Jakarta Sans typography, dark-only surfaces. Page-specific tweaks  */
 /* should consume CSS variables defined here rather than introduce new     */
-/* hex literals. See design-system/slidesdecklite/MASTER.md.               */
+/* hex literals. See design-system/slidestagelite/MASTER.md.               */
 /* ─────────────────────────────────────────────────────────────────────── */
 
 :root {
@@ -990,6 +990,65 @@ code {
   display: block;
   background: #000;
   overflow: hidden;
+}
+
+/* Sticky notice when the deck was auto-elevated to same-origin because
+ * its size exceeded the inline budget. Lives above the viewer; the
+ * dismiss button lets the user clear it after acknowledging. The
+ * compact two-line layout is deliberate so it does not steal vertical
+ * space from the slide. See App.tsx → openDeckFile → autoElevatedFor. */
+.auto-elevated-notice {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(720px, calc(100vw - 16px));
+  padding: 8px 12px 8px 10px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(56, 189, 248, 0.6);
+  border-radius: 10px;
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+}
+
+.auto-elevated-notice-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  flex-shrink: 0;
+}
+
+.auto-elevated-notice-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.auto-elevated-notice-dismiss {
+  flex-shrink: 0;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: inherit;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.auto-elevated-notice-dismiss:hover {
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .deck-open .viewer {
@@ -2111,4 +2170,136 @@ code {
     gap: 4px 10px;
     font-size: 11px;
   }
+}
+
+/* ─── Audience window floating controls (fullscreen toggle / close) ── */
+
+.audience-controls {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 12;
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 10px;
+  background: rgba(15, 15, 18, 0.78);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 180ms ease, transform 180ms ease;
+  pointer-events: none;
+}
+
+.audience-view:hover .audience-controls,
+.audience-controls:focus-within,
+.audience-controls.always-visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.audience-controls .btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.audience-controls .btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* ─── Monitor picker (audience-window placement modal) ─────────────── */
+
+.monitor-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.monitor-picker {
+  width: min(640px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 20px 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-elev);
+  color: var(--ink);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.monitor-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.monitor-picker-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.monitor-picker-desc {
+  margin: -4px 0 4px 0;
+  line-height: 1.45;
+}
+
+.monitor-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.monitor-card {
+  display: grid;
+  gap: 4px;
+  padding: 14px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.monitor-card:hover {
+  border-color: var(--primary-soft);
+  background: var(--bg-elev);
+}
+
+.monitor-card.selected {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.monitor-card-icon {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 4px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(120, 132, 255, 0.14);
+  color: var(--primary);
+}
+
+.monitor-card-name {
+  font-weight: 600;
+}
+
+.monitor-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
 }

@@ -4,7 +4,7 @@ import {
   normalizeCapabilities,
 } from '../deck/trustCapabilities';
 
-const keyPrefix = 'hcslides-lite:trust:';
+const keyPrefix = 'slidestage-lite:trust:';
 
 export interface TrustGrant {
   status: 'granted';

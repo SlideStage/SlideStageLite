@@ -30,7 +30,7 @@ const idSchema = z
 
 export const manifestSchema = z
   .object({
-    schema: z.literal('hcslides@1.0'),
+    schema: z.literal('slidestage@1.0'),
     id: idSchema,
     version: z.string().min(1).max(64),
     title: z.string().min(1).max(256),
@@ -186,7 +186,7 @@ function normalizeManifest(
     });
     if (typeof console !== 'undefined') {
       console.warn(
-        `[hcslides] manifest.totalSlides (${manifest.totalSlides}) does not match slides.length (${actualLength}); using slides.length.`,
+        `[slidestage] manifest.totalSlides (${manifest.totalSlides}) does not match slides.length (${actualLength}); using slides.length.`,
       );
     }
     manifest.totalSlides = actualLength;
@@ -198,7 +198,7 @@ function normalizeManifest(
     onWarning?.({ code: 'slideIndexRenumbered', originalIndices });
     if (typeof console !== 'undefined') {
       console.warn(
-        `[hcslides] slides[].index was not sequential (${originalIndices.join(', ')}); renumbering by array order.`,
+        `[slidestage] slides[].index was not sequential (${originalIndices.join(', ')}); renumbering by array order.`,
       );
     }
     manifest.slides = manifest.slides.map((slide, idx) => ({
@@ -235,7 +235,7 @@ function normalizeCompatRequires(
       onWarning?.({ code: 'unknownCompatCapability', capability: candidate });
       if (typeof console !== 'undefined') {
         console.warn(
-          `[hcslides] manifest.compat.requires contains unknown capability "${candidate}"; ignoring it.`,
+          `[slidestage] manifest.compat.requires contains unknown capability "${candidate}"; ignoring it.`,
         );
       }
       continue;

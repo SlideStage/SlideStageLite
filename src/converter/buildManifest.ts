@@ -1,5 +1,6 @@
 import type { Manifest, ManifestSlide } from '../deck/types';
 import type { RouterManifestEntry, SniffResult } from './sniffer';
+import { findSlideNotes } from './speakerNotes';
 
 const textDecoder = new TextDecoder('utf-8', { fatal: false });
 
@@ -56,14 +57,18 @@ function normalizeRelativePath(rootHtml: string, reference: string): string {
   return output.join('/');
 }
 
-function makeWrapperSlide(rootHtml: string, label: string): ManifestSlide {
+function makeWrapperSlide(
+  rootHtml: string,
+  label: string,
+  entries: Map<string, Uint8Array>,
+): ManifestSlide {
   return {
     index: 1,
     id: 'root',
     label,
     file: rootHtml,
     thumbnail: null,
-    notes: null,
+    notes: findSlideNotes(entries, rootHtml),
   };
 }
 
@@ -85,7 +90,7 @@ function buildRouterSlides(
         label: label.slice(0, 256),
         file,
         thumbnail: null,
-        notes: null,
+        notes: findSlideNotes(entries, file),
       };
       return slide;
     })
@@ -114,6 +119,7 @@ export function buildManifestFromSource(
         makeWrapperSlide(
           rootHtml,
           `Inline deck (${sniff.hints?.inlineSectionCount ?? 0} sections, runtime-managed)`,
+          entries,
         ),
       ];
       architecture = 'single-file-html';
@@ -123,6 +129,7 @@ export function buildManifestFromSource(
         makeWrapperSlide(
           rootHtml,
           `Web Component deck (${sniff.hints?.inlineSectionCount ?? 0} sections, runtime-managed)`,
+          entries,
         ),
       ];
       architecture = 'single-file-html';
@@ -131,7 +138,7 @@ export function buildManifestFromSource(
       const routerManifest = sniff.hints?.routerManifest ?? [];
       slides = buildRouterSlides(rootHtml, routerManifest, entries);
       if (slides.length === 0) {
-        slides = [makeWrapperSlide(rootHtml, 'Router deck (no resolved slides)')];
+        slides = [makeWrapperSlide(rootHtml, 'Router deck (no resolved slides)', entries)];
         architecture = 'single-file-html';
       } else {
         architecture = 'multi-file';
@@ -139,7 +146,7 @@ export function buildManifestFromSource(
       break;
     }
     case 'plain-html':
-      slides = [makeWrapperSlide(rootHtml, title)];
+      slides = [makeWrapperSlide(rootHtml, title, entries)];
       architecture = 'single-file-html';
       break;
     default:
@@ -147,13 +154,13 @@ export function buildManifestFromSource(
   }
 
   return {
-    schema: 'hcslides@1.0',
+    schema: 'slidestage@1.0',
     id: baseId,
     version: '0.0.0',
     title,
     subtitle: null,
     author: null,
-    description: `Synthesized by SlidesDeckLite sniffer (kind=${sniff.kind}).`,
+    description: `Synthesized by SlideStageLite sniffer (kind=${sniff.kind}).`,
     createdAt,
     updatedAt: createdAt,
     architecture,

@@ -47,7 +47,7 @@ type Selection =
   | { kind: 'folder'; folder: FolderEntries };
 
 interface ConverterPanelProps {
-  /** Called once a converted .hcslides File is ready to feed to loadDeck. */
+  /** Called once a converted .stage File is ready to feed to loadDeck. */
   onConvertedReady: (file: File) => Promise<void>;
   onClose: () => void;
 }
@@ -60,11 +60,11 @@ function formatSize(bytes: number): string {
 
 function outputNameFor(selection: Selection): string {
   if (selection.kind === 'file') {
-    const base = selection.file.name.replace(/\.(html?|zip|hcslides)$/i, '');
-    return `${base || 'converted'}.hcslides`;
+    const base = selection.file.name.replace(/\.(html?|zip|stage)$/i, '');
+    return `${base || 'converted'}.stage`;
   }
   const base = selection.folder.name.replace(/\W+/g, '-').replace(/^-+|-+$/g, '');
-  return `${base || 'converted'}.hcslides`;
+  return `${base || 'converted'}.stage`;
 }
 
 function summaryFor(selection: Selection): string {
@@ -180,7 +180,7 @@ export function ConverterPanel({ onConvertedReady, onClose }: ConverterPanelProp
       const opts = {
         mode: mode === 'auto' ? undefined : (mode as ConvertMode),
         report: true,
-        repackHcslides: mirrorEnabled,
+        repackStage: mirrorEnabled,
         ...(mirrorEnabled
           ? {
               mirror: {
@@ -226,9 +226,9 @@ export function ConverterPanel({ onConvertedReady, onClose }: ConverterPanelProp
   const handleConvertAndLoad = async () => {
     const out = await runConvert();
     if (!out || !selection) return;
-    const buffer = out.hcslides.buffer.slice(
-      out.hcslides.byteOffset,
-      out.hcslides.byteOffset + out.hcslides.byteLength,
+    const buffer = out.stage.buffer.slice(
+      out.stage.byteOffset,
+      out.stage.byteOffset + out.stage.byteLength,
     ) as ArrayBuffer;
     const blob = new Blob([buffer], { type: 'application/zip' });
     const outName = outputNameFor(selection);
@@ -252,9 +252,9 @@ export function ConverterPanel({ onConvertedReady, onClose }: ConverterPanelProp
   const handleConvertAndDownload = async () => {
     const out = await runConvert();
     if (!out || !selection) return;
-    const buffer = out.hcslides.buffer.slice(
-      out.hcslides.byteOffset,
-      out.hcslides.byteOffset + out.hcslides.byteLength,
+    const buffer = out.stage.buffer.slice(
+      out.stage.byteOffset,
+      out.stage.byteOffset + out.stage.byteLength,
     ) as ArrayBuffer;
     const blob = new Blob([buffer], { type: 'application/zip' });
     if (downloadUrlRef.current) URL.revokeObjectURL(downloadUrlRef.current);
@@ -288,7 +288,7 @@ export function ConverterPanel({ onConvertedReady, onClose }: ConverterPanelProp
       <p className="converter-panel__intro">
         {t('converter.intro.before')} <code>html-ppt-skill</code>,{' '}
         <code>huashu-design</code>
-        {t('converter.intro.mid')} <code>.hcslides</code>
+        {t('converter.intro.mid')} <code>.stage</code>
         {t('converter.intro.after')}
       </p>
 
@@ -325,7 +325,7 @@ export function ConverterPanel({ onConvertedReady, onClose }: ConverterPanelProp
                 </span>
                 <input
                   type="file"
-                  accept=".html,.htm,.zip,.hcslides,application/zip,text/html"
+                  accept=".html,.htm,.zip,.stage,application/zip,text/html"
                   onChange={handleFileChange}
                   data-testid="converter-file-input"
                 />

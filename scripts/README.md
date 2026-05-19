@@ -4,7 +4,7 @@ This folder is reserved for project automation.
 
 Scripts:
 
-- `build-fixtures.mjs`: generate deterministic `.hcslides` fixtures for tests.
+- `build-fixtures.mjs`: generate deterministic `.stage` fixtures for tests.
 
 Planned later scripts:
 

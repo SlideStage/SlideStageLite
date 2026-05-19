@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SlidesDeckLite",
+  "productName": "SlideStageLite",
   "version": "0.1.0",
-  "identifier": "dev.slidestage.slidesdecklite",
+  "identifier": "dev.slidestage.slidestagelite",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "SlidesDeckLite",
+        "title": "SlideStageLite",
         "width": 1280,
         "height": 800,
         "minWidth": 960,
@@ -33,8 +33,8 @@
     "active": true,
     "targets": "all",
     "category": "Productivity",
-    "shortDescription": "Local .hcslides presentation runtime",
-    "longDescription": "SlidesDeckLite — open, present, and convert .hcslides decks. Zero backend, zero accounts, zero upload.",
+    "shortDescription": "Local .stage presentation runtime",
+    "longDescription": "SlideStageLite — open, present, and convert .stage decks. Zero backend, zero accounts, zero upload.",
     "copyright": "© 2026 SlideStage",
     "icon": [
       "icons/32x32.png",
@@ -45,11 +45,11 @@
     ],
     "fileAssociations": [
       {
-        "ext": ["hcslides"],
-        "name": "HCSlides Deck",
-        "description": "SlidesDeck presentation package",
+        "ext": ["stage"],
+        "name": "SlideStage Deck",
+        "description": "SlideStage presentation package",
         "role": "Viewer",
-        "mimeType": "application/x-hcslides"
+        "mimeType": "application/x-stage"
       }
     ],
     "macOS": {
@@ -59,7 +59,7 @@
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": ["hcslides"]
+        "schemes": ["stage"]
       }
     }
   }

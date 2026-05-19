@@ -20,7 +20,7 @@ function manifestMtime(manifest: Manifest): number {
 }
 
 /**
- * Pack a manifest plus a bag of slide / asset entries into a `.hcslides` ZIP.
+ * Pack a manifest plus a bag of slide / asset entries into a `.stage` ZIP.
  *
  * Entries are written in the order they appear in `entries`. The manifest is
  * always emitted at the root and overwrites any colliding key in `entries`.
@@ -32,7 +32,7 @@ function manifestMtime(manifest: Manifest): number {
  * mtime to "now", which would otherwise make every conversion produce a
  * different zip and invalidate stored trust grants / annotations.)
  */
-export function packHcslides(
+export function packStage(
   manifest: Manifest,
   entries: Map<string, Uint8Array>,
 ): Uint8Array {

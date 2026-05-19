@@ -3,6 +3,7 @@ import { extractBalancedBlocks, type ExtractedBlock } from './htmlBlocks';
 import { asPlainUint8, bytesFromString } from './pack';
 import type { ConvertWarning } from './report';
 import type { SniffResult } from './sniffer';
+import { extractInlineNotes, findSlideNotes } from './speakerNotes';
 
 const textDecoder = new TextDecoder('utf-8', { fatal: false });
 
@@ -232,7 +233,7 @@ export function splitInlineDeck(input: SplitInput): SplitResult {
       label: slide.label,
       file: candidate,
       thumbnail: null,
-      notes: null,
+      notes: extractInlineNotes(html) ?? findSlideNotes(entries, candidate),
     });
   });
 

@@ -121,7 +121,7 @@ describe('tauriEventFactory', () => {
     expect(tauriEventFactory.isAvailable()).toBe(true);
   });
 
-  it('namespaces the event channel under hcslides: and round-trips messages', async () => {
+  it('namespaces the event channel under slidestage: and round-trips messages', async () => {
     const { invokeSpy } = installFakeInternals();
     const { tauriEventFactory } = await import('./tauriEvent');
 
@@ -137,7 +137,7 @@ describe('tauriEventFactory', () => {
     const emitCalls = invokeSpy.mock.calls.filter((c) =>
       String(c[0]).endsWith('|emit') || String(c[0]).endsWith('|emit_to'),
     );
-    expect(emitCalls.some((c) => (c[1] as { event: string }).event === 'hcslides:alpha')).toBe(true);
+    expect(emitCalls.some((c) => (c[1] as { event: string }).event === 'slidestage:alpha')).toBe(true);
 
     expect(received).toEqual([{ type: 'hello', role: 'presenter' }]);
 

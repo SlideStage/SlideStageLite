@@ -1,19 +1,19 @@
-# SlidesDeckLite
+# SlideStageLite
 
-> 在浏览器里打开、演示、转换 `.hcslides` 演示包。
+> 在浏览器里打开、演示、转换 `.stage` 演示包。
 > 零后端、零账号、零上传。
 
-SlidesDeckLite 可以直接从 `file://`、GitHub Pages、Netlify、Vercel、
+SlideStageLite 可以直接从 `file://`、GitHub Pages、Netlify、Vercel、
 内网 Nginx 或任意静态托管打开的静态构建产物。
 
 🇬🇧 [English README](README.md)
 
 ---
 
-## 为什么用 SlidesDeckLite？
+## 为什么用 SlideStageLite？
 
 大多数演示文稿工具会让你在**保真度**（原生 HTML/CSS/JS 动画）和**便携性**
-（一个能整体交付的文件）之间二选一。`.hcslides` 容器调和了二者：
+（一个能整体交付的文件）之间二选一。`.stage` 容器调和了二者：
 一个带严格清单（manifest）的压缩文件夹，按指纹签名、按显式能力清单授权。
 Lite 是这套容器的忠实运行时：
 
@@ -22,7 +22,7 @@ Lite 是这套容器的忠实运行时：
   请求**按包授权**（存储、BroadcastChannel、`window.open`）；
 - 自带 PowerPoint 级演讲者工具（演讲者视图、概览栅格、激光笔、聚光灯、
   持久墨迹、第二屏观众窗口）；
-- 内置实时 HTML → `.hcslides` 转换器，支持 `html-ppt-skill`、
+- 内置实时 HTML → `.stage` 转换器，支持 `html-ppt-skill`、
   `huashu-design`、普通 HTML 文件；
 - 同时支持英语和简体中文，开箱即用。
 
@@ -37,7 +37,7 @@ Lite 是这套容器的忠实运行时：
 | **PresenterView（多窗口）** | 可拖拽宽度的侧栏：下一张缩略、计时器、观众窗口状态；外加可拖拽高度的演讲者备注抽屉。备注按幻灯片可编辑、写入 `localStorage`。 |
 | **AudienceView（弹窗）** | 第二屏镜像演示输出：墨迹、当前页、黑屏、聚光、指针通过 `BroadcastChannel` 实时同步。 |
 | **信任授权** | 若演示包声明了 `compat.requires`，Lite 会在你为该指纹明确授权之前阻止渲染。 |
-| **转换器** | 拖入文件夹 / `.html` / `.zip` / `.hcslides`，选择转换模式（auto / split / wrap / single / passthrough），下载严格的 `.hcslides`。 |
+| **转换器** | 拖入文件夹 / `.html` / `.zip` / `.stage`，选择转换模式（auto / split / wrap / single / passthrough），下载严格的 `.stage`。 |
 | **国际化** | 英语 + 简体中文，键集完全对等由测试强制。优先级：URL `?lang=` → `localStorage` → `navigator.language*`。 |
 
 ---
@@ -47,8 +47,8 @@ Lite 是这套容器的忠实运行时：
 环境要求：**Node ≥ 20**，**pnpm 10.28+**。
 
 ```bash
-git clone https://github.com/<你>/SlidesDeckLite.git
-cd SlidesDeckLite
+git clone https://github.com/SlideStage/SlideStageLite.git
+cd SlideStageLite
 
 pnpm install
 pnpm dev                     # http://localhost:5173/
@@ -69,7 +69,7 @@ pnpm build                   # tsc -b && vite build → dist/
 
 ## 生产部署
 
-SlidesDeckLite 产物是一份纯静态包（`dist/index.html` + `dist/assets/*`），
+SlideStageLite 产物是一份纯静态包（`dist/index.html` + `dist/assets/*`），
 任何静态托管都能跑。
 
 ### 1. 配置环境变量（可选）
@@ -104,12 +104,12 @@ pnpm build
 
 ```bash
 # Vercel / Netlify 拖拽：
-#   项目根目录: SlidesDeckLite
+#   项目根目录: SlideStageLite
 #   构建命令: pnpm build
 #   输出目录: dist
 
 # Nginx（或任意静态 webroot）：
-rsync -av --delete dist/ user@host:/var/www/slidesdecklite/
+rsync -av --delete dist/ user@host:/var/www/slidestagelite/
 
 # GitHub Pages：
 pnpm build
@@ -138,18 +138,18 @@ npx gh-pages -d dist
 ## 仓库结构
 
 ```
-SlidesDeckLite/
+SlideStageLite/
 ├── src/
 │   ├── app/                  # 顶层 SPA 外壳（App, Footer, LanguageSwitcher, ConverterPanel, TrustPrompt）
-│   ├── deck/                 # .hcslides 加载器 + 能力沙箱
-│   ├── converter/            # html-ppt-skill / huashu / 普通 HTML → .hcslides 打包器
+│   ├── deck/                 # .stage 加载器 + 能力沙箱
+│   ├── converter/            # html-ppt-skill / huashu / 普通 HTML → .stage 打包器
 │   ├── viewer/               # DeckViewer + DeckStage + AudienceView
 │   ├── presenter/            # 工具栏、批注层、激光笔、聚光、黑屏、BroadcastChannel 同步 hook
 │   ├── persistence/          # localStorage 封装（备注、批注、信任授权）
 │   ├── i18n/                 # I18nProvider + 英/中字典
 │   ├── styles/globals.css    # 设计令牌 + 全部组件类（纯 CSS，无 Tailwind）
 │   └── main.tsx              # ReactDOM 启动入口
-├── bin/convert.ts            # `pnpm convert` CLI（文件夹/HTML/zip → .hcslides）
+├── bin/convert.ts            # `pnpm convert` CLI（文件夹/HTML/zip → .stage）
 ├── scripts/build-fixtures.mjs  # 确定性测试 fixture 生成器
 ├── public/                   # 静态资源（mpslogo.png 用于公安备案芯片，fixtures/ 在 predev/prebuild 自动生成）
 ├── design-system/            # MASTER 设计规范（令牌、组件、反模式）
@@ -164,8 +164,8 @@ SlidesDeckLite/
 
 ```bash
 pnpm dev          # Vite 开发服务器
-pnpm fixtures     # 重新生成确定性 .hcslides fixture（pre{dev,build,test} 自动跑）
-pnpm convert      # CLI：把文件夹 / html / zip 打包为 .hcslides
+pnpm fixtures     # 重新生成确定性 .stage fixture（pre{dev,build,test} 自动跑）
+pnpm convert      # CLI：把文件夹 / html / zip 打包为 .stage
 pnpm typecheck    # tsc -b --noEmit
 pnpm test:unit    # vitest（jsdom + react-dom）
 pnpm test:e2e     # playwright chromium

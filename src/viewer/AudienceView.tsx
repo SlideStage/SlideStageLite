@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Maximize2, Minimize2, X } from 'lucide-react';
 import {
   BASE_SANDBOX_TOKEN,
   normalizeCapabilities,
+  sandboxAllowsSameOrigin,
   sandboxTokensFor,
 } from '../deck/trustCapabilities';
 import type { LoadedDeck } from '../deck/types';
@@ -39,7 +41,86 @@ export function AudienceView() {
   const [deck, setDeck] = useState<LoadedDeck | null>(null);
   const [presenterAlive, setPresenterAlive] = useState(false);
   const [presentation, setPresentation] = useState<AudiencePresentationState>(INITIAL_PRESENTATION);
+  // Sandbox token the presenter is using. Tracked as separate state
+  // because it can change between snapshots (e.g. user grants
+  // additional trust while the audience window is open) and must
+  // override the local trust-store derivation for auto-elevated
+  // decks where the App layer granted caps that aren't declared in
+  // `compat.requires`.
+  const [presenterSandbox, setPresenterSandbox] = useState<string | null>(null);
   const deckFingerprint = useMemo(() => readDeckFingerprintFromUrl(), []);
+  const [isFullscreen, setIsFullscreen] = useState(true);
+
+  const tauriMode = isTauri();
+
+  // Mirror the OS-level fullscreen state into React so the toggle button
+  // shows the correct icon even when the user enters/exits fullscreen via
+  // the green traffic-light or Cmd+Ctrl+F outside of our control.
+  useEffect(() => {
+    if (!tauriMode) return undefined;
+    let cancelled = false;
+    let unlistenResize: (() => void) | null = null;
+    (async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const win = getCurrentWindow();
+        const initial = await win.isFullscreen().catch(() => true);
+        if (!cancelled) setIsFullscreen(initial);
+        const handle = await win.onResized(async () => {
+          try {
+            const next = await win.isFullscreen();
+            if (!cancelled) setIsFullscreen(next);
+          } catch {
+            // ignore
+          }
+        });
+        if (cancelled) {
+          handle();
+        } else {
+          unlistenResize = handle;
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('audience: failed to bind fullscreen listener', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      try {
+        unlistenResize?.();
+      } catch {
+        // ignore
+      }
+    };
+  }, [tauriMode]);
+
+  const toggleFullscreen = useCallback(async () => {
+    if (!tauriMode) return;
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      const win = getCurrentWindow();
+      const next = !isFullscreen;
+      await win.setFullscreen(next);
+      setIsFullscreen(next);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('audience: setFullscreen failed', err);
+    }
+  }, [isFullscreen, tauriMode]);
+
+  const closeWindow = useCallback(async () => {
+    if (!tauriMode) {
+      window.close();
+      return;
+    }
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      await getCurrentWindow().close();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('audience: close failed', err);
+    }
+  }, [tauriMode]);
 
   const handleMessage = useCallback((msg: AudienceMessage) => {
     switch (msg.type) {
@@ -52,6 +133,9 @@ export function AudienceView() {
       case 'snapshot':
         setDeck(deserializeAudienceDeck(msg.snapshot));
         setPresentation(msg.snapshot.presentation);
+        if (typeof msg.snapshot.iframeSandbox === 'string') {
+          setPresenterSandbox(msg.snapshot.iframeSandbox);
+        }
         setPresenterAlive(true);
         break;
       case 'presentation':
@@ -107,13 +191,36 @@ export function AudienceView() {
   const currentStrokes = presentation.strokesByIdx[presentation.currentIndex] ?? [];
   const blackoutColor =
     presentation.tool === 'blackout' ? '#000' : presentation.tool === 'whiteout' ? '#fff' : null;
-  // The audience window shares localStorage with its opener (same origin),
-  // so we can read the trust decision the user already granted in the
-  // presenter window. If the deck does not need trust the lookup returns
-  // null and we fall through to the minimal `allow-scripts` sandbox.
-  const requiredCaps = normalizeCapabilities(deck.manifest.compat?.requires);
-  const grant = requiredCaps.length > 0 ? loadTrustGrant(deck.fingerprint, requiredCaps) : null;
-  const iframeSandbox = grant ? sandboxTokensFor(grant.capabilities) : BASE_SANDBOX_TOKEN;
+  // Prefer the sandbox the presenter is actually using (shipped over
+  // the snapshot envelope). Falling back to the local trust-store
+  // lookup means an older presenter build (or a slow snapshot) still
+  // renders something — but it loses the auto-elevation grant for
+  // decks without a declared `compat.requires`. New builds always
+  // win the race because the snapshot lands as soon as the audience
+  // calls `request-snapshot` on hello.
+  let iframeSandbox: string;
+  if (presenterSandbox) {
+    iframeSandbox = presenterSandbox;
+  } else {
+    // The audience window shares localStorage with its opener (same
+    // origin), so we can read the trust decision the user granted in
+    // the presenter window. If the deck does not need trust the
+    // lookup returns null and we fall through to the minimal
+    // `allow-scripts` sandbox.
+    const requiredCaps = normalizeCapabilities(deck.manifest.compat?.requires);
+    const grant =
+      requiredCaps.length > 0 ? loadTrustGrant(deck.fingerprint, requiredCaps) : null;
+    iframeSandbox = grant ? sandboxTokensFor(grant.capabilities) : BASE_SANDBOX_TOKEN;
+  }
+  // Same decision as in DeckViewer: srcdoc when the iframe is opaque
+  // (Tauri WKWebView, no transport, or no `allow-same-origin`), src+
+  // virtual URL otherwise. Preloads are only meaningful when the SW
+  // can actually intercept the next-slide fetch.
+  // See DeckViewer for the matching guard; oversized decks have an
+  // unrenderable srcdoc body so we must mount via `src` only.
+  const audienceUseSrcdoc =
+    deck.inlinedHtmlAvailable &&
+    (tauriMode || deck.prefersSrcdoc || !sandboxAllowsSameOrigin(iframeSandbox));
 
   return (
     <main
@@ -124,17 +231,21 @@ export function AudienceView() {
     >
       <DeckStage
         src={deck.slideUrls[presentation.currentIndex]}
-        srcdoc={isTauri() ? deck.slideHtml[presentation.currentIndex] : undefined}
+        srcdoc={audienceUseSrcdoc ? deck.slideHtml[presentation.currentIndex] : undefined}
         title={tFormat('viewer.title.audience.live', {
           n: slide.index,
           label: slide.label,
         })}
         width={deck.manifest.dimensions.width}
         height={deck.manifest.dimensions.height}
-        preloadSrcs={[
-          deck.slideUrls[presentation.currentIndex - 1],
-          deck.slideUrls[presentation.currentIndex + 1],
-        ].filter((url): url is string => Boolean(url))}
+        preloadSrcs={
+          audienceUseSrcdoc
+            ? []
+            : [
+                deck.slideUrls[presentation.currentIndex - 1],
+                deck.slideUrls[presentation.currentIndex + 1],
+              ].filter((url): url is string => Boolean(url))
+        }
         sandbox={iframeSandbox}
       >
         <AnnotationOverlay
@@ -165,6 +276,39 @@ export function AudienceView() {
         />
         <Blackout color={blackoutColor} />
       </DeckStage>
+      {tauriMode ? (
+        <div
+          className="audience-controls"
+          role="toolbar"
+          aria-label={t('audience.aria')}
+          data-testid="audience-controls"
+        >
+          <button
+            type="button"
+            className="btn ghost small"
+            onClick={() => void toggleFullscreen()}
+            aria-pressed={isFullscreen}
+            data-testid="audience-toggle-fullscreen"
+            title={isFullscreen ? t('audience.exitFullscreen') : t('audience.enterFullscreen')}
+          >
+            {isFullscreen ? (
+              <Minimize2 className="btn-icon" aria-hidden size={14} />
+            ) : (
+              <Maximize2 className="btn-icon" aria-hidden size={14} />
+            )}
+            {isFullscreen ? t('audience.exitFullscreen') : t('audience.enterFullscreen')}
+          </button>
+          <button
+            type="button"
+            className="btn ghost small"
+            onClick={() => void closeWindow()}
+            data-testid="audience-close"
+            title={t('audience.closeWindow')}
+          >
+            <X className="btn-icon" aria-hidden size={14} />
+          </button>
+        </div>
+      ) : null}
       <div
         className={`audience-status ${presenterAlive ? 'live' : 'idle'}`}
         data-testid="audience-presenter-status"

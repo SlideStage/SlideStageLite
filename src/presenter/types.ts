@@ -7,7 +7,7 @@ export const SPOTLIGHT_DEFAULT_RADIUS = 180;
 export const SPOTLIGHT_MIN_RADIUS = 80;
 export const SPOTLIGHT_MAX_RADIUS = 480;
 export const SPOTLIGHT_STEP = 16;
-export const SPOTLIGHT_STORAGE_KEY = 'hcslides-lite:spotlight-radius';
+export const SPOTLIGHT_STORAGE_KEY = 'slidestage-lite:spotlight-radius';
 
 export type Tool =
   | 'mouse'

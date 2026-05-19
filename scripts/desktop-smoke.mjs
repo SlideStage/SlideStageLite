@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Desktop smoke test for the bundled SlidesDeckLite.app.
+ * Desktop smoke test for the bundled SlideStageLite.app.
  *
  * What we verify (all without needing macOS Accessibility permissions):
  *   1. The `.app` bundle exists at the expected path.
@@ -22,11 +22,11 @@ import { setTimeout as sleep } from 'node:timers/promises';
 const ROOT = resolve(import.meta.dirname, '..');
 const APP_PATH = resolve(
   ROOT,
-  'src-tauri/target/release/bundle/macos/SlidesDeckLite.app',
+  'src-tauri/target/release/bundle/macos/SlideStageLite.app',
 );
 const BIN_PATH = resolve(
   ROOT,
-  'src-tauri/target/release/slides-deck-lite-desktop',
+  'src-tauri/target/release/slidestage-lite-desktop',
 );
 const MAX_BIN_MB = 25;
 
@@ -51,16 +51,16 @@ function tryExec(cmd, timeout = 5000) {
 
 function isRunning() {
   // lsappinfo lists every running app by bundle id.
-  return tryExec('lsappinfo list').includes('SlidesDeckLite');
+  return tryExec('lsappinfo list').includes('SlideStageLite');
 }
 
 function quitApp() {
   if (isRunning()) {
-    tryExec('osascript -e \'tell application "SlidesDeckLite" to quit\'', 5000);
+    tryExec('osascript -e \'tell application "SlideStageLite" to quit\'', 5000);
   }
   // Belt-and-braces in case `osascript` was blocked by sandboxing.
-  tryExec('pkill -x slides-deck-lite-desktop');
-  tryExec('pkill -x SlidesDeckLite');
+  tryExec('pkill -x slidestage-lite-desktop');
+  tryExec('pkill -x SlideStageLite');
 }
 
 async function main() {
@@ -100,7 +100,7 @@ async function main() {
       await sleep(500);
       if (isRunning()) {
         saw = true;
-        info(`OK — SlidesDeckLite running (lsappinfo confirms)`);
+        info(`OK — SlideStageLite running (lsappinfo confirms)`);
         break;
       }
     }

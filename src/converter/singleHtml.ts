@@ -1,6 +1,7 @@
 import type { Manifest, ManifestSlide, TrustCapability } from '../deck/types';
 import { asPlainUint8 } from './pack';
 import type { ConvertWarning } from './report';
+import { findSlideNotes } from './speakerNotes';
 
 const textDecoder = new TextDecoder('utf-8', { fatal: false });
 const HEAD_RE = /<head\b[^>]*>([\s\S]*?)<\/head>/i;
@@ -76,7 +77,7 @@ export function singleHtmlSlide(input: SingleHtmlInput): SingleHtmlResult {
     label: pageTitle.slice(0, 256),
     file: rootHtmlPath,
     thumbnail: null,
-    notes: null,
+    notes: findSlideNotes(entries, rootHtmlPath),
   };
 
   const hasScript = ANY_SCRIPT_RE.test(rootHtml);

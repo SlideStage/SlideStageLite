@@ -2,16 +2,16 @@
 /**
  * Stand-alone CLI for the offline mirror pass.
  *
- * Reads an existing `.hcslides` package, runs the mirror over it, writes a
- * fresh `.hcslides` (and optional report) to disk. Wraps the same core
+ * Reads an existing `.stage` package, runs the mirror over it, writes a
+ * fresh `.stage` (and optional report) to disk. Wraps the same core
  * mirror module the GUI uses; the only thing the CLI adds is file I/O, the
  * Node `fetch` fetcher, and a progress printer.
  *
  * Usage:
- *   pnpm mirror <input.hcslides> --out <output.hcslides> [options]
+ *   pnpm mirror <input.stage> --out <output.stage> [options]
  *
  * Options:
- *   --out <file>             Destination .hcslides path (required).
+ *   --out <file>             Destination .stage path (required).
  *   --max-asset-bytes <n>    Per-asset size cap (default 50 MiB).
  *   --max-total-bytes <n>    Total download budget (default 500 MiB).
  *   --include-scripts        Mirror <script src="https://..."> as well.
@@ -32,7 +32,7 @@ import { unzipSync } from 'fflate';
 import {
   createNetworkFetcher,
   mirrorExternalAssets,
-  packHcslides,
+  packStage,
   type MirrorPolicy,
   type MirrorProgress,
   type MirrorResult,
@@ -123,13 +123,13 @@ function parseArgs(argv: string[]): CliArgs {
 
 function printUsage(): void {
   process.stdout.write(
-    `slides-deck-mirror — pre-download external assets into a .hcslides
+    `slidestage-mirror — pre-download external assets into a .stage
 
 Usage:
-  pnpm mirror <input.hcslides> --out <output.hcslides> [options]
+  pnpm mirror <input.stage> --out <output.stage> [options]
 
 Options:
-  --out <file>            Destination .hcslides path (required).
+  --out <file>            Destination .stage path (required).
   --max-asset-bytes <n>   Per-asset size cap (default 50 MiB).
   --max-total-bytes <n>   Total download budget (default 500 MiB).
   --include-scripts       Mirror <script src="https://..."> as well.
@@ -150,7 +150,7 @@ Exit codes:
 }
 
 function defaultReportPath(outPath: string): string {
-  const base = outPath.replace(/\.hcslides$/i, '');
+  const base = outPath.replace(/\.stage$/i, '');
   return `${base}-mirror-report.md`;
 }
 
@@ -161,7 +161,7 @@ function renderMirrorReport(source: string, out: string, result: MirrorResult): 
   const mirrored = result.offline.mirroredAssets
     .map((a) => `- \`${a.path}\` ← \`${a.originalUrl}\` (${(a.bytes / 1024).toFixed(1)} KiB · ${a.contentType})`)
     .join('\n');
-  return `# hcslides offline mirror report
+  return `# slidestage offline mirror report
 
 - **Source**: \`${source}\`
 - **Output**: \`${out}\`
@@ -214,7 +214,7 @@ async function main(): Promise<void> {
   try {
     rawEntries = unzipSync(new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
   } catch (error) {
-    process.stderr.write(`[mirror] not a valid .hcslides zip: ${(error as Error).message}\n`);
+    process.stderr.write(`[mirror] not a valid .stage zip: ${(error as Error).message}\n`);
     process.exit(4);
   }
 
@@ -224,11 +224,11 @@ async function main(): Promise<void> {
     entries.set(name.replace(/\\/g, '/'), bytes_);
   }
 
-  const manifestBytes = entries.get('manifest.json');
-  if (!manifestBytes) {
+  if (!entries.has('manifest.json')) {
     process.stderr.write('[mirror] manifest.json is missing from the package root.\n');
     process.exit(4);
   }
+  const manifestBytes = entries.get('manifest.json')!;
 
   let manifest: Manifest;
   try {
@@ -260,7 +260,7 @@ async function main(): Promise<void> {
   const outPath = resolve(args.out);
   await mkdir(dirname(outPath), { recursive: true });
 
-  const zipBytes = packHcslides(result.manifest, result.entries);
+  const zipBytes = packStage(result.manifest, result.entries);
   await writeFile(outPath, zipBytes);
 
   const wantReport = !args.noReport;

@@ -18,53 +18,65 @@ export type MessageDict = Readonly<Record<string, string>>;
 
 export const messages: Readonly<Record<Locale, MessageDict>> = {
   en: {
-    'app.brand.name': 'SlidesDeckLite',
+    'app.brand.name': 'SlideStageLite',
     'app.brand.tag': 'lite',
-    'app.brand.aria': 'SlidesDeckLite home',
+    'app.brand.aria': 'SlideStageLite home',
     'app.header.meta': 'Local · no server',
 
     'language.aria': 'Interface language',
     'language.menu': 'Language',
 
-    'landing.eyebrow': 'Twin of SlidesDeckPro · v0.1',
+    'landing.eyebrow': 'Twin of SlideStagePro · v0.1',
     'landing.headline.before': 'Open, present, and convert',
-    'landing.headline.token': '.hcslides',
+    'landing.headline.token': '.stage',
     'landing.headline.after': 'decks — right in your browser.',
     'landing.subhead':
-      'A pure-frontend runtime for the open .hcslides container. Sandboxed iframe presentation, presenter tools, annotations, and a live HTML deck converter — no login, no backend, no upload.',
-    'landing.cta.open': 'Open .hcslides',
+      'A pure-frontend runtime for the open .stage container. Sandboxed iframe presentation, presenter tools, annotations, and a live HTML deck converter — no login, no backend, no upload.',
+    'landing.cta.open': 'Open .stage',
     'landing.cta.convert.show': 'Convert from HTML deck',
     'landing.cta.convert.hide': 'Hide converter',
     'landing.cta.sample': 'Open sample deck',
     'landing.status.loading': 'Loading deck…',
     'landing.sectionTitle': 'Capabilities',
 
-    'landing.benefit.local.title': 'Local .hcslides loader',
+    'landing.benefit.local.title': 'Local .stage loader',
     'landing.benefit.local.desc':
-      'Open a .hcslides package straight from disk. Manifest validation, asset extraction, and font warmup all run in your tab — no upload required.',
+      'Open a .stage package straight from disk. Manifest validation, asset extraction, and font warmup all run in your tab — no upload required.',
     'landing.benefit.trust.title': 'Per-deck trust prompts',
     'landing.benefit.trust.desc':
       'Sandboxed iframes by default. Decks that declare extra browser capabilities (storage, BroadcastChannel, popups) ask for explicit per-deck consent.',
     'landing.benefit.presenter.title': 'PowerPoint-grade presenter tools',
     'landing.benefit.presenter.desc':
       'Speaker view, overview grid, annotations, laser/spotlight, persistent ink, and a second-screen audience window. All local, all keyboard-driven.',
-    'landing.benefit.converter.title': 'Live HTML → .hcslides converter',
+    'landing.benefit.converter.title': 'Live HTML → .stage converter',
     'landing.benefit.converter.desc':
-      'Drag in an html-ppt-skill / huashu-design / plain HTML deck and the converter packs it into a strict .hcslides while you watch.',
+      'Drag in an html-ppt-skill / huashu-design / plain HTML deck and the converter packs it into a strict .stage while you watch.',
     'landing.benefit.privacy.title': 'No server. No accounts.',
     'landing.benefit.privacy.desc':
       'Runtime state — notes edits, annotations, trust grants — lives in your browser. Close the tab and your data stays with you.',
-    'landing.benefit.twin.title': 'Twin to SlidesDeckPro',
+    'landing.benefit.twin.title': 'Twin to SlideStagePro',
     'landing.benefit.twin.desc':
-      'Same design tokens, same .hcslides contract, same presenter ergonomics. Lite is the local-first sibling of the self-hosted Pro platform.',
+      'Same design tokens, same .stage contract, same presenter ergonomics. Lite is the local-first sibling of the self-hosted Pro platform.',
 
     'errors.loadDeckFallback': 'Failed to load the selected deck.',
     'errors.sampleMissing': 'Sample fixture is missing. Run pnpm fixtures and reload.',
     'errors.sampleFallback': 'Failed to load sample deck.',
     'errors.trustDenied': 'E_TRUST_DENIED: required capabilities were not granted.',
+    'errors.tooLargeForInline':
+      'E_TOO_LARGE_FOR_INLINE: This deck is larger than the inline budget and your ' +
+      "browser environment can't host the service worker that would render it " +
+      'efficiently. Try opening it in Chrome, Brave, or the SlideStage desktop app, ' +
+      'or repackage the deck with smaller fonts/images.',
+
+    'viewer.notice.autoElevatedSize':
+      'This deck weighs in at {mb} MB. To render it efficiently, SlideStageLite ' +
+      'mounted it with same-origin access (so the in-tab service worker can serve ' +
+      'its assets without inlining every byte as a data: URL). The deck can read ' +
+      'browser storage for this site while it is open.',
+    'viewer.notice.dismiss': 'Dismiss',
 
     'trust.eyebrow': 'Trust required',
-    'trust.lead.before': 'This deck was packaged in a mode that needs extra browser capabilities to render faithfully. SlidesDeckLite will not enable them until you grant trust for',
+    'trust.lead.before': 'This deck was packaged in a mode that needs extra browser capabilities to render faithfully. SlideStageLite will not enable them until you grant trust for',
     'trust.lead.emphasis': 'this specific deck',
     'trust.lead.after': '.',
     'trust.producerNote': 'Producer note:',
@@ -85,7 +97,7 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'converter.drop.idle': 'Drag a file or folder here',
     'converter.drop.dragging': 'Release to load',
     'converter.drop.help':
-      '.html / .htm / .zip / .hcslides, or a deck folder (subfolders are walked recursively).',
+      '.html / .htm / .zip / .stage, or a deck folder (subfolders are walked recursively).',
     'converter.drop.pickFile': 'Pick a file',
     'converter.drop.pickAnother': 'Choose another file',
     'converter.drop.pickFolder': 'Pick a folder',
@@ -97,7 +109,7 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
       'Single wrapper slide; preserves original runtime (trust required).',
     'converter.mode.single.help': 'Single slide; plain-html shape.',
     'converter.mode.passthrough.help':
-      'For .hcslides input; re-emit after schema validation.',
+      'For .stage input; re-emit after schema validation.',
     'converter.actions.load': 'Convert & Load',
     'converter.actions.loading': 'Converting…',
     'converter.actions.download': 'Convert & Download',
@@ -150,6 +162,17 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'viewer.action.audienceLive': 'Audience window: Live',
     'viewer.action.closeSpeakerS': 'Close (S)',
 
+    'viewer.monitorPicker.title': 'Where should the audience window open?',
+    'viewer.monitorPicker.desc':
+      'Pick a display. The audience window will open native-fullscreen so the OS gives it its own Space. You can exit fullscreen from the audience window at any time.',
+    'viewer.monitorPicker.recommended': 'Recommended',
+    'viewer.monitorPicker.primary': 'Primary display',
+    'viewer.monitorPicker.secondary': 'External display',
+    'viewer.monitorPicker.size': '{w} × {h} @ {scale}x',
+    'viewer.monitorPicker.cancel': 'Cancel',
+    'viewer.monitorPicker.fullscreen': 'Fullscreen',
+    'viewer.monitorPicker.windowed': 'Open as window',
+
     'viewer.title.next.live': 'Next slide {n}: {label}',
     'viewer.title.current.live': 'Slide {n}: {label}',
     'viewer.title.audience.live': 'Audience slide {n}: {label}',
@@ -192,6 +215,9 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'audience.waiting.body': 'Waiting for a presenter window to send the current deck...',
     'audience.linked': 'Linked',
     'audience.waitingShort': 'Waiting for presenter...',
+    'audience.exitFullscreen': 'Exit fullscreen',
+    'audience.enterFullscreen': 'Fullscreen',
+    'audience.closeWindow': 'Close audience window',
 
     'toolbar.aria': 'Presenter tools',
     'toolbar.handle.expand': 'Show presenter tools',
@@ -230,54 +256,60 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
   },
 
   'zh-CN': {
-    'app.brand.name': 'SlidesDeckLite',
+    'app.brand.name': 'SlideStageLite',
     'app.brand.tag': 'lite',
-    'app.brand.aria': 'SlidesDeckLite 主页',
+    'app.brand.aria': 'SlideStageLite 主页',
     'app.header.meta': '本地运行 · 无服务端',
 
     'language.aria': '界面语言',
     'language.menu': '语言',
 
-    'landing.eyebrow': 'SlidesDeckPro 双子星 · v0.1',
+    'landing.eyebrow': 'SlideStagePro 双子星 · v0.1',
     'landing.headline.before': '打开、演示、转换',
-    'landing.headline.token': '.hcslides',
+    'landing.headline.token': '.stage',
     'landing.headline.after': '演示包 —— 全程在你的浏览器内完成。',
     'landing.subhead':
-      '面向开放 .hcslides 容器的纯前端运行时。沙箱化 iframe 播放、演讲者工具、批注、以及实时 HTML → .hcslides 转换器 —— 无需登录，无需后端，无需上传。',
-    'landing.cta.open': '打开 .hcslides',
+      '面向开放 .stage 容器的纯前端运行时。沙箱化 iframe 播放、演讲者工具、批注、以及实时 HTML → .stage 转换器 —— 无需登录，无需后端，无需上传。',
+    'landing.cta.open': '打开 .stage',
     'landing.cta.convert.show': '转换 HTML 演示',
     'landing.cta.convert.hide': '收起转换器',
     'landing.cta.sample': '打开示例演示',
     'landing.status.loading': '正在加载演示…',
     'landing.sectionTitle': '能力一览',
 
-    'landing.benefit.local.title': '本地 .hcslides 加载',
+    'landing.benefit.local.title': '本地 .stage 加载',
     'landing.benefit.local.desc':
-      '直接从磁盘打开 .hcslides 包。清单校验、资源解包、字体预热全部在本标签页里完成 —— 无需上传。',
+      '直接从磁盘打开 .stage 包。清单校验、资源解包、字体预热全部在本标签页里完成 —— 无需上传。',
     'landing.benefit.trust.title': '按包询问的信任授权',
     'landing.benefit.trust.desc':
       '默认沙箱化 iframe。如果演示声明了额外的浏览器能力（存储、BroadcastChannel、弹窗），会请求针对该演示的显式授权。',
     'landing.benefit.presenter.title': 'PowerPoint 级演讲者工具',
     'landing.benefit.presenter.desc':
       '演讲者视图、概览栅格、批注、激光/聚光、持久墨迹，以及第二屏观众窗口。全部本地运行，全键盘可控。',
-    'landing.benefit.converter.title': '实时 HTML → .hcslides 转换器',
+    'landing.benefit.converter.title': '实时 HTML → .stage 转换器',
     'landing.benefit.converter.desc':
-      '把 html-ppt-skill / huashu-design / 普通 HTML 演示拖进来，转换器即刻打包成严格的 .hcslides。',
+      '把 html-ppt-skill / huashu-design / 普通 HTML 演示拖进来，转换器即刻打包成严格的 .stage。',
     'landing.benefit.privacy.title': '无服务端，无账号',
     'landing.benefit.privacy.desc':
       '所有运行时状态 —— 备注编辑、批注、信任授权 —— 都留在你的浏览器里。关掉标签页，数据也跟你走。',
-    'landing.benefit.twin.title': 'SlidesDeckPro 的双子星',
+    'landing.benefit.twin.title': 'SlideStagePro 的双子星',
     'landing.benefit.twin.desc':
-      '相同的设计令牌、相同的 .hcslides 协议、相同的演讲者手感。Lite 是自托管 Pro 平台的本地优先孪生版本。',
+      '相同的设计令牌、相同的 .stage 协议、相同的演讲者手感。Lite 是自托管 Pro 平台的本地优先孪生版本。',
 
     'errors.loadDeckFallback': '无法加载所选演示包。',
     'errors.sampleMissing': '示例 fixture 缺失，请运行 pnpm fixtures 后刷新。',
     'errors.sampleFallback': '无法加载示例演示。',
     'errors.trustDenied': 'E_TRUST_DENIED：未授予所需的浏览器能力。',
+    'errors.tooLargeForInline':
+      'E_TOO_LARGE_FOR_INLINE：该 deck 超过 inline 预算，当前浏览器环境也无法承载用来高效渲染的 service worker。请改用 Chrome / Brave / SlideStage 桌面版打开，或者把字体/图片瘦身后重新打包。',
+
+    'viewer.notice.autoElevatedSize':
+      '该 deck 体积达 {mb} MB。为了高效渲染，SlideStageLite 已用同源（same-origin）方式装载它，让标签内的 Service Worker 直接提供资源，而非把每个字节 inline 成 data: URL。在打开期间，该 deck 可以读取本站浏览器存储。',
+    'viewer.notice.dismiss': '关闭提示',
 
     'trust.eyebrow': '需要信任授权',
     'trust.lead.before':
-      '此演示打包时声明需要额外的浏览器能力才能完整呈现。SlidesDeckLite 在你为',
+      '此演示打包时声明需要额外的浏览器能力才能完整呈现。SlideStageLite 在你为',
     'trust.lead.emphasis': '该具体演示',
     'trust.lead.after': '授权之前不会启用这些能力。',
     'trust.producerNote': '作者备注：',
@@ -298,7 +330,7 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'converter.drop.idle': '把文件或文件夹拖到此处',
     'converter.drop.dragging': '松开以加载',
     'converter.drop.help':
-      '支持 .html / .htm / .zip / .hcslides，或一整个演示文件夹（递归遍历子目录）。',
+      '支持 .html / .htm / .zip / .stage，或一整个演示文件夹（递归遍历子目录）。',
     'converter.drop.pickFile': '选择文件',
     'converter.drop.pickAnother': '更换文件',
     'converter.drop.pickFolder': '选择文件夹',
@@ -310,7 +342,7 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
       '单包装幻灯片，保留原运行时（需要信任授权）。',
     'converter.mode.single.help': '单张幻灯片，使用 plain-html 形态。',
     'converter.mode.passthrough.help':
-      '针对 .hcslides 输入，经清单校验后原样输出。',
+      '针对 .stage 输入，经清单校验后原样输出。',
     'converter.actions.load': '转换并打开',
     'converter.actions.loading': '正在转换…',
     'converter.actions.download': '转换并下载',
@@ -332,7 +364,7 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
 
     'converter.mirror.label': '预下载外部资源（离线就绪）',
     'converter.mirror.help':
-      '抓取幻灯片里所有 https:// 引用的图片 / 字体 / 视频 / 样式，并打包进 .hcslides。部分 CDN 会阻止跨源读取；如需最完整的覆盖，建议改用命令行 `pnpm mirror`。',
+      '抓取幻灯片里所有 https:// 引用的图片 / 字体 / 视频 / 样式，并打包进 .stage。部分 CDN 会阻止跨源读取；如需最完整的覆盖，建议改用命令行 `pnpm mirror`。',
     'converter.mirror.progress':
       '镜像 {phase}：{done}/{queued}（已下载 {mib} MiB）',
     'converter.mirror.summary.ready':
@@ -361,6 +393,17 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'viewer.action.openAudience': '打开观众窗口',
     'viewer.action.audienceLive': '观众窗口：已连接',
     'viewer.action.closeSpeakerS': '关闭 (S)',
+
+    'viewer.monitorPicker.title': '在哪个显示器打开观众窗？',
+    'viewer.monitorPicker.desc':
+      '选择一个显示器。观众窗会以原生全屏方式打开（macOS 会自动分配一个独立桌面）。打开后可随时从观众窗退出全屏。',
+    'viewer.monitorPicker.recommended': '推荐',
+    'viewer.monitorPicker.primary': '主显示器',
+    'viewer.monitorPicker.secondary': '外接显示器',
+    'viewer.monitorPicker.size': '{w} × {h} @ {scale}x',
+    'viewer.monitorPicker.cancel': '取消',
+    'viewer.monitorPicker.fullscreen': '全屏播放',
+    'viewer.monitorPicker.windowed': '以窗口模式打开',
 
     'viewer.title.next.live': '下一张幻灯片 {n}：{label}',
     'viewer.title.current.live': '幻灯片 {n}：{label}',
@@ -402,6 +445,9 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'audience.waiting.body': '等待演讲者窗口发送当前演示…',
     'audience.linked': '已连接',
     'audience.waitingShort': '等待演讲者…',
+    'audience.exitFullscreen': '退出全屏',
+    'audience.enterFullscreen': '全屏',
+    'audience.closeWindow': '关闭观众窗口',
 
     'toolbar.aria': '演讲者工具',
     'toolbar.handle.expand': '展开演讲者工具',

@@ -63,7 +63,7 @@ describe('I18nProvider', () => {
   it('renders English copy by default', () => {
     render('en');
     expect(get('locale')).toBe('en');
-    expect(get('brand')).toBe('SlidesDeckLite');
+    expect(get('brand')).toBe('SlideStageLite');
     expect(get('meta')).toBe('Local · no server');
     expect(get('formatted')).toBe('Slide 3: Intro');
     expect(document.documentElement.lang).toBe('en');
@@ -75,7 +75,7 @@ describe('I18nProvider', () => {
       container.querySelector<HTMLButtonElement>('[data-testid="to-zh"]')!.click();
     });
     expect(get('locale')).toBe('zh-CN');
-    expect(get('brand')).toBe('SlidesDeckLite');
+    expect(get('brand')).toBe('SlideStageLite');
     expect(get('meta')).toBe('本地运行 · 无服务端');
     expect(get('formatted')).toBe('幻灯片 3：Intro');
     expect(document.documentElement.lang).toBe('zh-CN');

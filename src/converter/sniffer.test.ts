@@ -12,9 +12,9 @@ function entries(...pairs: Array<[string, string | Uint8Array]>): Map<string, Ui
 }
 
 describe('sniffDeck', () => {
-  it('detects hcslides@1.0 when manifest.json is present', () => {
+  it('detects slidestage@1.0 when manifest.json is present', () => {
     const result = sniffDeck(entries(['manifest.json', '{}']));
-    expect(result.kind).toBe('hcslides@1.0');
+    expect(result.kind).toBe('slidestage@1.0');
     expect(result.confidence).toBe(1);
   });
 

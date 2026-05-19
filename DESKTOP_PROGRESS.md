@@ -1,4 +1,4 @@
-# SlidesDeckLite Desktop —— 实施记录
+# SlideStageLite Desktop —— 实施记录
 
 > 配套文档：[DESKTOP_PLAN.md](./DESKTOP_PLAN.md)
 > 完成会话：2026-05-15
@@ -25,7 +25,7 @@
 | **Phase 2** | 创建 `src/desktop/fileOpen.ts`（监听 `deck:open` event + 拉取 `pending_file`） | ✅ |
 | Phase 2 | 改 `App.tsx` 加 Tauri 文件打开 useEffect | ✅ |
 | Phase 2 | Rust 命令 `read_deck_bytes` + `pending_file`（在 `src-tauri/src/lib.rs`） | ✅ |
-| Phase 2 | `tauri.conf.json` 注册 `.hcslides` fileAssociations + 深链 schema `hcslides://` | ✅ |
+| Phase 2 | `tauri.conf.json` 注册 `.stage` fileAssociations + 深链 schema `stage://` | ✅ |
 | Phase 2 | `single-instance` 插件接管多次启动，转发为 `deck:open` event | ✅ |
 | **Phase 3** | 加 4 个测试文件（broadcastChannel/tauriEvent/index/env），共 10 个测试用例 | ✅ |
 | Phase 3 | 写 `scripts/desktop-smoke.mjs` —— 启动验证 + 二进制大小阈值检查 + 干净退出 | ✅ |
@@ -138,7 +138,7 @@ Tauri 环境 → @tauri-apps/api/event 的 emit/listen
 ### 5.2 capabilities ACL ↔ Lite trust 模型同构
 `src-tauri/capabilities/default.json` 只白名单：
 - 窗口生命周期（`core:window:default` / `webview:allow-create-webview-window`）
-- 事件 emit/listen（限定 hcslides: 前缀）
+- 事件 emit/listen（限定 slidestage: 前缀）
 - 文件系统：`fs:allow-read-file` + `dialog:allow-open`（不暴露 write/scan）
 
 这与 Lite 已有的 per-deck capabilities trust prompt **哲学完全一致**：能力按需放开、用户显式授权、范围最小化。
@@ -151,7 +151,7 @@ Tauri 环境 → @tauri-apps/api/event 的 emit/listen
 两条路径通过 `isTauri()` 一行检测切换，无需用户感知。
 
 ### 5.4 文件双击启动
-1. 主进程 `setup()` 时扫描 `argv[1..]`，如果是 `.hcslides`，存入 `PendingFile` Mutex
+1. 主进程 `setup()` 时扫描 `argv[1..]`，如果是 `.stage`，存入 `PendingFile` Mutex
 2. `single-instance` 插件接管后续启动（同实例打开新文件），emit `deck:open` event
 3. 前端在 `App.tsx` 启动时：先 `invoke('pending_file')` 拉冷启动文件，再 `listen('deck:open')` 监听后续
 4. 拿到路径后 `invoke('read_deck_bytes', { path })`，包成 `File` 喂给现有 `openDeckFile`
@@ -166,9 +166,9 @@ Tauri 环境 → @tauri-apps/api/event 的 emit/listen
 |---|---|---|
 | 未做代码签名 / Notarize | 中 | 用户首次打开 `.dmg` 会被 Gatekeeper 拦截。需 Apple Developer ID 后用 `tauri-plugin-updater` 的 signing 流程 |
 | Windows / Linux 未编译 | 中 | 需在 GH Actions matrix 跑 `tauri build`；macOS 本地交叉编译 Windows 复杂 |
-| 自动更新 | 低 | 计划用 `tauri-plugin-updater` 接 SlidesDeckPro 自托管 endpoint |
+| 自动更新 | 低 | 计划用 `tauri-plugin-updater` 接 SlideStagePro 自托管 endpoint |
 | Tauri WebDriver e2e | 低 | 当前用 lsappinfo 做 smoke；如需深度 UI 测试可加 `tauri-driver` + `webdriverio` |
-| 文件关联首次注册 | 低 | macOS 需安装一次 `.dmg` 后 LaunchServices 才识别 `.hcslides` |
+| 文件关联首次注册 | 低 | macOS 需安装一次 `.dmg` 后 LaunchServices 才识别 `.stage` |
 | Web 版的 `window.open` 兜底 | 低 | 现有 `audienceWindowRef.current.closed` 轮询仅 Web 用，Desktop 路径靠 Tauri 窗口生命周期事件，但没轮询替代 — 未来加 `WebviewWindow.onCloseRequested` |
 | `Cargo.lock` 是否提交 | 低 | 目前在 `src-tauri/.gitignore` 里。如果你要锁版本可移出 |
 
@@ -195,7 +195,7 @@ Tauri 环境 → @tauri-apps/api/event 的 emit/listen
 - [x] 新增 transport 抽象单测，覆盖 BroadcastChannel + Tauri Event 两条路径
 - [x] 桌面 app 启动 < 1s、内存 < 100MB（**实测 ~96MB 含冷启动峰值**）
 - [ ] Presenter window 打开 Audience window 后翻页/批注实时同步（需要你手动验证——双击 `.dmg` 安装后试）
-- [ ] 双击 `.hcslides` 从 Finder 启动 app 自动加载（需安装 `.dmg` 后才注册 LaunchServices）
+- [ ] 双击 `.stage` 从 Finder 启动 app 自动加载（需安装 `.dmg` 后才注册 LaunchServices）
 
 最后两项需要你在 Finder 里实际安装 `.dmg` 后人肉验证，因为 LaunchServices 必须把 `.app` 拷进 `/Applications/` 才会注册 fileAssociations。
 
@@ -205,11 +205,11 @@ Tauri 环境 → @tauri-apps/api/event 的 emit/listen
 
 1. 在 Finder 里打开：
    ```
-   src-tauri/target/release/bundle/dmg/SlidesDeckLite_0.1.0_aarch64.dmg
+   src-tauri/target/release/bundle/dmg/SlideStageLite_0.1.0_aarch64.dmg
    ```
-   把里面的 `SlidesDeckLite.app` 拖到 `/Applications/`。
+   把里面的 `SlideStageLite.app` 拖到 `/Applications/`。
 
-2. 用 `pnpm fixtures` 产生的 sample `.hcslides`（在 `public/fixtures/valid-basic.hcslides`），右键 → 打开方式 → SlidesDeckLite，验证文件关联工作。
+2. 用 `pnpm fixtures` 产生的 sample `.stage`（在 `public/fixtures/valid-basic.stage`），右键 → 打开方式 → SlideStageLite，验证文件关联工作。
 
 3. 启动 presenter view，点 "Open Audience"，验证两个窗口都开起来后翻页同步。
 

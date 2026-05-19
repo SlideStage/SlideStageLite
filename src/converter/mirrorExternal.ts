@@ -1,5 +1,5 @@
 /**
- * Offline mirror pass for `.hcslides` decks.
+ * Offline mirror pass for `.stage` decks.
  *
  * The pass walks every slide HTML (and the CSS it references) for external
  * resource URLs that match the configured policy, downloads what is in
@@ -106,7 +106,7 @@ export const DEFAULT_MIRROR_POLICY: Required<
   maxTotalBytes: 500 * 1024 * 1024,
 };
 
-export const MIRROR_TOOL_NAME = 'hcslides-mirror';
+export const MIRROR_TOOL_NAME = 'slidestage-mirror';
 export const MIRROR_TOOL_VERSION = '0.1.0';
 const MIRROR_DIR = 'assets/_mirror';
 

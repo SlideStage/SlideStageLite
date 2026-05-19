@@ -74,10 +74,11 @@ describe('rewriteHtmlAssetReferences', () => {
   });
 
   describe('@import string form', () => {
-    it('rewrites @import "..." to lookup URL', () => {
+    it('rewrites @import "..." to lookup URL when no textLookup is supplied', () => {
       const lookup = makeLookup({
         'shared/extra.css': 'blob:extra',
       });
+      // No textLookup → no inline; fall back to URL rewrite.
       const html = `<style>@import "../shared/extra.css";\n.s{}</style>`;
       const rewritten = rewriteHtmlAssetReferences(html, 'slides/01.html', lookup);
       expect(rewritten).toContain('@import "blob:extra"');
@@ -90,13 +91,159 @@ describe('rewriteHtmlAssetReferences', () => {
       expect(rewritten).toContain('@import "../missing.css"');
     });
 
-    it('rewrites @import url(...) via the cssUrl pass as well', () => {
+    it('rewrites @import url(...) via the cssUrl pass when no textLookup is supplied', () => {
       const lookup = makeLookup({
         'shared/extra.css': 'blob:extra',
       });
       const html = `<style>@import url("../shared/extra.css");</style>`;
       const rewritten = rewriteHtmlAssetReferences(html, 'slides/01.html', lookup);
       expect(rewritten).toContain('url("blob:extra")');
+    });
+
+    it('recursively inlines @import url(...) bodies so nested url() refs resolve against the imported file', () => {
+      // Why this matters: mirrored decks chain `shared/tokens.css` →
+      // `@import url("../assets/_mirror/css/foo.css")` → `@font-face
+      // url("../font/<hash>.ttf")`. Without recursive inlining we would
+      // rewrite the @import to a `data:text/css;base64,...` URL — but
+      // data: URLs have no base, so `../font/<hash>.ttf` inside that
+      // CSS body silently 404s.
+      const lookup = makeLookup({
+        'assets/_mirror/font/abc.ttf': 'data:font/ttf;base64,FAKE',
+      });
+      const lookupText = makeTextLookup({
+        'shared/tokens.css': `:root { --sans: 'Inter'; }\n@import url("../assets/_mirror/css/main.css");`,
+        'assets/_mirror/css/main.css': `@font-face { src: url("../font/abc.ttf") format('truetype'); }`,
+      });
+      const html = `<link rel="stylesheet" href="../shared/tokens.css">`;
+      const rewritten = rewriteHtmlAssetReferences(
+        html,
+        'slides/01.html',
+        lookup,
+        lookupText,
+      );
+
+      // The mirrored CSS body must have been spliced *into* tokens.css
+      // and its sibling-relative `../font/abc.ttf` resolved to a
+      // working data: URL.
+      expect(rewritten).toContain('<style data-slidestage-inline-css="shared/tokens.css">');
+      expect(rewritten).toContain('url("data:font/ttf;base64,FAKE")');
+      // The `@import url(...)` must be gone from the final body so the
+      // browser doesn't try to re-fetch the (now meaningless) reference.
+      expect(rewritten).not.toContain('@import url(');
+      // The slidestage:inlined marker is the only breadcrumb we leave
+      // behind so the diff is debuggable.
+      expect(rewritten).toContain('slidestage:inlined @import assets/_mirror/css/main.css');
+    });
+
+    it('recursively inlines @import "..." string form too', () => {
+      const lookup = makeLookup({
+        'assets/_mirror/font/x.woff2': 'data:font/woff2;base64,WW',
+      });
+      const lookupText = makeTextLookup({
+        'shared/tokens.css': `@import "../assets/_mirror/css/main.css";`,
+        'assets/_mirror/css/main.css': `@font-face { src: url('../font/x.woff2') format('woff2'); }`,
+      });
+      const html = `<link rel="stylesheet" href="../shared/tokens.css">`;
+      const rewritten = rewriteHtmlAssetReferences(
+        html,
+        'slides/01.html',
+        lookup,
+        lookupText,
+      );
+
+      expect(rewritten).toContain('url("data:font/woff2;base64,WW")');
+      // No surviving string-form @import either.
+      expect(rewritten).not.toMatch(/@import\s+(?:"|'|url\()/);
+    });
+
+    it('falls back to URL rewrite for @import targets that are not in the package', () => {
+      const lookup = makeLookup({});
+      const lookupText = makeTextLookup({
+        'shared/tokens.css': `@import "../assets/_mirror/css/main.css";`,
+        // Note: main.css intentionally missing from lookupText so the
+        // recursive inliner has to give up.
+      });
+      const html = `<link rel="stylesheet" href="../shared/tokens.css">`;
+      const rewritten = rewriteHtmlAssetReferences(
+        html,
+        'slides/01.html',
+        lookup,
+        lookupText,
+      );
+      // The @import stays put with the resolved path written back so
+      // the eventual SW or browser load can still find it via the
+      // host transport.
+      expect(rewritten).toContain('@import "../assets/_mirror/css/main.css"');
+    });
+
+    it('breaks @import cycles (A → B → A)', () => {
+      const lookup = makeLookup({});
+      const lookupText = makeTextLookup({
+        'a.css': `@import "b.css";\n.a {}`,
+        'b.css': `@import "a.css";\n.b {}`,
+      });
+      const html = `<link rel="stylesheet" href="a.css">`;
+      // Should not loop forever and should keep at least the leaf
+      // rules from both files.
+      const rewritten = rewriteHtmlAssetReferences(
+        html,
+        'index.html',
+        lookup,
+        lookupText,
+      );
+      expect(rewritten).toContain('.a');
+      expect(rewritten).toContain('.b');
+      // The inner @import was dropped to break the cycle.
+      const aImports = (rewritten.match(/slidestage:inlined @import a\.css/g) ?? []).length;
+      expect(aImports).toBeLessThanOrEqual(1);
+    });
+
+    it('handles deep @import chains up to the inline depth cap', () => {
+      const lookup = makeLookup({
+        'leaf.woff2': 'data:font/woff2;base64,LEAF',
+      });
+      const lookupText = makeTextLookup({
+        'a.css': `@import "b.css";`,
+        'b.css': `@import "c.css";`,
+        'c.css': `@import "d.css";`,
+        'd.css': `@font-face { src: url('leaf.woff2') format('woff2'); }`,
+      });
+      const html = `<link rel="stylesheet" href="a.css">`;
+      const rewritten = rewriteHtmlAssetReferences(
+        html,
+        'index.html',
+        lookup,
+        lookupText,
+      );
+      expect(rewritten).toContain('url("data:font/woff2;base64,LEAF")');
+    });
+
+    it('does not double-prefix already-virtual URLs when the lookup returns absolute paths', () => {
+      // Regression: with the SW transport, lookup returns
+      // `/__stage/<id>/<resolved>` URLs. The inner `url("../font/x.ttf")`
+      // inside a chained @import gets rewritten to a virtual URL by the
+      // recursive pass; the outer pass MUST NOT rewrite that virtual URL
+      // a second time (which would prepend the outer file's dirname and
+      // produce e.g. `/__stage/<id>/shared/__stage/<id>/assets/font/x.ttf`,
+      // causing every font to 404).
+      const lookup = (path: string) => `/__stage/abc/${path}`;
+      const lookupText = makeTextLookup({
+        'shared/tokens.css': `@import url("../assets/_mirror/css/main.css");`,
+        'assets/_mirror/css/main.css': `@font-face { src: url('../font/x.ttf') format('truetype'); }`,
+      });
+      const html = `<link rel="stylesheet" href="../shared/tokens.css">`;
+      const rewritten = rewriteHtmlAssetReferences(
+        html,
+        'slides/01.html',
+        lookup,
+        lookupText,
+      );
+      expect(rewritten).toContain(
+        'url("/__stage/abc/assets/_mirror/font/x.ttf")',
+      );
+      expect(rewritten).not.toContain(
+        '/__stage/abc/shared/__stage/',
+      );
     });
   });
 
@@ -160,7 +307,7 @@ describe('rewriteHtmlAssetReferences', () => {
   });
 
   describe('inline-CSS path-base bug', () => {
-    it('does not re-apply slide fromPath to url() inside inlined <style data-hcslides-inline-css>', () => {
+    it('does not re-apply slide fromPath to url() inside inlined <style data-slidestage-inline-css>', () => {
       // The CSS file lives at `shared/theme.css` and references a sibling
       // `shared/missing.png`. The asset is intentionally absent from lookup so
       // the first pass leaves it as `./missing.png`. The bug being fixed: the
@@ -185,21 +332,21 @@ describe('rewriteHtmlAssetReferences', () => {
       );
 
       // Inlined block exists and still references the un-rewritten path:
-      expect(rewritten).toContain('<style data-hcslides-inline-css="shared/theme.css">');
+      expect(rewritten).toContain('<style data-slidestage-inline-css="shared/theme.css">');
       expect(rewritten).toContain('url("./missing.png")');
 
       // It must NOT have been re-wrapped or mutated by the final rewrite.
       // (If the bug returned, the body would change shape because the second
       // rewriteCssUrls would touch it; we lock in the literal string.)
       const inlineBlock = rewritten.match(
-        /<style data-hcslides-inline-css="shared\/theme\.css">[\s\S]*?<\/style>/,
+        /<style data-slidestage-inline-css="shared\/theme\.css">[\s\S]*?<\/style>/,
       );
       expect(inlineBlock?.[0]).toBeDefined();
       expect(inlineBlock?.[0]).toContain('url("./missing.png")');
     });
 
     it('still rewrites url() that lives in a slide-authored <style> block', () => {
-      // Author-written <style> blocks (no data-hcslides-inline-css marker) must
+      // Author-written <style> blocks (no data-slidestage-inline-css marker) must
       // continue to be rewritten against the slide's fromPath.
       const lookup = makeLookup({
         'slides/img/spot.png': 'blob:spot',
@@ -232,7 +379,7 @@ describe('rewriteHtmlAssetReferences', () => {
       });
       const html = `<link rel="stylesheet" href="./theme.css" />`;
       const rewritten = rewriteHtmlAssetReferences(html, 'slides/01.html', lookup, textLookup);
-      expect(rewritten).toContain('data-hcslides-inline-css="slides/theme.css"');
+      expect(rewritten).toContain('data-slidestage-inline-css="slides/theme.css"');
       expect(rewritten).not.toContain('media="print"');
     });
 

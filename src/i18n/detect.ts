@@ -17,7 +17,7 @@
  */
 import { DEFAULT_LOCALE, isLocale, LOCALES, type Locale } from './locales';
 
-export const LOCALE_STORAGE_KEY = 'hcslides-lite:locale';
+export const LOCALE_STORAGE_KEY = 'slidestage-lite:locale';
 
 const ZH_PATTERN = /^zh(?:[-_]|$)/i;
 

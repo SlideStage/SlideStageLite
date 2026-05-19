@@ -1,13 +1,13 @@
 [package]
-name = "slides-deck-lite-desktop"
+name = "slidestage-lite-desktop"
 version = "0.1.0"
-description = "SlidesDeckLite — pure local .hcslides presentation runtime"
+description = "SlideStageLite — pure local .stage presentation runtime"
 authors = ["SlideStage"]
 edition = "2021"
 rust-version = "1.77"
 
 [lib]
-name = "slides_deck_lite_lib"
+name = "slidestage_lite_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -19,6 +19,7 @@ tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+tauri-plugin-global-shortcut = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

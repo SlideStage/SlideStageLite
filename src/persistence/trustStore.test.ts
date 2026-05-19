@@ -54,11 +54,11 @@ describe('trustStore', () => {
   });
 
   it('treats malformed JSON or missing fields as no grant', () => {
-    window.localStorage.setItem('hcslides-lite:trust:' + FP, '{not json');
+    window.localStorage.setItem('slidestage-lite:trust:' + FP, '{not json');
     expect(loadTrustGrant(FP, ['same-origin-storage'])).toBeNull();
 
     window.localStorage.setItem(
-      'hcslides-lite:trust:' + FP,
+      'slidestage-lite:trust:' + FP,
       JSON.stringify({ status: 'pending', capabilities: ['same-origin-storage'] }),
     );
     expect(loadTrustGrant(FP, ['same-origin-storage'])).toBeNull();

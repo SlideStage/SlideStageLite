@@ -17,8 +17,12 @@ import {
   Radio,
   StickyNote,
 } from 'lucide-react';
+import { sandboxAllowsSameOrigin } from '../deck/trustCapabilities';
 import type { LoadedDeck } from '../deck/types';
 import { isTauri } from '../desktop/env';
+import { MonitorPicker } from '../desktop/MonitorPicker';
+import { listMonitors, type MonitorInfo } from '../desktop/monitors';
+import { useThumbnailCapture } from '../desktop/useThumbnailCapture';
 import { useI18n } from '../i18n/I18nProvider';
 import { loadAnnotations, saveAnnotations } from '../persistence/annotationStore';
 import { loadNotes, saveNotes, type StoredNotes } from '../persistence/notesStore';
@@ -41,9 +45,9 @@ import {
 import { DeckStage } from './DeckStage';
 import { Overview } from './Overview';
 
-const SIDE_WIDTH_KEY = 'hcslides-lite:side-w';
-const NOTES_HEIGHT_KEY = 'hcslides-lite:notes-h';
-const VIEW_MODE_KEY = 'hcslides-lite:view-mode';
+const SIDE_WIDTH_KEY = 'slidestage-lite:side-w';
+const NOTES_HEIGHT_KEY = 'slidestage-lite:notes-h';
+const VIEW_MODE_KEY = 'slidestage-lite:view-mode';
 const SIDE_WIDTH_MIN = 240;
 const SIDE_WIDTH_MAX = 640;
 const NOTES_HEIGHT_MIN = 96;
@@ -161,21 +165,66 @@ export function DeckViewer({
     setViewModeState(mode);
     persistViewMode(mode);
   }, []);
+  // First-play thumbnail capture: on desktop we lazily render every
+  // slide off-screen and cache the resulting WebP under the user's app
+  // data dir. The hook is a no-op on the Web build.
+  const thumbnails = useThumbnailCapture(deck);
+  const effectiveDeck = useMemo<LoadedDeck>(
+    () => ({ ...deck, thumbnailUrls: thumbnails.thumbnailUrls }),
+    [deck, thumbnails.thumbnailUrls],
+  );
   const slide = deck.manifest.slides[currentIndex];
   const nextSlide = deck.manifest.slides[currentIndex + 1];
   const canGoPrev = currentIndex > 0;
   const canGoNext = currentIndex < deck.manifest.totalSlides - 1;
   const currentStrokes = presenter.state.strokesByIdx[currentIndex] ?? [];
-  const preloadSrcs = [deck.slideUrls[currentIndex - 1], deck.slideUrls[currentIndex + 1]].filter(
-    (url): url is string => Boolean(url),
-  );
+  // Preload sibling slide URLs only when the active iframe is rendered
+  // via `src` (trust-elevated → Service Worker intercepts). For the
+  // common srcdoc path the next slide's HTML is already inlined into
+  // the DOM, so the browser has nothing extra to warm up — and the
+  // preload iframe would otherwise spin up a wasted request that
+  // Vite's SPA fallback would happily answer with `index.html`.
   const nextSlideUrl = nextSlide ? deck.slideUrls[currentIndex + 1] : null;
-  // In the Tauri desktop build we render the active slide via `srcdoc`
-  // (see DeckStage.tsx for why); the Web build sticks with `src=blob:`
-  // and ignores `srcdoc` to avoid duplicating the HTML in the DOM.
-  const useSrcdoc = isTauri();
+  // Render the active slide via `srcdoc` whenever:
+  //   - we're inside Tauri's WKWebView (refuses to navigate iframes to
+  //     `blob:tauri://...` URLs under the custom scheme), OR
+  //   - the loader could not publish to a Service Worker (file://, old
+  //     browser, registration failed). In that case `deck.slideUrls`
+  //     point at `blob:` URLs and the iframe must consume the
+  //     self-contained HTML directly so it never has to fetch
+  //     subresources from a partitioned blob.
+  //
+  // Whenever a Service Worker hosts the assets, the Web build keeps
+  // using `src=virtualURL` so the slide HTML stays out of the React
+  // DOM and assets are deduplicated through CacheStorage.
+  //
+  // Caveat: Chrome only routes a navigation through the SW when the
+  // target client has a non-opaque origin. A sandboxed iframe without
+  // `allow-same-origin` is opaque, so the SW never sees the fetch and
+  // Vite happily serves the SPA fallback. Falling back to srcdoc here
+  // keeps the slide rendering in that case (the inlined data: URLs
+  // don't need a real origin to resolve).
+  //
+  // BUT when `deck.inlinedHtmlAvailable === false` the srcdoc copy
+  // is a placeholder (the loader skipped the inline pass because the
+  // deck exceeds the inline budget). Insisting on srcdoc there would
+  // paint a blank "srcdoc disabled" slide — the App layer is
+  // responsible for arranging an `allow-same-origin` sandbox via
+  // auto-elevation before we get here. We honour that contract by
+  // forcing `useSrcdoc = false` for oversized decks; if the sandbox
+  // somehow still lacks `allow-same-origin` the iframe will load a
+  // 404 from the SW and the viewer's error overlay will surface it,
+  // which is a clearer failure than a placeholder body.
+  const useSrcdoc =
+    deck.inlinedHtmlAvailable &&
+    (isTauri() || deck.prefersSrcdoc || !sandboxAllowsSameOrigin(iframeSandbox));
   const currentSlideHtml = useSrcdoc ? deck.slideHtml[currentIndex] : undefined;
   const nextSlideHtml = useSrcdoc && nextSlide ? deck.slideHtml[currentIndex + 1] : undefined;
+  const preloadSrcs = useSrcdoc
+    ? []
+    : [deck.slideUrls[currentIndex - 1], deck.slideUrls[currentIndex + 1]].filter(
+        (url): url is string => Boolean(url),
+      );
   const broadcastStrokes = useMemo(() => {
     if (!draftStroke || draftStroke.points.length === 0) {
       return presenter.state.strokesByIdx;
@@ -281,14 +330,30 @@ export function DeckViewer({
     (sync: { send: (msg: AudienceMessage) => void }, presentation: AudiencePresentationState) => {
       sync.send({
         type: 'snapshot',
-        snapshot: { deck: serializeAudienceDeck(deck), presentation },
+        snapshot: {
+          deck: serializeAudienceDeck(deck),
+          presentation,
+          // Ship the resolved sandbox token string so the audience
+          // window mirrors the presenter exactly. Without this the
+          // audience falls back to deriving caps from
+          // `manifest.compat.requires` + the trust-store record, which
+          // misses any caps the App layer auto-granted (e.g. the
+          // `same-origin-storage` we add to oversized decks to push
+          // them through the SW transport instead of the inline
+          // srcdoc path). When that happens the audience iframe is
+          // opaque-origin, the SW can't intercept its requests, and
+          // the popup ends up empty.
+          iframeSandbox,
+        },
       });
     },
-    [deck],
+    [deck, iframeSandbox],
   );
 
   const audienceWindowRef = useRef<Window | null>(null);
   const audiencePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [monitorPickerOpen, setMonitorPickerOpen] = useState(false);
+  const [availableMonitors, setAvailableMonitors] = useState<MonitorInfo[]>([]);
 
   const handleSyncMessage = useCallback(
     (msg: AudienceMessage) => {
@@ -321,14 +386,18 @@ export function DeckViewer({
     sync.send({ type: 'presentation', presentation: audiencePresentation });
   }, [sync, audiencePresentation]);
 
-  const openAudienceWindow = useCallback(async () => {
-    if (isTauri()) {
-      // Desktop build: spawn a Tauri WebviewWindow instead of window.open.
-      // The Rust side enforces capability ACL on the new window's label
-      // (`audience-*` is whitelisted in capabilities/default.json).
+  // Desktop helper: actually spawn the Tauri WebviewWindow once the user
+  // has either picked a display (multi-monitor systems) or single-display
+  // bypass kicked in. The Rust side enforces capability ACL on the new
+  // window's label (`audience-*` is whitelisted in
+  // capabilities/default.json).
+  const launchAudienceTauri = useCallback(
+    async (monitor: MonitorInfo | null, fullscreen: boolean) => {
       try {
-        const { openAudienceWindow: openAudienceTauri } = await import('../desktop/audienceWindow');
-        await openAudienceTauri(deck.fingerprint);
+        const { openAudienceWindow: openAudienceTauri } = await import(
+          '../desktop/audienceWindow'
+        );
+        await openAudienceTauri(deck.fingerprint, { monitor, fullscreen });
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('Failed to open Tauri audience window', err);
@@ -341,6 +410,26 @@ export function DeckViewer({
         () => sendSnapshot(syncRef.current, audiencePresentationRef.current),
         400,
       );
+    },
+    [deck.fingerprint, sendSnapshot],
+  );
+
+  const openAudienceWindow = useCallback(async () => {
+    if (isTauri()) {
+      let monitors: MonitorInfo[] = [];
+      try {
+        monitors = await listMonitors();
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('listMonitors failed, falling back to OS-default placement', err);
+      }
+      setAvailableMonitors(monitors);
+      // Single-display systems skip the picker; fullscreen straight away.
+      if (monitors.length <= 1) {
+        await launchAudienceTauri(monitors[0] ?? null, true);
+        return;
+      }
+      setMonitorPickerOpen(true);
       return;
     }
 
@@ -353,7 +442,7 @@ export function DeckViewer({
     const url = `/?audience=1&deck=${encodeURIComponent(deck.fingerprint)}`;
     const popup = window.open(
       url,
-      `hcslides-lite-audience-${deck.fingerprint}`,
+      `slidestage-lite-audience-${deck.fingerprint}`,
       'popup,width=1280,height=720',
     );
     if (!popup) return;
@@ -362,7 +451,19 @@ export function DeckViewer({
       () => sendSnapshot(syncRef.current, audiencePresentationRef.current),
       250,
     );
-  }, [deck.fingerprint, sendSnapshot]);
+  }, [deck.fingerprint, launchAudienceTauri, sendSnapshot]);
+
+  const handleMonitorPicked = useCallback(
+    (monitor: MonitorInfo, fullscreen: boolean) => {
+      setMonitorPickerOpen(false);
+      void launchAudienceTauri(monitor, fullscreen);
+    },
+    [launchAudienceTauri],
+  );
+
+  const handleMonitorCancel = useCallback(() => {
+    setMonitorPickerOpen(false);
+  }, []);
 
   useEffect(() => {
     if (audiencePollRef.current) clearInterval(audiencePollRef.current);
@@ -394,6 +495,85 @@ export function DeckViewer({
       audienceWindowRef.current = null;
     };
   }, []);
+
+  // Keep refs in sync for the global-shortcut handler so it always reads
+  // the latest navigation / presenter state without re-registering on
+  // every keystroke or slide change.
+  const onNavigateRef = useRef(onNavigate);
+  onNavigateRef.current = onNavigate;
+  const currentIndexRef = useRef(currentIndex);
+  currentIndexRef.current = currentIndex;
+  const totalSlidesRef = useRef(deck.manifest.totalSlides);
+  totalSlidesRef.current = deck.manifest.totalSlides;
+  const presenterRef = useRef(presenter);
+  presenterRef.current = presenter;
+
+  // While the audience window is live in the Tauri build, register a
+  // global-shortcut belt-and-braces layer so presentation keys keep
+  // working even if a slide iframe steals focus on the audience side.
+  // We deliberately scope this to (a) Tauri only, (b) only while the
+  // audience is connected, so we never claim system shortcuts during a
+  // plain Web session or while the user is just browsing decks.
+  useEffect(() => {
+    if (!isTauri() || !audienceConnected) return undefined;
+    let cancelled = false;
+    let handle: { unregister(): Promise<void> } | null = null;
+    (async () => {
+      try {
+        const { registerPresentationShortcuts } = await import(
+          '../desktop/globalShortcuts'
+        );
+        const registered = await registerPresentationShortcuts((action) => {
+          const total = totalSlidesRef.current;
+          const idx = currentIndexRef.current;
+          switch (action) {
+            case 'next-slide':
+              onNavigateRef.current(Math.min(idx + 1, total - 1));
+              break;
+            case 'prev-slide':
+              onNavigateRef.current(Math.max(idx - 1, 0));
+              break;
+            case 'first-slide':
+              onNavigateRef.current(0);
+              break;
+            case 'last-slide':
+              onNavigateRef.current(total - 1);
+              break;
+            case 'toggle-blackout': {
+              const api = presenterRef.current;
+              api.setTool(api.state.tool === 'blackout' ? 'mouse' : 'blackout');
+              break;
+            }
+            case 'exit-fullscreen':
+              // Best-effort: tell the audience window to leave fullscreen.
+              void (async () => {
+                try {
+                  const { setAudienceFullscreen } = await import('../desktop/audienceWindow');
+                  await setAudienceFullscreen(deck.fingerprint, false);
+                } catch {
+                  // ignore
+                }
+              })();
+              break;
+            default:
+              break;
+          }
+        });
+        if (cancelled) {
+          await registered.unregister();
+        } else {
+          handle = registered;
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('global shortcuts setup failed', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      void handle?.unregister();
+    };
+  }, [audienceConnected, deck.fingerprint]);
 
   const startSideResize = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -561,7 +741,7 @@ export function DeckViewer({
 
   const overviewOverlay = showOverview ? (
     <Overview
-      deck={deck}
+      deck={effectiveDeck}
       currentIndex={currentIndex}
       onSelect={(index) => {
         onNavigate(index);
@@ -925,6 +1105,14 @@ export function DeckViewer({
       {notesPanel}
 
       {overviewOverlay}
+
+      {monitorPickerOpen && availableMonitors.length > 0 ? (
+        <MonitorPicker
+          monitors={availableMonitors}
+          onPick={handleMonitorPicked}
+          onCancel={handleMonitorCancel}
+        />
+      ) : null}
     </section>
   );
 }

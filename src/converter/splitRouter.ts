@@ -2,6 +2,7 @@ import type { Manifest, ManifestSlide } from '../deck/types';
 import { asPlainUint8 } from './pack';
 import type { ConvertWarning } from './report';
 import type { RouterManifestEntry, SniffResult } from './sniffer';
+import { findSlideNotes } from './speakerNotes';
 
 const textDecoder = new TextDecoder('utf-8', { fatal: false });
 const HEAD_RE = /<head\b[^>]*>([\s\S]*?)<\/head>/i;
@@ -113,7 +114,7 @@ export function splitRouter(input: SplitRouterInput): SplitRouterResult {
       label,
       file: resolved,
       thumbnail: null,
-      notes: null,
+      notes: findSlideNotes(entries, resolved),
     });
   });
 

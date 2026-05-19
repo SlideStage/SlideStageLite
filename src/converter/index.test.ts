@@ -6,7 +6,7 @@ import { convertFolderSource, convertSource } from './index';
 import { loadDeck } from '../deck/loadDeck';
 import { DeckLoadError } from '../deck/types';
 
-const validBasicPath = resolve('tests/fixtures/valid-basic.hcslides');
+const validBasicPath = resolve('tests/fixtures/valid-basic.stage');
 const plainHtmlPath = resolve('tests/fixtures/sources/plain-page.html');
 const inlineDeckPath = resolve('tests/fixtures/sources/html-ppt-inline-deck.zip');
 const webComponentPath = resolve('tests/fixtures/sources/huashu-webcomponent-deck.zip');
@@ -39,18 +39,18 @@ async function buildLocalZip(files: Record<string, string>): Promise<Uint8Array>
 }
 
 describe('convertSource', () => {
-  it('round-trips an hcslides@1.0 source in passthrough mode', async () => {
+  it('round-trips a slidestage@1.0 source in passthrough mode', async () => {
     const source = await readSource(validBasicPath);
     const result = await convertSource(source);
 
-    expect(result.manifest.schema).toBe('hcslides@1.0');
+    expect(result.manifest.schema).toBe('slidestage@1.0');
     expect(result.manifest.id).toBe('lite-fixture');
     expect(result.manifest.totalSlides).toBe(2);
-    expect(result.report.sourceKind).toBe('hcslides@1.0');
+    expect(result.report.sourceKind).toBe('slidestage@1.0');
     expect(result.report.mode).toBe('passthrough');
     expect(result.report.slides).toHaveLength(2);
 
-    const unzipped = unzipSync(result.hcslides);
+    const unzipped = unzipSync(result.stage);
     const keys = Object.keys(unzipped);
     expect(keys).toContain('manifest.json');
     expect(keys).toContain('slides/01-cover.html');
@@ -63,9 +63,9 @@ describe('convertSource', () => {
     const result = await convertSource(source, { report: true });
 
     expect(result.reportMarkdown).toBeDefined();
-    expect(result.reportMarkdown).toContain('# SlidesDeck Converter Report');
+    expect(result.reportMarkdown).toContain('# SlideStage Converter Report');
     expect(result.reportMarkdown).toContain('Total slides**: 2');
-    expect(result.reportMarkdown).toContain('Detected kind**: `hcslides@1.0`');
+    expect(result.reportMarkdown).toContain('Detected kind**: `slidestage@1.0`');
   });
 
   it('applies manifest overrides on top of the synthesized manifest', async () => {
@@ -90,13 +90,13 @@ describe('convertSource', () => {
       sourceKind: 'plain-html',
       conversionMode: 'single',
       sourceEntry: 'index.html',
-      converter: { name: 'slides-deck-converter' },
+      converter: { name: 'slidestage-converter' },
     });
     expect(result.manifest.totalSlides).toBe(1);
     expect(result.manifest.title).toBe('Plain Single Page');
     expect(result.manifest.compat).toBeUndefined();
 
-    const unzipped = unzipSync(result.hcslides);
+    const unzipped = unzipSync(result.stage);
     expect(Object.keys(unzipped)).toContain('manifest.json');
     // Single-HTML inputs are normalized to `index.html` by normalizeSource.
     expect(Object.keys(unzipped)).toContain('index.html');
@@ -135,7 +135,7 @@ describe('convertSource', () => {
     expect(result.manifest.totalSlides).toBe(2);
     expect(result.manifest.slides.map((s) => s.label)).toEqual(['WC 1', 'WC 2']);
 
-    const unzipped = unzipSync(result.hcslides);
+    const unzipped = unzipSync(result.stage);
     const keys = Object.keys(unzipped);
     expect(keys).toContain('01-wc-1.html');
     expect(keys).toContain('02-wc-2.html');
@@ -151,10 +151,10 @@ describe('convertSource', () => {
     const source = await readSource(webComponentPath);
     const result = await convertSource(source);
 
-    const bytes = asLocalBytes(result.hcslides);
+    const bytes = asLocalBytes(result.stage);
     const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
     const blob = new Blob([buffer], { type: 'application/zip' });
-    const file = new File([blob], 'converted-wc.hcslides', {
+    const file = new File([blob], 'converted-wc.stage', {
       type: 'application/zip',
       lastModified: Date.now(),
     });
@@ -184,7 +184,7 @@ describe('convertSource', () => {
       'slides/03-finale.html',
     ]);
 
-    const unzipped = unzipSync(result.hcslides);
+    const unzipped = unzipSync(result.stage);
     expect(Object.keys(unzipped)).toContain('slides/01-cover.html');
     expect(Object.keys(unzipped)).toContain('shared/theme.css');
     // Loader page is no longer needed because slides[] points at the slide
@@ -201,10 +201,10 @@ describe('convertSource', () => {
     const source = await readSource(routerPath);
     const result = await convertSource(source);
 
-    const bytes = asLocalBytes(result.hcslides);
+    const bytes = asLocalBytes(result.stage);
     const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
     const blob = new Blob([buffer], { type: 'application/zip' });
-    const file = new File([blob], 'converted-router.hcslides', {
+    const file = new File([blob], 'converted-router.stage', {
       type: 'application/zip',
       lastModified: Date.now(),
     });
@@ -265,7 +265,7 @@ describe('convertSource', () => {
     expect(files[1]).toBe('02-two.html');
     expect(files[2]).toBe('03-three.html');
 
-    const unzipped = unzipSync(result.hcslides);
+    const unzipped = unzipSync(result.stage);
     const keys = Object.keys(unzipped);
     expect(keys).toContain('manifest.json');
     expect(keys).toContain('01-cover.html');
@@ -289,14 +289,14 @@ describe('convertSource', () => {
     expect(runtimeDropped).toBeDefined();
   });
 
-  it('produces .hcslides bytes that loadDeck accepts (inline-deck round-trip)', async () => {
+  it('produces .stage bytes that loadDeck accepts (inline-deck round-trip)', async () => {
     const source = await readSource(inlineDeckPath);
     const result = await convertSource(source);
 
-    const bytes = asLocalBytes(result.hcslides);
+    const bytes = asLocalBytes(result.stage);
     const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
     const blob = new Blob([buffer], { type: 'application/zip' });
-    const file = new File([blob], 'converted-inline.hcslides', {
+    const file = new File([blob], 'converted-inline.stage', {
       type: 'application/zip',
       lastModified: Date.now(),
     });
@@ -329,13 +329,13 @@ describe('convertSource', () => {
       expect.arrayContaining(['same-origin-storage', 'broadcast-channel', 'window-open']),
     );
 
-    const unzipped = unzipSync(result.hcslides);
+    const unzipped = unzipSync(result.stage);
     expect(Object.keys(unzipped)).toContain('manifest.json');
     expect(result.report.warnings.some((w) => w.kind === 'note')).toBe(true);
   });
 
 
-  it('refuses non-passthrough mode on hcslides@1.0 unless repackHcslides is set', async () => {
+  it('refuses non-passthrough mode on slidestage@1.0 unless repackStage is set', async () => {
     const source = await readSource(validBasicPath);
     await expect(convertSource(source, { mode: 'split' })).rejects.toThrow(/passthrough/);
   });
@@ -399,12 +399,12 @@ describe('convertFolderSource', () => {
     expect(result.manifest.totalSlides).toBe(2);
     expect(result.manifest.slides[0].label).toBe('Hello');
 
-    const buffer = result.hcslides.buffer.slice(
-      result.hcslides.byteOffset,
-      result.hcslides.byteOffset + result.hcslides.byteLength,
+    const buffer = result.stage.buffer.slice(
+      result.stage.byteOffset,
+      result.stage.byteOffset + result.stage.byteLength,
     ) as ArrayBuffer;
     const blob = new Blob([buffer], { type: 'application/zip' });
-    const file = new File([blob], 'folder-inline-deck.hcslides', { type: 'application/zip' });
+    const file = new File([blob], 'folder-inline-deck.stage', { type: 'application/zip' });
     const loaded = await loadDeck(file);
     try {
       expect(loaded.manifest.totalSlides).toBe(2);
@@ -426,7 +426,7 @@ describe('convertFolderSource', () => {
       { entries, name: 'noisy-folder', lastModified: 0 },
     );
 
-    const unzipped = unzipSync(result.hcslides);
+    const unzipped = unzipSync(result.stage);
     const keys = Object.keys(unzipped);
     expect(keys).not.toContain('.git/HEAD');
     expect(keys).not.toContain('node_modules/foo/index.js');

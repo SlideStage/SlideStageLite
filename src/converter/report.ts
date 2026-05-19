@@ -96,7 +96,7 @@ export function renderReportMarkdown(report: ConvertReport): string {
     ? `\n## Warnings\n\n${report.warnings.map(formatWarning).join('\n')}\n`
     : '\n## Warnings\n\nNone.\n';
 
-  return `# SlidesDeck Converter Report
+  return `# SlideStage Converter Report
 
 - **Source**: \`${report.sourceName}\`
 - **Detected kind**: \`${report.sourceKind}\`

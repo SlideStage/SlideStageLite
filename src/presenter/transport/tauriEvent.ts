@@ -22,7 +22,7 @@ export const tauriEventFactory: TransportFactory = {
     );
   },
   create(channelName: string): SyncTransport {
-    const eventName = `hcslides:${channelName}`;
+    const eventName = `slidestage:${channelName}`;
     let unlistenP: Promise<() => void> | null = null;
     let closed = false;
 

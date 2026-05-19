@@ -2,6 +2,7 @@ import type { Manifest, ManifestSlide } from '../deck/types';
 import { extractBalancedBlocks, type ExtractedBlock } from './htmlBlocks';
 import { asPlainUint8, bytesFromString } from './pack';
 import type { ConvertWarning } from './report';
+import { extractInlineNotes, findSlideNotes } from './speakerNotes';
 
 const textDecoder = new TextDecoder('utf-8', { fatal: false });
 
@@ -206,7 +207,7 @@ export function splitWebComponent(input: SplitWcInput): SplitWcResult {
       label: slide.label,
       file: candidate,
       thumbnail: null,
-      notes: null,
+      notes: extractInlineNotes(html) ?? findSlideNotes(entries, candidate),
     });
   });
 

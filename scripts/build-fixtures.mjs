@@ -68,12 +68,12 @@ async function emitSourceZip(name, files) {
 
 async function buildValidBasic() {
   const manifest = {
-    schema: 'hcslides@1.0',
+    schema: 'slidestage@1.0',
     id: 'lite-fixture',
     version: '1.0.0',
     title: 'Lite Fixture Deck',
     subtitle: null,
-    author: 'SlidesDeckLite',
+    author: 'SlideStageLite',
     description: 'Small deterministic fixture for loader tests.',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -109,15 +109,15 @@ async function buildValidBasic() {
     platform: { minSchemaVersion: '1.0', compatibleArchitectures: ['multi-file'] },
     stats: {
       packedAt: '2026-01-01T00:00:00.000Z',
-      packerVersion: 'slides-deck-lite-fixture@1.0.0',
+      packerVersion: 'slidestage-lite-fixture@1.0.0',
     },
   };
 
-  await emit('valid-basic.hcslides', {
+  await emit('valid-basic.stage', {
     'manifest.json': strToU8(`${JSON.stringify(manifest, null, 2)}\n`),
     'shared/tokens.css': strToU8(tokensCss),
     'slides/01-cover.html': strToU8(
-      buildSlideHtml('Lite Fixture Deck', 'Slide 1 rendered from a local .hcslides file.'),
+      buildSlideHtml('Lite Fixture Deck', 'Slide 1 rendered from a local .stage file.'),
     ),
     'slides/02-details.html': strToU8(
       buildSlideHtml('Details Slide', 'Slide 2 proves navigation works.'),
@@ -129,12 +129,12 @@ async function buildMismatchedCounts() {
   // totalSlides intentionally wrong, slides[].index intentionally not 1..N sequential.
   // PR-D1 expects loader to warn and use slides.length, and to renumber index by array order.
   const manifest = {
-    schema: 'hcslides@1.0',
+    schema: 'slidestage@1.0',
     id: 'lite-mismatched',
     version: '1.0.0',
     title: 'Mismatched Counts Deck',
     subtitle: null,
-    author: 'SlidesDeckLite',
+    author: 'SlideStageLite',
     description: 'Fixture for schema relaxation tests (PR-D1).',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -169,7 +169,7 @@ async function buildMismatchedCounts() {
     ],
   };
 
-  await emit('mismatched-counts.hcslides', {
+  await emit('mismatched-counts.stage', {
     'manifest.json': strToU8(`${JSON.stringify(manifest, null, 2)}\n`),
     'shared/tokens.css': strToU8(tokensCss),
     'slides/01-first.html': strToU8(buildSlideHtml('First slide', 'Index renumbered by D1.')),
@@ -183,12 +183,12 @@ async function buildRelaxedId() {
   // letters, or punctuation. PR-D1 only forbids NUL, "/", "\\", "..", and
   // control characters. Test a real-world-flavored id.
   const manifest = {
-    schema: 'hcslides@1.0',
+    schema: 'slidestage@1.0',
     id: 'Acme Corp — Q4 2026 Pitch (Final)',
     version: '1.0.0',
     title: 'Relaxed Id Deck',
     subtitle: null,
-    author: 'SlidesDeckLite',
+    author: 'SlideStageLite',
     description: 'Fixture for id regex relaxation tests (PR-D1).',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -202,12 +202,12 @@ async function buildRelaxedId() {
         label: 'Only slide',
         file: 'slides/01-only.html',
         thumbnail: null,
-        notes: 'Architecture stays within the standard hcslides@1.0 enum.',
+        notes: 'Architecture stays within the standard slidestage@1.0 enum.',
       },
     ],
   };
 
-  await emit('relaxed-id.hcslides', {
+  await emit('relaxed-id.stage', {
     'manifest.json': strToU8(`${JSON.stringify(manifest, null, 2)}\n`),
     'shared/tokens.css': strToU8(tokensCss),
     'slides/01-only.html': strToU8(
@@ -224,12 +224,12 @@ async function buildTrickyAssets() {
   // 3. <iframe srcdoc="..."> whose inner HTML references a package asset.
   // 4. CSS body referenced via @import url(...).
   const manifest = {
-    schema: 'hcslides@1.0',
+    schema: 'slidestage@1.0',
     id: 'tricky-assets',
     version: '1.0.0',
     title: 'Tricky Assets Deck',
     subtitle: null,
-    author: 'SlidesDeckLite',
+    author: 'SlideStageLite',
     description: 'Fixture for HTML rewrite coverage tests (PR-D2).',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -280,6 +280,8 @@ async function buildTrickyAssets() {
   <head>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../shared/theme.css" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700" />
     <style>@import url("../shared/extra.css");</style>
   </head>
   <body>
@@ -293,7 +295,7 @@ async function buildTrickyAssets() {
 </html>
 `;
 
-  await emit('tricky-assets.hcslides', {
+  await emit('tricky-assets.stage', {
     'manifest.json': strToU8(`${JSON.stringify(manifest, null, 2)}\n`),
     'shared/tokens.css': strToU8(tokensCss),
     'shared/theme.css': strToU8(themeCss),
@@ -507,6 +509,79 @@ async function buildSniffedPlainHtml() {
   await emitSource('plain-page.html', html);
 }
 
+async function buildOversizedDeck() {
+  // Fixture that exceeds the default Web inline budget (16 MiB). We
+  // ship a single ~20 MiB "font" asset alongside a real slide so:
+  //   - In Web mode the loader trips inlineMode='auto' and reports
+  //     `inlinedHtmlAvailable === false`. The App layer should then
+  //     auto-grant same-origin-storage and surface the sticky banner.
+  //   - The transport-published slide still has working virtual URLs.
+  //
+  // Real CJK fonts compress poorly, so we use a tiny xorshift PRNG to
+  // produce a byte stream deflate cannot fold. zip's level=9 over a
+  // truly-random 20 MiB blob barely budges from raw size.
+  const fillerSize = 20 * 1024 * 1024; // 20 MiB; > 16 MiB default budget
+  const filler = new Uint8Array(fillerSize);
+  let state = 0xdeadbeef >>> 0;
+  for (let i = 0; i < fillerSize; i += 1) {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    filler[i] = state & 0xff;
+  }
+
+  const manifest = {
+    schema: 'slidestage@1.0',
+    id: 'oversized-fixture',
+    version: '1.0.0',
+    title: 'Oversized Deck',
+    subtitle: null,
+    author: 'SlideStageLite',
+    description:
+      'Fixture larger than the default Web inline budget. Used to verify ' +
+      'the auto-elevation path that bypasses srcdoc data-URL inlining and ' +
+      'falls back to the Service Worker transport.',
+    createdAt: '2026-05-19T00:00:00.000Z',
+    updatedAt: '2026-05-19T00:00:00.000Z',
+    architecture: 'multi-file',
+    dimensions: { width: 1920, height: 1080 },
+    totalSlides: 1,
+    slides: [
+      {
+        index: 1,
+        id: 'cover',
+        label: 'Cover',
+        file: 'slides/01-cover.html',
+        thumbnail: null,
+        notes: 'Inline budget regression fixture.',
+      },
+    ],
+  };
+
+  const slideHtml = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../shared/tokens.css" />
+  </head>
+  <body>
+    <main class="slide" data-testid="oversized-cover-slide">
+      <div>
+        <h1>Oversized Deck</h1>
+        <p>Auto-elevated via same-origin-storage.</p>
+      </div>
+    </main>
+  </body>
+</html>`;
+
+  await emit('oversized.stage', {
+    'manifest.json': strToU8(`${JSON.stringify(manifest, null, 2)}\n`),
+    'shared/tokens.css': strToU8(tokensCss),
+    'slides/01-cover.html': strToU8(slideHtml),
+    'assets/_mirror/font/oversized-filler.ttf': filler,
+  });
+}
+
 await buildValidBasic();
 await buildMismatchedCounts();
 await buildRelaxedId();
@@ -516,3 +591,4 @@ await buildSniffedWebComponentDeck();
 await buildSniffedRouterHtml();
 await buildSniffedPlainHtml();
 await buildFolderInlineDeckFixture();
+await buildOversizedDeck();

@@ -1,11 +1,11 @@
 import { unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import type { Manifest } from '../deck/types';
-import { packHcslides, asPlainUint8, bytesFromString } from './pack';
+import { packStage, asPlainUint8, bytesFromString } from './pack';
 
 function makeManifest(overrides: Partial<Manifest> = {}): Manifest {
   return {
-    schema: 'hcslides@1.0',
+    schema: 'slidestage@1.0',
     id: 'pack-test',
     version: '1.0.0',
     title: 'Pack Test',
@@ -38,17 +38,17 @@ function makeEntries(): Map<string, Uint8Array> {
   ]);
 }
 
-describe('packHcslides · determinism', () => {
+describe('packStage · determinism', () => {
   it('produces byte-identical zips for byte-identical inputs across calls', () => {
     const manifest = makeManifest();
-    const a = packHcslides(manifest, makeEntries());
-    const b = packHcslides(manifest, makeEntries());
+    const a = packStage(manifest, makeEntries());
+    const b = packStage(manifest, makeEntries());
     expect(Array.from(asPlainUint8(a))).toEqual(Array.from(asPlainUint8(b)));
   });
 
   it('changes only when manifest createdAt drifts', () => {
-    const stable = packHcslides(makeManifest(), makeEntries());
-    const drifted = packHcslides(
+    const stable = packStage(makeManifest(), makeEntries());
+    const drifted = packStage(
       makeManifest({ createdAt: '2025-06-15T12:00:00.000Z', updatedAt: '2025-06-15T12:00:00.000Z' }),
       makeEntries(),
     );
@@ -57,7 +57,7 @@ describe('packHcslides · determinism', () => {
 
   it('round-trips through unzipSync with all entries intact', () => {
     const manifest = makeManifest();
-    const bytes = packHcslides(manifest, makeEntries());
+    const bytes = packStage(manifest, makeEntries());
     const unpacked = unzipSync(asPlainUint8(bytes));
     expect(Object.keys(unpacked).sort()).toEqual(
       ['assets/style.css', 'manifest.json', 'slides/01-cover.html'].sort(),

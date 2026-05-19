@@ -1,4 +1,4 @@
-# SlidesDeckLite repo ignore list
+# SlideStageLite repo ignore list
 #
 # We keep only "shippable" source under version control: src/, bin/,
 # scripts/, config files, index.html, package manifests. AI-generated

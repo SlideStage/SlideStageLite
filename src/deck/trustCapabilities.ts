@@ -106,3 +106,22 @@ export function capabilitiesEqual(
 export function describeCapability(cap: TrustCapability): TrustCapabilityInfo {
   return CAPABILITY_REGISTRY[cap];
 }
+
+/**
+ * Returns true when the sandbox token list grants `allow-same-origin`.
+ *
+ * The viewer uses this to decide whether to render a slide via
+ * `<iframe src={virtualUrl}>` (service worker route, only honoured by
+ * Chrome for same-origin iframes) or via `<iframe srcdoc={html}>` (the
+ * always-safe data-URL-inlined fallback). Sandboxed iframes without
+ * `allow-same-origin` have an opaque ("null") origin which Chrome
+ * explicitly bypasses for service worker fetch interception, so they
+ * MUST go through srcdoc no matter how nicely the SW is wired up.
+ */
+export function sandboxAllowsSameOrigin(sandbox: string | undefined | null): boolean {
+  if (!sandbox) return false;
+  return sandbox
+    .split(/\s+/)
+    .filter(Boolean)
+    .includes('allow-same-origin');
+}

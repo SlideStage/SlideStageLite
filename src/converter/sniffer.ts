@@ -1,7 +1,7 @@
 const textDecoder = new TextDecoder('utf-8', { fatal: false });
 
 export type SniffKind =
-  | 'hcslides@1.0'
+  | 'slidestage@1.0'
   | 'inline-deck'
   | 'webcomponent-deck'
   | 'router-html'
@@ -190,7 +190,7 @@ function tryParseJsArray(raw: string): unknown[] | null {
 
 export function sniffDeck(entries: Map<string, Uint8Array>): SniffResult {
   if (entries.has('manifest.json')) {
-    return { kind: 'hcslides@1.0', confidence: 1.0 };
+    return { kind: 'slidestage@1.0', confidence: 1.0 };
   }
 
   const htmlEntries = listHtmlEntries(entries);

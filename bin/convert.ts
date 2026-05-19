@@ -114,24 +114,24 @@ function parseArgs(argv: string[]): ParsedArgs {
 
 function printUsage(): void {
   process.stdout.write(
-    `slides-deck-convert — pack HTML decks into .hcslides
+    `slidestage-convert — pack HTML decks into .stage
 
 Usage:
-  slides-deck-convert pack <source> --out <file.hcslides> [options]
+  slidestage-convert pack <source> --out <file.stage> [options]
 
 <source> may be:
   • A .html / .htm file (single-page deck).
-  • A .zip or .hcslides archive (already-packaged deck).
+  • A .zip or .stage archive (already-packaged deck).
   • A directory tree (recursively walked; .git / node_modules / OS noise
     are skipped by the shared folder filter).
 
 Required:
-  --out <file>           Destination .hcslides path.
+  --out <file>           Destination .stage path.
 
 Modes:
   --mode <split|wrap|passthrough|single>
                          Override the default mode for the detected source.
-  --repack               Allow repacking an hcslides input (otherwise only
+  --repack               Allow repacking a slidestage input (otherwise only
                          passthrough is permitted).
 
 Manifest overrides:
@@ -165,7 +165,7 @@ const exitCodeByErrorCode: Partial<Record<DeckLoadErrorCode, number>> = {
 };
 
 function defaultReportPath(outPath: string): string {
-  const base = outPath.replace(/\.hcslides$/i, '');
+  const base = outPath.replace(/\.stage$/i, '');
   return `${base}-report.md`;
 }
 
@@ -252,7 +252,7 @@ async function main(): Promise<void> {
   const wantReport = !args.noReport;
   const options: ConvertOptions = {
     mode: args.mode,
-    repackHcslides: args.repack,
+    repackStage: args.repack,
     strict: args.strict,
     report: wantReport,
     manifestOverrides: args.manifest,
@@ -276,7 +276,7 @@ async function main(): Promise<void> {
 
     const outPath = resolve(args.out);
     await mkdir(dirname(outPath), { recursive: true });
-    await writeFile(outPath, result.hcslides);
+    await writeFile(outPath, result.stage);
 
     let reportPath: string | undefined;
     if (wantReport && result.reportMarkdown) {
@@ -288,7 +288,7 @@ async function main(): Promise<void> {
 
     if (args.verbose) {
       process.stderr.write(
-        `[converter] wrote ${outPath} (${result.hcslides.byteLength} bytes, ${result.manifest.totalSlides} slides)\n`,
+        `[converter] wrote ${outPath} (${result.stage.byteLength} bytes, ${result.manifest.totalSlides} slides)\n`,
       );
       if (reportPath) {
         process.stderr.write(`[converter] wrote ${reportPath}\n`);

@@ -83,7 +83,7 @@ describe('format()', () => {
 
 describe('translate()', () => {
   it('returns the localized string when present', () => {
-    expect(translate('en', 'app.brand.name')).toBe('SlidesDeckLite');
+    expect(translate('en', 'app.brand.name')).toBe('SlideStageLite');
     expect(translate('zh-CN', 'app.header.meta')).toBe('本地运行 · 无服务端');
   });
 
@@ -93,7 +93,7 @@ describe('translate()', () => {
     const original = dict['app.brand.name'];
     delete dict['app.brand.name'];
     try {
-      expect(translate(phantomLocale, 'app.brand.name')).toBe('SlidesDeckLite');
+      expect(translate(phantomLocale, 'app.brand.name')).toBe('SlideStageLite');
     } finally {
       dict['app.brand.name'] = original;
     }

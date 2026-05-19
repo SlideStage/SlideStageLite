@@ -9,7 +9,7 @@ import {
   type MirrorPolicy,
   type MirrorResult,
 } from './mirrorExternal';
-import { packHcslides } from './pack';
+import { packStage } from './pack';
 import {
   emptyReport,
   renderReportMarkdown,
@@ -31,7 +31,7 @@ import { splitWebComponent } from './splitWebComponent';
 import { wrapSource } from './wrapSource';
 
 const textDecoder = new TextDecoder('utf-8', { fatal: true });
-const converterName = 'slides-deck-converter';
+const converterName = 'slidestage-converter';
 const converterVersion = '0.1.0';
 
 export interface ManifestOverrides {
@@ -45,17 +45,17 @@ export interface ManifestOverrides {
 export interface ConvertOptions {
   /** Output mode override. Default is implied by the sniffed source kind. */
   mode?: ConvertMode;
-  /** When true, return a Markdown render of the report alongside `hcslides`. */
+  /** When true, return a Markdown render of the report alongside `stage`. */
   report?: boolean;
   /** Optional manifest overrides applied on top of the synthesized manifest. */
   manifestOverrides?: ManifestOverrides;
-  /** Allow re-emitting a `.hcslides` source (otherwise only `passthrough` is allowed). */
-  repackHcslides?: boolean;
+  /** Allow re-emitting a `.stage` source (otherwise only `passthrough` is allowed). */
+  repackStage?: boolean;
   /** When true, treat warnings as errors and throw. */
   strict?: boolean;
   /**
    * When set, run the offline mirror pass after conversion. The result is
-   * baked into the output `.hcslides` (slide HTML/CSS are statically
+   * baked into the output `.stage` (slide HTML/CSS are statically
    * rewritten, `assets/_mirror/...` is populated, `manifest.offline` is
    * filled in). Set `fetcher: createNetworkFetcher()` to mirror over the
    * real network or supply a test fetcher.
@@ -70,8 +70,8 @@ export interface ConvertOptions {
 }
 
 export interface ConvertResult {
-  /** `.hcslides` ZIP bytes ready to write to disk or feed to `loadDeck`. */
-  hcslides: Uint8Array;
+  /** `.stage` ZIP bytes ready to write to disk or feed to `loadDeck`. */
+  stage: Uint8Array;
   /** Final manifest object. */
   manifest: Manifest;
   /** Structured conversion report. */
@@ -83,7 +83,7 @@ export interface ConvertResult {
 }
 
 const defaultModeBySniff: Record<SniffKind, ConvertMode> = {
-  'hcslides@1.0': 'passthrough',
+  'slidestage@1.0': 'passthrough',
   'inline-deck': 'split',
   'webcomponent-deck': 'split',
   'router-html': 'split',
@@ -96,7 +96,7 @@ function pickDefaultMode(kind: SniffKind, options: ConvertOptions): ConvertMode 
   return options.mode ?? defaultModeBySniff[kind];
 }
 
-function parseHcslidesManifest(entries: Map<string, Uint8Array>): Manifest {
+function parseStageManifest(entries: Map<string, Uint8Array>): Manifest {
   const bytes = entries.get('manifest.json');
   if (!bytes) {
     throw new DeckLoadError('E_NO_MANIFEST', 'manifest.json is missing from the source package root.');
@@ -111,7 +111,7 @@ function parseHcslidesManifest(entries: Map<string, Uint8Array>): Manifest {
     return parseManifest(JSON.parse(text));
   } catch (error) {
     if (error instanceof SyntaxError || error instanceof ZodError) {
-      throw new DeckLoadError('E_BAD_MANIFEST', 'manifest.json does not match hcslides@1.0.');
+      throw new DeckLoadError('E_BAD_MANIFEST', 'manifest.json does not match slidestage@1.0.');
     }
     throw error;
   }
@@ -136,7 +136,7 @@ function attachConversionProvenance(
   sniff: SniffResult,
   mode: ConvertMode,
 ): Manifest {
-  if (sniff.kind === 'hcslides@1.0') {
+  if (sniff.kind === 'slidestage@1.0') {
     return manifest;
   }
 
@@ -188,7 +188,7 @@ interface DispatchOutput {
 }
 
 function dispatchPassthrough({ normalized, sniff, mode }: DispatchInput): DispatchOutput {
-  const manifest = parseHcslidesManifest(normalized.entries);
+  const manifest = parseStageManifest(normalized.entries);
   const packEntries = copyEntriesForPack(normalized.entries);
   const report = emptyReport(normalized.sourceName, sniff.kind, mode);
   report.manifestId = manifest.id;
@@ -497,13 +497,13 @@ function dispatch(input: DispatchInput): DispatchOutput {
   const { sniff, mode, normalized, options } = input;
 
   switch (sniff.kind) {
-    case 'hcslides@1.0':
+    case 'slidestage@1.0':
       if (mode === 'passthrough') {
         return dispatchPassthrough(input);
       }
-      if (!options.repackHcslides) {
+      if (!options.repackStage) {
         throw new Error(
-          `[converter] hcslides@1.0 source can only be converted in "passthrough" mode unless --repack is set.`,
+          `[converter] slidestage@1.0 source can only be converted in "passthrough" mode unless --repack is set.`,
         );
       }
       return notImplemented(sniff.kind, mode);
@@ -621,9 +621,9 @@ async function convertNormalized(
     );
   }
 
-  const hcslides = packHcslides(resolvedManifest, resolvedEntries);
+  const stage = packStage(resolvedManifest, resolvedEntries);
   const result: ConvertResult = {
-    hcslides,
+    stage,
     manifest: resolvedManifest,
     report,
   };
@@ -648,7 +648,7 @@ export async function convertSource(
 
 /**
  * Pack a folder-shaped input — keyed by package-relative paths — into a
- * `.hcslides`. Use this entry point when the source comes from a directory
+ * `.stage`. Use this entry point when the source comes from a directory
  * tree (CLI `pack <folder>`) or from a multi-file browser drop (SPA folder
  * picker / `webkitdirectory` / drag-and-drop).
  *
@@ -665,7 +665,7 @@ export async function convertFolderSource(
 
 export { sniffDeck } from './sniffer';
 export { buildManifestFromSource } from './buildManifest';
-export { packHcslides } from './pack';
+export { packStage } from './pack';
 export { renderReportMarkdown } from './report';
 export { shouldSkipFolderPath, DEFAULT_FOLDER_SKIP_PATTERNS } from './folderFilter';
 export {

@@ -1,6 +1,6 @@
-# SlidesDeckLite Desktop —— Tauri 2 实施计划书
+# SlideStageLite Desktop —— Tauri 2 实施计划书
 
-> 目标：在不破坏现有 Web 版的前提下，给 SlidesDeckLite 套一个 Tauri 2 桌面壳，
+> 目标：在不破坏现有 Web 版的前提下，给 SlideStageLite 套一个 Tauri 2 桌面壳，
 > 输出 macOS / Windows / Linux 原生应用，包体 < 15MB、内存 < 80MB、启动 < 1s。
 
 ---
@@ -14,7 +14,7 @@
 | 多窗口通信 | 抽象 `SyncTransport`，Web 用 BroadcastChannel，Desktop 用 Tauri Event | 两端都 first-class，无后悔药 |
 | 文件读写 | 渲染层 File API 优先（拖入/picker），主进程仅做 deep-link / fileAssociations | 保持 Web 版逻辑 100% 复用 |
 | 打包 | Tauri 内置（`tauri build`）→ `.dmg` / `.msi` / `.AppImage` | 官方支持，含自动更新插件 |
-| 自动更新 | `tauri-plugin-updater`（后续阶段加入） | 与 SlidesDeckPro 自托管 endpoint 对接 |
+| 自动更新 | `tauri-plugin-updater`（后续阶段加入） | 与 SlideStagePro 自托管 endpoint 对接 |
 
 ---
 
@@ -22,14 +22,14 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                  SlidesDeckLite (Web 版,不变)                 │
+│                  SlideStageLite (Web 版,不变)                 │
 │  Vite + React 19 + TS  →  dist/  (静态文件,GitHub Pages 等)   │
 └──────────────────────────────────────────────────────────────┘
                               ▲
                               │ 共享 src/ 渲染层
                               │
 ┌──────────────────────────────────────────────────────────────┐
-│           SlidesDeckLite Desktop (Tauri 2 新增)                │
+│           SlideStageLite Desktop (Tauri 2 新增)                │
 │                                                                │
 │  ┌─────────────────┐         ┌──────────────────────────────┐│
 │  │ src-tauri/      │  IPC    │  WebviewWindow: main          ││
@@ -58,7 +58,7 @@
 ## 三、项目结构变更
 
 ```
-SlidesDeckLite/
+SlideStageLite/
 ├── src/                          ← 不变（少量 transport 抽象重构）
 │   └── presenter/
 │       ├── usePresentationSync.ts    ← 改为 transport-agnostic（保持公共 API）
@@ -138,7 +138,7 @@ import { emit, listen } from '@tauri-apps/api/event';
 export const tauriEventFactory: TransportFactory = {
   isAvailable: () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window,
   create(name) {
-    const channel = `hcslides:${name}`;
+    const channel = `slidestage:${name}`;
     let unlisten: Promise<() => void> | null = null;
     return {
       postMessage: (msg) => { emit(channel, msg); },
@@ -177,7 +177,7 @@ export async function openAudienceWindow(fingerprint: string): Promise<void> {
 
   await new WebviewWindow(label, {
     url: `/?audience=1&deck=${encodeURIComponent(fingerprint)}`,
-    title: 'SlidesDeckLite — Audience',
+    title: 'SlideStageLite — Audience',
     width: 1280, height: 720,
     decorations: true, resizable: true,
   }).once('tauri://created', () => {/* track */});
@@ -204,16 +204,16 @@ const openAudienceWindow = useCallback(async () => {
   "bundle": {
     "fileAssociations": [
       {
-        "ext": ["hcslides"],
-        "name": "HCSlides Deck",
-        "description": "SlidesDeck presentation",
+        "ext": ["stage"],
+        "name": "SlideStage Deck",
+        "description": "SlideStage presentation",
         "role": "Viewer",
-        "mimeType": "application/x-hcslides"
+        "mimeType": "application/x-stage"
       }
     ]
   },
   "plugins": {
-    "deep-link": { "desktop": { "schemes": ["hcslides"] } }
+    "deep-link": { "desktop": { "schemes": ["stage"] } }
   }
 }
 ```
@@ -253,7 +253,7 @@ async fn pending_file(app: tauri::AppHandle) -> Option<String> {
 }
 ```
 
-`fs:scope-deck-files` 是自定义 scope，只允许读已通过 dialog 选择的 `.hcslides` 文件。
+`fs:scope-deck-files` 是自定义 scope，只允许读已通过 dialog 选择的 `.stage` 文件。
 **这与 Lite 的 per-deck trust 模型在哲学上完全一致**：能力按需开放、用户显式授权、范围最小化。
 
 ---
@@ -276,7 +276,7 @@ async fn pending_file(app: tauri::AppHandle) -> Option<String> {
 
 ### Phase 2 — 文件系统集成
 - [ ] Rust 命令 `read_deck_bytes(path)` → `Vec<u8>`
-- [ ] `tauri.conf.json` 注册 `.hcslides` fileAssociations
+- [ ] `tauri.conf.json` 注册 `.stage` fileAssociations
 - [ ] `src/desktop/fileOpen.ts` 监听 `deck:open` 事件
 - [ ] 启动时检查 `pending_file` 命令处理首次打开
 
@@ -292,13 +292,13 @@ async fn pending_file(app: tauri::AppHandle) -> Option<String> {
 
 ### Phase 5 — 运行验证
 - [ ] 打开 app，验证 landing 页面渲染
-- [ ] 用 `pnpm fixtures` 生成的 `.hcslides` 文件测试 deck open
+- [ ] 用 `pnpm fixtures` 生成的 `.stage` 文件测试 deck open
 - [ ] 验证 presenter view 打开 audience window 后双窗同步
 
 ### Phase 6 — 后续（不在本批次）
 - [ ] Windows / Linux 交叉编译（GH Actions matrix）
-- [ ] `tauri-plugin-updater` 接 SlidesDeckPro 自托管 endpoint
-- [ ] 单例模式（防止多个 SlidesDeckLite 实例打开同一 deck）
+- [ ] `tauri-plugin-updater` 接 SlideStagePro 自托管 endpoint
+- [ ] 单例模式（防止多个 SlideStageLite 实例打开同一 deck）
 - [ ] tray icon + global shortcut 启动 presenter
 - [ ] iOS / Android（Tauri 2 mobile，复用同一 codebase）
 
@@ -325,7 +325,7 @@ async fn pending_file(app: tauri::AppHandle) -> Option<String> {
 5. ✅ 新增 transport 抽象单测，覆盖 BroadcastChannel + Tauri 两条路径
 6. ✅ 桌面 app 启动 < 1s，内存 < 100MB
 7. ✅ Presenter window 打开 Audience window 后，翻页/批注实时同步
-8. ✅ 双击 `.hcslides` 能从 Finder 启动 app 并自动加载
+8. ✅ 双击 `.stage` 能从 Finder 启动 app 并自动加载
 
 ---
 

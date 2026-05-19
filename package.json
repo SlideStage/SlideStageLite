@@ -1,9 +1,9 @@
 {
-  "name": "slides-deck-lite",
+  "name": "slidestage-lite",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Pure frontend .hcslides presentation runtime",
+  "description": "Pure frontend .stage presentation runtime",
   "scripts": {
     "predev": "pnpm fixtures",
     "dev": "vite",
