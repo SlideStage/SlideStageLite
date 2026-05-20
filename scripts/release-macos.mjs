@@ -321,6 +321,39 @@ runOrDie(`codesign --verify --verbose=2 "${DMG_ORIG}"`, {
   softFailWhen: mode !== 'full',
 });
 
+// Tauri's bundler submits + staples the inner .app, but does NOT submit
+// the outer .dmg to Apple. Without a separate submission the dmg has no
+// ticket, `stapler staple` would fail, and Gatekeeper shows "macOS
+// cannot verify" on first open. We therefore notarize the dmg here.
+if (mode === 'full' && !SKIP_STAPLING) {
+  step('Ensuring .dmg has a notarization staple');
+  if (dmgIsStapled(DMG_ORIG)) {
+    info('dmg already stapled — skipping re-notarization');
+  } else {
+    info(
+      'dmg is not yet stapled — submitting to Apple notary service ' +
+        '(this usually takes 1–3 minutes; progress prints below)',
+    );
+    const submission = notarizeDmg(DMG_ORIG);
+    info(`submission id: ${submission.id}`);
+    info(`submission status: ${submission.status}`);
+    if (submission.status !== 'Accepted') {
+      die(
+        `notarytool returned status="${submission.status}" for ${submission.id}.\n` +
+          `  Inspect the log with:\n` +
+          `    xcrun notarytool log ${submission.id} \\\n` +
+          `      --key "${process.env.APPLE_API_KEY_PATH}" \\\n` +
+          `      --key-id "${process.env.APPLE_API_KEY}" \\\n` +
+          `      --issuer "${process.env.APPLE_API_ISSUER}"`,
+      );
+    }
+    runOrDie(`xcrun stapler staple "${DMG_ORIG}"`, {
+      hint: 'stapler staple failed on the .dmg after notarization',
+    });
+    info('dmg stapled');
+  }
+}
+
 if (mode === 'full') {
   step('Verifying staple on .dmg');
   const stapleDmg = spawnSync('xcrun', ['stapler', 'validate', DMG_ORIG], {
@@ -328,7 +361,8 @@ if (mode === 'full') {
   });
   if (stapleDmg.status !== 0 && !SKIP_STAPLING) {
     die(
-      'dmg is not stapled. Notarization may not have completed for the dmg surface.',
+      'dmg is not stapled even after submission. Run `xcrun notarytool history ...` ' +
+        'and inspect the latest submission log.',
     );
   } else if (stapleDmg.status === 0) {
     info('dmg stapled OK');
@@ -404,4 +438,54 @@ async function sha256(filePath) {
     stream.on('end', () => resolveP(hash.digest('hex')));
     stream.on('error', rejectP);
   });
+}
+
+function dmgIsStapled(dmgPath) {
+  const r = spawnSync('xcrun', ['stapler', 'validate', dmgPath], {
+    stdio: 'pipe',
+  });
+  return r.status === 0;
+}
+
+function notarizeDmg(dmgPath) {
+  const r = spawnSync(
+    'xcrun',
+    [
+      'notarytool',
+      'submit',
+      dmgPath,
+      '--key',
+      process.env.APPLE_API_KEY_PATH,
+      '--key-id',
+      process.env.APPLE_API_KEY,
+      '--issuer',
+      process.env.APPLE_API_ISSUER,
+      '--wait',
+      '--output-format',
+      'json',
+    ],
+    { stdio: ['ignore', 'pipe', 'inherit'] },
+  );
+  if (r.status !== 0) {
+    die(
+      `notarytool submit failed for ${basename(dmgPath)} (exit ${r.status}). ` +
+        'Re-run with --verbose to see Apple\u2019s progress output, or check ' +
+        '`xcrun notarytool history ...` for the most recent submission.',
+    );
+  }
+  const stdout = r.stdout?.toString?.() ?? '';
+  try {
+    const parsed = JSON.parse(stdout);
+    return {
+      id: parsed.id ?? 'unknown',
+      status: parsed.status ?? 'unknown',
+      message: parsed.message ?? '',
+    };
+  } catch (err) {
+    die(
+      `failed to parse notarytool JSON output: ${err.message}\n` +
+        `  raw stdout:\n${stdout}`,
+    );
+    return { id: 'unknown', status: 'unknown', message: '' };
+  }
 }
