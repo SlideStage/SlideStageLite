@@ -9,8 +9,8 @@ import {
   shouldSkipFolderPath,
   type ConvertMode,
   type ConvertOptions,
-} from '../src/converter/index.ts';
-import { DeckLoadError, type DeckLoadErrorCode } from '../src/deck/types.ts';
+} from '@slidestage/core/converter';
+import { DeckLoadError, type DeckLoadErrorCode } from '@slidestage/core/deck/types';
 
 interface ParsedArgs {
   command: 'pack' | null;

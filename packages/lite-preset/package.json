@@ -1,9 +1,10 @@
 {
   "name": "@slidestage/lite-preset",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "description": "Default Lite feature preset: i18n, local persistence, app shell.",
+  "license": "MIT",
+  "sideEffects": false,
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -34,9 +35,16 @@
     "./desktop/thumbnailCapture": "./src/desktop/thumbnailCapture.ts",
     "./desktop/useThumbnailCapture": "./src/desktop/useThumbnailCapture.ts",
     "./desktop/MonitorPicker": "./src/desktop/MonitorPicker.tsx",
-    "./browser/stageServiceWorker": "./src/browser/stageServiceWorker.ts"
+    "./browser/stageServiceWorker": "./src/browser/stageServiceWorker.ts",
+    "./package.json": "./package.json"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "scripts": {
+    "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "engines": {
@@ -47,8 +55,167 @@
     "@slidestage/ui": "workspace:*"
   },
   "peerDependencies": {
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-global-shortcut": "^2.3.1",
     "lucide-react": "^1.14.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
+  },
+  "peerDependenciesMeta": {
+    "@tauri-apps/api": {
+      "optional": true
+    },
+    "@tauri-apps/plugin-global-shortcut": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "./litePreset": {
+        "types": "./dist/litePreset.d.ts",
+        "import": "./dist/litePreset.js",
+        "default": "./dist/litePreset.js"
+      },
+      "./app/LiteApp": {
+        "types": "./dist/app/LiteApp.d.ts",
+        "import": "./dist/app/LiteApp.js",
+        "default": "./dist/app/LiteApp.js"
+      },
+      "./app/ConverterPanel": {
+        "types": "./dist/app/ConverterPanel.d.ts",
+        "import": "./dist/app/ConverterPanel.js",
+        "default": "./dist/app/ConverterPanel.js"
+      },
+      "./app/TrustPrompt": {
+        "types": "./dist/app/TrustPrompt.d.ts",
+        "import": "./dist/app/TrustPrompt.js",
+        "default": "./dist/app/TrustPrompt.js"
+      },
+      "./app/Footer": {
+        "types": "./dist/app/Footer.d.ts",
+        "import": "./dist/app/Footer.js",
+        "default": "./dist/app/Footer.js"
+      },
+      "./app/LanguageSwitcher": {
+        "types": "./dist/app/LanguageSwitcher.d.ts",
+        "import": "./dist/app/LanguageSwitcher.js",
+        "default": "./dist/app/LanguageSwitcher.js"
+      },
+      "./app/readFolderInput": {
+        "types": "./dist/app/readFolderInput.d.ts",
+        "import": "./dist/app/readFolderInput.js",
+        "default": "./dist/app/readFolderInput.js"
+      },
+      "./viewer/DeckViewer": {
+        "types": "./dist/viewer/DeckViewer.d.ts",
+        "import": "./dist/viewer/DeckViewer.js",
+        "default": "./dist/viewer/DeckViewer.js"
+      },
+      "./viewer/AudienceView": {
+        "types": "./dist/viewer/AudienceView.d.ts",
+        "import": "./dist/viewer/AudienceView.js",
+        "default": "./dist/viewer/AudienceView.js"
+      },
+      "./i18n/I18nProvider": {
+        "types": "./dist/i18n/I18nProvider.d.ts",
+        "import": "./dist/i18n/I18nProvider.js",
+        "default": "./dist/i18n/I18nProvider.js"
+      },
+      "./i18n/detect": {
+        "types": "./dist/i18n/detect.d.ts",
+        "import": "./dist/i18n/detect.js",
+        "default": "./dist/i18n/detect.js"
+      },
+      "./i18n/locales": {
+        "types": "./dist/i18n/locales.d.ts",
+        "import": "./dist/i18n/locales.js",
+        "default": "./dist/i18n/locales.js"
+      },
+      "./i18n/messages": {
+        "types": "./dist/i18n/messages.d.ts",
+        "import": "./dist/i18n/messages.js",
+        "default": "./dist/i18n/messages.js"
+      },
+      "./persistence/annotationStore": {
+        "types": "./dist/persistence/annotationStore.d.ts",
+        "import": "./dist/persistence/annotationStore.js",
+        "default": "./dist/persistence/annotationStore.js"
+      },
+      "./persistence/legacyMigration": {
+        "types": "./dist/persistence/legacyMigration.d.ts",
+        "import": "./dist/persistence/legacyMigration.js",
+        "default": "./dist/persistence/legacyMigration.js"
+      },
+      "./persistence/notesStore": {
+        "types": "./dist/persistence/notesStore.d.ts",
+        "import": "./dist/persistence/notesStore.js",
+        "default": "./dist/persistence/notesStore.js"
+      },
+      "./persistence/trustStore": {
+        "types": "./dist/persistence/trustStore.d.ts",
+        "import": "./dist/persistence/trustStore.js",
+        "default": "./dist/persistence/trustStore.js"
+      },
+      "./desktop/env": {
+        "types": "./dist/desktop/env.d.ts",
+        "import": "./dist/desktop/env.js",
+        "default": "./dist/desktop/env.js"
+      },
+      "./desktop/fileOpen": {
+        "types": "./dist/desktop/fileOpen.d.ts",
+        "import": "./dist/desktop/fileOpen.js",
+        "default": "./dist/desktop/fileOpen.js"
+      },
+      "./desktop/globalShortcuts": {
+        "types": "./dist/desktop/globalShortcuts.d.ts",
+        "import": "./dist/desktop/globalShortcuts.js",
+        "default": "./dist/desktop/globalShortcuts.js"
+      },
+      "./desktop/monitors": {
+        "types": "./dist/desktop/monitors.d.ts",
+        "import": "./dist/desktop/monitors.js",
+        "default": "./dist/desktop/monitors.js"
+      },
+      "./desktop/audienceWindow": {
+        "types": "./dist/desktop/audienceWindow.d.ts",
+        "import": "./dist/desktop/audienceWindow.js",
+        "default": "./dist/desktop/audienceWindow.js"
+      },
+      "./desktop/thumbnailCache": {
+        "types": "./dist/desktop/thumbnailCache.d.ts",
+        "import": "./dist/desktop/thumbnailCache.js",
+        "default": "./dist/desktop/thumbnailCache.js"
+      },
+      "./desktop/thumbnailCapture": {
+        "types": "./dist/desktop/thumbnailCapture.d.ts",
+        "import": "./dist/desktop/thumbnailCapture.js",
+        "default": "./dist/desktop/thumbnailCapture.js"
+      },
+      "./desktop/useThumbnailCapture": {
+        "types": "./dist/desktop/useThumbnailCapture.d.ts",
+        "import": "./dist/desktop/useThumbnailCapture.js",
+        "default": "./dist/desktop/useThumbnailCapture.js"
+      },
+      "./desktop/MonitorPicker": {
+        "types": "./dist/desktop/MonitorPicker.d.ts",
+        "import": "./dist/desktop/MonitorPicker.js",
+        "default": "./dist/desktop/MonitorPicker.js"
+      },
+      "./browser/stageServiceWorker": {
+        "types": "./dist/browser/stageServiceWorker.d.ts",
+        "import": "./dist/browser/stageServiceWorker.js",
+        "default": "./dist/browser/stageServiceWorker.js"
+      },
+      "./package.json": "./package.json"
+    }
   }
 }

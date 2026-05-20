@@ -36,9 +36,9 @@ import {
   type MirrorPolicy,
   type MirrorProgress,
   type MirrorResult,
-} from '../src/converter/index.ts';
-import { parseManifest } from '../src/deck/manifestSchema.ts';
-import type { Manifest, ManifestOfflineSkippedUrl } from '../src/deck/types.ts';
+} from '@slidestage/core/converter';
+import { parseManifest } from '@slidestage/core/deck/manifestSchema';
+import type { Manifest, ManifestOfflineSkippedUrl } from '@slidestage/core/deck/types';
 
 interface CliArgs {
   source?: string;

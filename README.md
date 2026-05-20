@@ -5,9 +5,10 @@
 
 SlideStageLite is the **local-first sibling** of [SlideStagePro](https://github.com/SlideStage/SlideStagePro)
 (self-hosted platform). They share design tokens, the `.stage` container
-contract, and the presenter ergonomics — Lite just trades the server for a
-single static bundle you can run from `file://`, GitHub Pages, Netlify,
-Vercel, an internal Nginx, or anywhere else that serves static files.
+contract, and the presenter ergonomics — Lite just trades the server for
+a single static bundle you can run from `file://`, deploy to **Cloudflare
+Workers** (the supported web host), or upload to any other plain
+static-file host (GitHub Pages, internal Nginx, …).
 
 🇨🇳 [中文 README](README_cn.md)
 
@@ -75,7 +76,8 @@ pnpm build                   # tsc -b && vite build → dist/
 ## Deploy to Production
 
 SlideStageLite builds to a vanilla static bundle (`dist/index.html`,
-`dist/assets/*`). Any static host works.
+`dist/assets/*`, `dist/stage-sw.js`, `dist/fixtures/*`). The supported
+production host is **Cloudflare Workers** (static-assets binding).
 
 ### 1. Configure environment (optional)
 
@@ -96,22 +98,32 @@ contract.
 > double quotes) — see [`docs/FOOTER_BEIAN.md`](docs/FOOTER_BEIAN.md) for
 > the gory details.
 
-### 2. Build
+### 2. Deploy to Cloudflare Workers
+
+The repo ships a ready-to-use `wrangler.jsonc` pointing at `./dist` with
+SPA fallback enabled (real files like `/stage-sw.js` are still served as
+files; missing routes fall back to `index.html`). You don't need to add
+wrangler as a dependency — `pnpm dlx wrangler` fetches it on demand.
 
 ```bash
-pnpm build
+pnpm install
+pnpm preview:cloudflare   # local: pnpm build && wrangler dev
+pnpm deploy:cloudflare    # prod : pnpm build && wrangler deploy
 ```
 
-### 3. Upload `dist/`
+The first deploy will prompt you to authenticate with
+`wrangler login` (browser-based OAuth). Subsequent deploys reuse the
+cached credentials. For non-interactive CI, set the standard
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` env vars before
+calling `pnpm deploy:cloudflare`.
 
-Generic recipe:
+### 3. Other static hosts (optional)
+
+Because `dist/` is plain files, any static host still works. Lite is no
+longer tested or documented against Vercel; the bundle does run there
+but you're on your own for `vercel.json` / SPA fallback config.
 
 ```bash
-# Vercel / Netlify drag-and-drop:
-#   Project root: SlideStageLite
-#   Build command: pnpm build
-#   Output directory: dist
-
 # Nginx (or any plain webroot):
 rsync -av --delete dist/ user@host:/var/www/slidestagelite/
 

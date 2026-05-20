@@ -1,7 +1,7 @@
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { LoadedDeck, Manifest } from '../deck/types';
+import type { LoadedDeck, Manifest } from '@slidestage/core/deck/types';
 import { __test } from '@slidestage/lite-preset/desktop/thumbnailCapture';
 import type { ThumbnailCache } from '@slidestage/lite-preset/desktop/thumbnailCache';
 import {

@@ -1,19 +1,45 @@
 {
   "name": "@slidestage/core",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "description": "Headless SlideStage runtime and converter primitives.",
+  "license": "MIT",
+  "sideEffects": false,
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
     "./createSlideStage": "./src/createSlideStage.ts",
-    "./deck/*": "./src/deck/*.ts",
+    "./deck/loadDeck": "./src/deck/loadDeck.ts",
+    "./deck/manifestSchema": "./src/deck/manifestSchema.ts",
+    "./deck/pathSafety": "./src/deck/pathSafety.ts",
+    "./deck/rewriteHtml": "./src/deck/rewriteHtml.ts",
+    "./deck/trustCapabilities": "./src/deck/trustCapabilities.ts",
+    "./deck/types": "./src/deck/types.ts",
     "./converter": "./src/converter/index.ts",
-    "./converter/*": "./src/converter/*.ts"
+    "./converter/buildManifest": "./src/converter/buildManifest.ts",
+    "./converter/folderFilter": "./src/converter/folderFilter.ts",
+    "./converter/htmlBlocks": "./src/converter/htmlBlocks.ts",
+    "./converter/mirrorExternal": "./src/converter/mirrorExternal.ts",
+    "./converter/pack": "./src/converter/pack.ts",
+    "./converter/report": "./src/converter/report.ts",
+    "./converter/singleHtml": "./src/converter/singleHtml.ts",
+    "./converter/sniffer": "./src/converter/sniffer.ts",
+    "./converter/sources": "./src/converter/sources.ts",
+    "./converter/speakerNotes": "./src/converter/speakerNotes.ts",
+    "./converter/splitInlineDeck": "./src/converter/splitInlineDeck.ts",
+    "./converter/splitRouter": "./src/converter/splitRouter.ts",
+    "./converter/splitWebComponent": "./src/converter/splitWebComponent.ts",
+    "./converter/wrapSource": "./src/converter/wrapSource.ts",
+    "./package.json": "./package.json"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "scripts": {
+    "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "engines": {
@@ -22,5 +48,129 @@
   "dependencies": {
     "fflate": "^0.8.2",
     "zod": "^4.4.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "./createSlideStage": {
+        "types": "./dist/createSlideStage.d.ts",
+        "import": "./dist/createSlideStage.js",
+        "default": "./dist/createSlideStage.js"
+      },
+      "./deck/loadDeck": {
+        "types": "./dist/deck/loadDeck.d.ts",
+        "import": "./dist/deck/loadDeck.js",
+        "default": "./dist/deck/loadDeck.js"
+      },
+      "./deck/manifestSchema": {
+        "types": "./dist/deck/manifestSchema.d.ts",
+        "import": "./dist/deck/manifestSchema.js",
+        "default": "./dist/deck/manifestSchema.js"
+      },
+      "./deck/pathSafety": {
+        "types": "./dist/deck/pathSafety.d.ts",
+        "import": "./dist/deck/pathSafety.js",
+        "default": "./dist/deck/pathSafety.js"
+      },
+      "./deck/rewriteHtml": {
+        "types": "./dist/deck/rewriteHtml.d.ts",
+        "import": "./dist/deck/rewriteHtml.js",
+        "default": "./dist/deck/rewriteHtml.js"
+      },
+      "./deck/trustCapabilities": {
+        "types": "./dist/deck/trustCapabilities.d.ts",
+        "import": "./dist/deck/trustCapabilities.js",
+        "default": "./dist/deck/trustCapabilities.js"
+      },
+      "./deck/types": {
+        "types": "./dist/deck/types.d.ts",
+        "import": "./dist/deck/types.js",
+        "default": "./dist/deck/types.js"
+      },
+      "./converter": {
+        "types": "./dist/converter/index.d.ts",
+        "import": "./dist/converter/index.js",
+        "default": "./dist/converter/index.js"
+      },
+      "./converter/buildManifest": {
+        "types": "./dist/converter/buildManifest.d.ts",
+        "import": "./dist/converter/buildManifest.js",
+        "default": "./dist/converter/buildManifest.js"
+      },
+      "./converter/folderFilter": {
+        "types": "./dist/converter/folderFilter.d.ts",
+        "import": "./dist/converter/folderFilter.js",
+        "default": "./dist/converter/folderFilter.js"
+      },
+      "./converter/htmlBlocks": {
+        "types": "./dist/converter/htmlBlocks.d.ts",
+        "import": "./dist/converter/htmlBlocks.js",
+        "default": "./dist/converter/htmlBlocks.js"
+      },
+      "./converter/mirrorExternal": {
+        "types": "./dist/converter/mirrorExternal.d.ts",
+        "import": "./dist/converter/mirrorExternal.js",
+        "default": "./dist/converter/mirrorExternal.js"
+      },
+      "./converter/pack": {
+        "types": "./dist/converter/pack.d.ts",
+        "import": "./dist/converter/pack.js",
+        "default": "./dist/converter/pack.js"
+      },
+      "./converter/report": {
+        "types": "./dist/converter/report.d.ts",
+        "import": "./dist/converter/report.js",
+        "default": "./dist/converter/report.js"
+      },
+      "./converter/singleHtml": {
+        "types": "./dist/converter/singleHtml.d.ts",
+        "import": "./dist/converter/singleHtml.js",
+        "default": "./dist/converter/singleHtml.js"
+      },
+      "./converter/sniffer": {
+        "types": "./dist/converter/sniffer.d.ts",
+        "import": "./dist/converter/sniffer.js",
+        "default": "./dist/converter/sniffer.js"
+      },
+      "./converter/sources": {
+        "types": "./dist/converter/sources.d.ts",
+        "import": "./dist/converter/sources.js",
+        "default": "./dist/converter/sources.js"
+      },
+      "./converter/speakerNotes": {
+        "types": "./dist/converter/speakerNotes.d.ts",
+        "import": "./dist/converter/speakerNotes.js",
+        "default": "./dist/converter/speakerNotes.js"
+      },
+      "./converter/splitInlineDeck": {
+        "types": "./dist/converter/splitInlineDeck.d.ts",
+        "import": "./dist/converter/splitInlineDeck.js",
+        "default": "./dist/converter/splitInlineDeck.js"
+      },
+      "./converter/splitRouter": {
+        "types": "./dist/converter/splitRouter.d.ts",
+        "import": "./dist/converter/splitRouter.js",
+        "default": "./dist/converter/splitRouter.js"
+      },
+      "./converter/splitWebComponent": {
+        "types": "./dist/converter/splitWebComponent.d.ts",
+        "import": "./dist/converter/splitWebComponent.js",
+        "default": "./dist/converter/splitWebComponent.js"
+      },
+      "./converter/wrapSource": {
+        "types": "./dist/converter/wrapSource.d.ts",
+        "import": "./dist/converter/wrapSource.js",
+        "default": "./dist/converter/wrapSource.js"
+      },
+      "./package.json": "./package.json"
+    }
   }
 }

@@ -11,7 +11,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "declaration": true,
+    "declarationMap": true,
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src"]
 }
