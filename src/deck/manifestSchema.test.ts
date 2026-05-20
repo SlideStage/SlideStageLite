@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseManifest, type ManifestWarning } from './manifestSchema';
+import { parseManifest, type ManifestWarning } from '@slidestage/core/deck/manifestSchema';
 
 const baseManifest = {
   schema: 'slidestage@1.0',

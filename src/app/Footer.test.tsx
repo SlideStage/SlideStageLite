@@ -17,8 +17,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { I18nProvider } from '../i18n/I18nProvider';
-import { Footer } from './Footer';
+import { I18nProvider } from '@slidestage/lite-preset/i18n/I18nProvider';
+import { Footer } from '@slidestage/lite-preset/app/Footer';
 
 let container: HTMLDivElement;
 let root: Root;

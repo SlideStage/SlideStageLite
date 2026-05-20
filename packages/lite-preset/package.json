@@ -1,0 +1,54 @@
+{
+  "name": "@slidestage/lite-preset",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Default Lite feature preset: i18n, local persistence, app shell.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./litePreset": "./src/litePreset.tsx",
+    "./app/LiteApp": "./src/app/LiteApp.tsx",
+    "./app/ConverterPanel": "./src/app/ConverterPanel.tsx",
+    "./app/TrustPrompt": "./src/app/TrustPrompt.tsx",
+    "./app/Footer": "./src/app/Footer.tsx",
+    "./app/LanguageSwitcher": "./src/app/LanguageSwitcher.tsx",
+    "./app/readFolderInput": "./src/app/readFolderInput.ts",
+    "./viewer/DeckViewer": "./src/viewer/DeckViewer.tsx",
+    "./viewer/AudienceView": "./src/viewer/AudienceView.tsx",
+    "./i18n/I18nProvider": "./src/i18n/I18nProvider.tsx",
+    "./i18n/detect": "./src/i18n/detect.ts",
+    "./i18n/locales": "./src/i18n/locales.ts",
+    "./i18n/messages": "./src/i18n/messages.ts",
+    "./persistence/annotationStore": "./src/persistence/annotationStore.ts",
+    "./persistence/legacyMigration": "./src/persistence/legacyMigration.ts",
+    "./persistence/notesStore": "./src/persistence/notesStore.ts",
+    "./persistence/trustStore": "./src/persistence/trustStore.ts",
+    "./desktop/env": "./src/desktop/env.ts",
+    "./desktop/fileOpen": "./src/desktop/fileOpen.ts",
+    "./desktop/globalShortcuts": "./src/desktop/globalShortcuts.ts",
+    "./desktop/monitors": "./src/desktop/monitors.ts",
+    "./desktop/audienceWindow": "./src/desktop/audienceWindow.ts",
+    "./desktop/thumbnailCache": "./src/desktop/thumbnailCache.ts",
+    "./desktop/thumbnailCapture": "./src/desktop/thumbnailCapture.ts",
+    "./desktop/useThumbnailCapture": "./src/desktop/useThumbnailCapture.ts",
+    "./desktop/MonitorPicker": "./src/desktop/MonitorPicker.tsx",
+    "./browser/stageServiceWorker": "./src/browser/stageServiceWorker.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@slidestage/core": "workspace:*",
+    "@slidestage/ui": "workspace:*"
+  },
+  "peerDependencies": {
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  }
+}

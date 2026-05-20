@@ -6,8 +6,11 @@ import {
   runSingleCapture,
   __test,
   type CaptureRequest,
-} from './thumbnailCapture';
-import { noopThumbnailCache, type ThumbnailCache } from './thumbnailCache';
+} from '@slidestage/lite-preset/desktop/thumbnailCapture';
+import {
+  noopThumbnailCache,
+  type ThumbnailCache,
+} from '@slidestage/lite-preset/desktop/thumbnailCache';
 
 describe('injectCaptureProbe', () => {
   it('appends the probe right before </body>', () => {

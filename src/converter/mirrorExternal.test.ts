@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { Manifest } from '../deck/types';
+import type { Manifest } from '@slidestage/core/deck/types';
 import {
   extractExternalRefsFromCss,
   extractExternalRefsFromHtml,
   mirrorExternalAssets,
   type MirrorFetchResult,
   type MirrorFetcher,
-} from './mirrorExternal';
-import { bytesFromString } from './pack';
+} from '@slidestage/core/converter/mirrorExternal';
+import { bytesFromString } from '@slidestage/core/converter/pack';
 
 function manifestForSlides(
   slides: Array<{ index: number; id: string; file: string }>,

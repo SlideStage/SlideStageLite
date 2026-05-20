@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { unzipSync } from 'fflate';
-import { convertFolderSource, convertSource } from './index';
-import { loadDeck } from '../deck/loadDeck';
-import { DeckLoadError } from '../deck/types';
+import { convertFolderSource, convertSource } from '@slidestage/core/converter';
+import { loadDeck } from '@slidestage/core/deck/loadDeck';
+import { DeckLoadError } from '@slidestage/core/deck/types';
 
 const validBasicPath = resolve('tests/fixtures/valid-basic.stage');
 const plainHtmlPath = resolve('tests/fixtures/sources/plain-page.html');

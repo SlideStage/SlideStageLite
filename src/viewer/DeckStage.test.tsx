@@ -1,6 +1,6 @@
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { DeckStage } from './DeckStage';
+import { DeckStage } from '@slidestage/ui/viewer/DeckStage';
 
 // jsdom does not ship ResizeObserver; `useStageLayout` needs one and
 // crashes otherwise. A minimal noop polyfill is enough for these tests.

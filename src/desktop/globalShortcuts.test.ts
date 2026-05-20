@@ -92,7 +92,9 @@ describe('registerPresentationShortcuts', () => {
   it('registers the canonical presentation key set', async () => {
     const out = { registered: [] as RegisteredHandler[], unregisteredAll: 0 };
     installFakeInternals(out);
-    const { registerPresentationShortcuts } = await import('./globalShortcuts');
+    const { registerPresentationShortcuts } = await import(
+      '@slidestage/lite-preset/desktop/globalShortcuts'
+    );
 
     const handle = await registerPresentationShortcuts(() => {});
     await flushMicrotasks();
@@ -109,7 +111,9 @@ describe('registerPresentationShortcuts', () => {
   it('only fires the action callback on Pressed events', async () => {
     const out = { registered: [] as RegisteredHandler[], unregisteredAll: 0 };
     installFakeInternals(out);
-    const { registerPresentationShortcuts } = await import('./globalShortcuts');
+    const { registerPresentationShortcuts } = await import(
+      '@slidestage/lite-preset/desktop/globalShortcuts'
+    );
 
     const seen: string[] = [];
     const handle = await registerPresentationShortcuts((action) => seen.push(action));

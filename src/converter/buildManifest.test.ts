@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildManifestFromSource } from './buildManifest';
-import type { SniffResult } from './sniffer';
+import { buildManifestFromSource } from '@slidestage/core/converter/buildManifest';
+import type { SniffResult } from '@slidestage/core/converter/sniffer';
 
 const encoder = new TextEncoder();
 

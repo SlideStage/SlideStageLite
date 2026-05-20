@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  SlideStageLite — macOS Hardened Runtime entitlements.
+
+  Notarization REQUIRES the Hardened Runtime, which Tauri's bundler
+  enables automatically as soon as `bundle.macOS.signingIdentity` is set
+  to anything other than `"-"`. Hardened Runtime is restrictive by
+  default and blocks behaviors that the Tauri/wry stack legitimately
+  needs, so we have to re-allow them here.
+
+  Why each entitlement is present:
+
+  - cs.allow-jit
+      WebKit (which `wry` embeds) compiles JavaScript to native code at
+      runtime. Without this entitlement the JS engine cannot allocate
+      executable pages and the viewer silently dies on startup.
+
+  - cs.allow-unsigned-executable-memory
+      WebKit's lower JIT tier uses pages that are not strictly
+      "JIT-style" but are also not signed. Required alongside
+      allow-jit on macOS 13+ for reliable webview boot.
+
+  - cs.disable-library-validation
+      Tauri can load embedded helper frameworks and plugins that are
+      not co-signed by Apple. Without this the app refuses to launch
+      because the loader rejects "foreign" code.
+
+  - cs.allow-dyld-environment-variables
+      Some webkit child processes inspect DYLD_* variables for
+      hardened-runtime-friendly behavior. Cheap to grant and avoids
+      brittle "works on my Mac, crashes on yours" surprises.
+
+  - network.client
+      The web viewport may fetch external assets (CDN'd reveal.js,
+      analytics-free CSS, etc.) when a deck explicitly opts in via
+      `trustCapabilities`. Hardened Runtime would block outbound
+      network from a webview without this.
+
+  We deliberately do NOT grant:
+    - cs.debugger / get-task-allow:
+        Anything that lets external processes attach to the running
+        binary. Notarization will FAIL if get-task-allow is true.
+    - app-sandbox:
+        SlideStageLite intentionally runs without the App Sandbox so
+        users can open `.stage` files anywhere on disk. The Sandbox
+        would require a long set of `files.user-selected` /
+        `files.bookmarks.app-scope` workarounds that are out of scope
+        for the Lite product.
+-->
+<plist version="1.0">
+  <dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+    <key>com.apple.security.network.client</key>
+    <true/>
+  </dict>
+</plist>

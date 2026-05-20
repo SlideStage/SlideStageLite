@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { LoadedDeck } from '../deck/types';
+import type { LoadedDeck } from '@slidestage/core/deck/types';
 import {
   DEFAULT_AUDIENCE_CHANNEL,
   deserializeAudienceDeck,
@@ -7,8 +7,8 @@ import {
   presentationChannelName,
   serializeAudienceDeck,
   type AudienceSnapshot,
-} from './usePresentationSync';
-import type { PresenterState, Stroke } from './types';
+} from '@slidestage/ui/presenter/usePresentationSync';
+import type { PresenterState, Stroke } from '@slidestage/ui/presenter/types';
 
 function makePresenterState(overrides: Partial<PresenterState> = {}): PresenterState {
   return {

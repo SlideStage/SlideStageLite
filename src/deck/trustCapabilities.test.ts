@@ -4,8 +4,8 @@ import {
   capabilitiesEqual,
   normalizeCapabilities,
   sandboxTokensFor,
-} from './trustCapabilities';
-import type { TrustCapability } from './types';
+} from '@slidestage/core/deck/trustCapabilities';
+import type { TrustCapability } from '@slidestage/core/deck/types';
 
 describe('trustCapabilities · normalizeCapabilities', () => {
   it('drops unknown strings, dedupes, and sorts', () => {

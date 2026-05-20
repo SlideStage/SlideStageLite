@@ -6,7 +6,11 @@
  * English so the SPA renders predictably out of the box.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { detectLocale, LOCALE_STORAGE_KEY, persistLocale } from './detect';
+import {
+  detectLocale,
+  LOCALE_STORAGE_KEY,
+  persistLocale,
+} from '@slidestage/lite-preset/i18n/detect';
 
 function setSearch(query: string): void {
   window.history.replaceState(null, '', query.length > 0 ? `/?${query}` : '/');

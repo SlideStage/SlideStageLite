@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { splitInlineDeck } from './splitInlineDeck';
-import type { SniffResult } from './sniffer';
+import { splitInlineDeck } from '@slidestage/core/converter/splitInlineDeck';
+import type { SniffResult } from '@slidestage/core/converter/sniffer';
 
 const encoder = new TextEncoder();
 function asLocalBytes(view: Uint8Array): Uint8Array {

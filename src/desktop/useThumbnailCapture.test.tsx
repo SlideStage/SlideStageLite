@@ -2,9 +2,12 @@ import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LoadedDeck, Manifest } from '../deck/types';
-import { __test } from './thumbnailCapture';
-import type { ThumbnailCache } from './thumbnailCache';
-import { useThumbnailCapture, type ThumbnailCaptureState } from './useThumbnailCapture';
+import { __test } from '@slidestage/lite-preset/desktop/thumbnailCapture';
+import type { ThumbnailCache } from '@slidestage/lite-preset/desktop/thumbnailCache';
+import {
+  useThumbnailCapture,
+  type ThumbnailCaptureState,
+} from '@slidestage/lite-preset/desktop/useThumbnailCapture';
 
 function makeManifest(): Manifest {
   return {

@@ -6,8 +6,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { I18nProvider, useI18n } from './I18nProvider';
-import { LOCALE_STORAGE_KEY } from './detect';
+import { I18nProvider, useI18n } from '@slidestage/lite-preset/i18n/I18nProvider';
+import { LOCALE_STORAGE_KEY } from '@slidestage/lite-preset/i18n/detect';
 
 let container: HTMLDivElement;
 let root: Root;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFolderFromDataTransfer } from './readFolderInput';
+import { readFolderFromDataTransfer } from '@slidestage/lite-preset/app/readFolderInput';
 
 describe('readFolderFromDataTransfer', () => {
   it('returns paths relative to a single dropped directory root', async () => {

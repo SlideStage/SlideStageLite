@@ -26,12 +26,17 @@
     "tauri:build": "tauri build",
     "tauri:smoke": "node scripts/desktop-smoke.mjs",
     "deploy": "pnpm run build && wrangler deploy"
+    "release:macos": "node scripts/release-macos.mjs",
+    "check:macos-signing": "node scripts/check-macos-signing.mjs"
   },
   "engines": {
     "node": ">=20"
   },
-  "packageManager": "pnpm@10.28.0",
+  "packageManager": "pnpm@11.1.3",
   "dependencies": {
+    "@slidestage/core": "workspace:*",
+    "@slidestage/lite-preset": "workspace:*",
+    "@slidestage/ui": "workspace:*",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-deep-link": "^2.4.9",
     "@tauri-apps/plugin-dialog": "^2.7.1",

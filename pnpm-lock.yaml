@@ -8,6 +8,15 @@ importers:
 
   .:
     dependencies:
+      '@slidestage/core':
+        specifier: workspace:*
+        version: link:packages/core
+      '@slidestage/lite-preset':
+        specifier: workspace:*
+        version: link:packages/lite-preset
+      '@slidestage/ui':
+        specifier: workspace:*
+        version: link:packages/ui
       '@tauri-apps/api':
         specifier: ^2.11.0
         version: 2.11.0
@@ -84,6 +93,48 @@ importers:
       wrangler:
         specifier: ^4.93.0
         version: 4.93.0
+
+  packages/core:
+    dependencies:
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.2
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
+  packages/lite-preset:
+    dependencies:
+      '@slidestage/core':
+        specifier: workspace:*
+        version: link:../core
+      '@slidestage/ui':
+        specifier: workspace:*
+        version: link:../ui
+      lucide-react:
+        specifier: ^1.14.0
+        version: 1.14.0(react@19.2.6)
+      react:
+        specifier: ^19.2.6
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.2.6
+        version: 19.2.6(react@19.2.6)
+
+  packages/ui:
+    dependencies:
+      '@slidestage/core':
+        specifier: workspace:*
+        version: link:../core
+      lucide-react:
+        specifier: ^1.14.0
+        version: 1.14.0(react@19.2.6)
+      react:
+        specifier: ^19.2.6
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.2.6
+        version: 19.2.6(react@19.2.6)
 
 packages:
 

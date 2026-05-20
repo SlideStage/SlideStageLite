@@ -1,0 +1,54 @@
+{
+  "name": "@slidestage/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Reusable SlideStage React UI: viewer, presenter, and overlays.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./i18n/translator": "./src/i18n/translator.tsx",
+    "./viewer/AudienceView": "./src/viewer/AudienceView.tsx",
+    "./viewer/DeckStage": "./src/viewer/DeckStage.tsx",
+    "./viewer/DeckViewer": "./src/viewer/DeckViewer.tsx",
+    "./viewer/DeckViewerHeader": "./src/viewer/DeckViewerHeader.tsx",
+    "./viewer/NotesPanel": "./src/viewer/NotesPanel.tsx",
+    "./viewer/Overview": "./src/viewer/Overview.tsx",
+    "./viewer/PresenterSideRail": "./src/viewer/PresenterSideRail.tsx",
+    "./viewer/PresenterStageBlock": "./src/viewer/PresenterStageBlock.tsx",
+    "./viewer/SpeakerNotesPanel": "./src/viewer/SpeakerNotesPanel.tsx",
+    "./viewer/SpeakerPanel": "./src/viewer/SpeakerPanel.tsx",
+    "./viewer/useAudiencePointerTracking": "./src/viewer/useAudiencePointerTracking.ts",
+    "./viewer/useDeckViewerResize": "./src/viewer/useDeckViewerResize.ts",
+    "./viewer/useStageLayout": "./src/viewer/useStageLayout.ts",
+    "./viewer/viewMath": "./src/viewer/viewMath.ts",
+    "./presenter/types": "./src/presenter/types.ts",
+    "./presenter/Toolbar": "./src/presenter/Toolbar.tsx",
+    "./presenter/usePresenter": "./src/presenter/usePresenter.ts",
+    "./presenter/usePersistedNumber": "./src/presenter/usePersistedNumber.ts",
+    "./presenter/AnnotationOverlay": "./src/presenter/AnnotationOverlay.tsx",
+    "./presenter/Blackout": "./src/presenter/Blackout.tsx",
+    "./presenter/LaserPointer": "./src/presenter/LaserPointer.tsx",
+    "./presenter/Spotlight": "./src/presenter/Spotlight.tsx",
+    "./presenter/usePresentationSync": "./src/presenter/usePresentationSync.ts",
+    "./presenter/transport": "./src/presenter/transport/index.ts",
+    "./presenter/transport/broadcastChannel": "./src/presenter/transport/broadcastChannel.ts",
+    "./presenter/transport/tauriEvent": "./src/presenter/transport/tauriEvent.ts",
+    "./presenter/transport/types": "./src/presenter/transport/types.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@slidestage/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  }
+}
