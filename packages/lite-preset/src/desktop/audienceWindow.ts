@@ -6,14 +6,16 @@
  * can downgrade to a normal window after opening via
  * `setAudienceFullscreen`.
  *
- * IMPORTANT: imports `@tauri-apps/api/webviewWindow` at the top level.
- * Only import this module from a *dynamic* `await import(...)` inside an
- * `if (isTauri())` branch so the Web bundle never pulls Tauri in.
+ * Tauri APIs are loaded via dynamic `await import('@tauri-apps/...')` so
+ * a pure-Web consumer that pulls `@slidestage/lite-preset` from npm can
+ * tree-shake the entire Tauri surface away. `@tauri-apps/api` is marked
+ * `optional` in our `peerDependenciesMeta` for exactly this reason.
+ * Callers must still gate every entry point behind `isTauri()`.
  */
-import { PhysicalPosition, PhysicalSize } from '@tauri-apps/api/dpi';
-import {
+import type { PhysicalPosition, PhysicalSize } from '@tauri-apps/api/dpi';
+import type {
   WebviewWindow,
-  getAllWebviewWindows,
+  getAllWebviewWindows as GetAllWebviewWindows,
 } from '@tauri-apps/api/webviewWindow';
 import type { MonitorInfo } from './monitors';
 
@@ -26,6 +28,26 @@ export interface OpenAudienceOptions {
   fullscreen?: boolean;
 }
 
+type DpiModule = {
+  PhysicalPosition: new (x: number, y: number) => PhysicalPosition;
+  PhysicalSize: new (w: number, h: number) => PhysicalSize;
+};
+type WebviewWindowModule = {
+  WebviewWindow: new (
+    label: string,
+    options: Record<string, unknown>,
+  ) => WebviewWindow;
+  getAllWebviewWindows: typeof GetAllWebviewWindows;
+};
+
+function loadDpi(): Promise<DpiModule> {
+  return import('@tauri-apps/api/dpi') as unknown as Promise<DpiModule>;
+}
+
+function loadWebviewWindow(): Promise<WebviewWindowModule> {
+  return import('@tauri-apps/api/webviewWindow') as unknown as Promise<WebviewWindowModule>;
+}
+
 function labelFor(fingerprint: string): string {
   // Tauri window labels must be ASCII; fingerprints are hex so this is
   // safe. Truncate to keep us comfortably under the platform's label cap.
@@ -34,6 +56,7 @@ function labelFor(fingerprint: string): string {
 
 async function findAudienceWindow(fingerprint: string): Promise<WebviewWindow | null> {
   const label = labelFor(fingerprint);
+  const { getAllWebviewWindows } = await loadWebviewWindow();
   const windows = await getAllWebviewWindows();
   return windows.find((w) => w.label === label) ?? null;
 }
@@ -55,6 +78,7 @@ export async function openAudienceWindow(
   if (existing) {
     if (monitor) {
       try {
+        const { PhysicalPosition } = await loadDpi();
         await existing.setPosition(new PhysicalPosition(monitor.x, monitor.y));
       } catch {
         // best effort
@@ -81,6 +105,7 @@ export async function openAudienceWindow(
   const initialWidth = monitor?.width ?? 1280;
   const initialHeight = monitor?.height ?? 720;
 
+  const { WebviewWindow } = await loadWebviewWindow();
   const win = new WebviewWindow(label, {
     url,
     title: 'SlideStageLite — Audience',
@@ -108,6 +133,7 @@ export async function openAudienceWindow(
         resolved = true;
         try {
           if (monitor) {
+            const { PhysicalPosition, PhysicalSize } = await loadDpi();
             await win.setPosition(new PhysicalPosition(monitor.x, monitor.y));
             await win.setSize(new PhysicalSize(monitor.width, monitor.height));
           }
