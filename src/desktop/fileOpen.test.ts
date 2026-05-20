@@ -120,7 +120,7 @@ describe('attachDesktopFileOpen', () => {
 
   it('drains cold-start `opened_urls` queue on attach', async () => {
     installFakeInternals({ openedQueue: ['/tmp/cold.stage'] });
-    const { attachDesktopFileOpen } = await import('./fileOpen');
+    const { attachDesktopFileOpen } = await import('@slidestage/lite-preset/desktop/fileOpen');
     const received: string[] = [];
     const handle = await attachDesktopFileOpen(async (file) => {
       received.push(file.name);
@@ -132,7 +132,7 @@ describe('attachDesktopFileOpen', () => {
 
   it('drains legacy single-path `pending_file` for back-compat', async () => {
     installFakeInternals({ pendingQueue: ['/tmp/legacy.stage'] });
-    const { attachDesktopFileOpen } = await import('./fileOpen');
+    const { attachDesktopFileOpen } = await import('@slidestage/lite-preset/desktop/fileOpen');
     const received: string[] = [];
     const handle = await attachDesktopFileOpen(async (file) => {
       received.push(file.name);
@@ -144,7 +144,7 @@ describe('attachDesktopFileOpen', () => {
 
   it('reacts to warm `opened` events that arrive after attach', async () => {
     const { emitOpened } = installFakeInternals();
-    const { attachDesktopFileOpen } = await import('./fileOpen');
+    const { attachDesktopFileOpen } = await import('@slidestage/lite-preset/desktop/fileOpen');
     const received: string[] = [];
     const handle = await attachDesktopFileOpen(async (file) => {
       received.push(file.name);
@@ -158,7 +158,7 @@ describe('attachDesktopFileOpen', () => {
 
   it('still honours the legacy `deck:open` event name', async () => {
     const { emitDeckOpen } = installFakeInternals();
-    const { attachDesktopFileOpen } = await import('./fileOpen');
+    const { attachDesktopFileOpen } = await import('@slidestage/lite-preset/desktop/fileOpen');
     const received: string[] = [];
     const handle = await attachDesktopFileOpen(async (file) => {
       received.push(file.name);
@@ -178,7 +178,7 @@ describe('attachDesktopFileOpen', () => {
         return FAKE_BYTES;
       },
     });
-    const { attachDesktopFileOpen } = await import('./fileOpen');
+    const { attachDesktopFileOpen } = await import('@slidestage/lite-preset/desktop/fileOpen');
     const handle = await attachDesktopFileOpen(async () => {});
     await flushMicrotasks();
     emitOpened(['file:///Users/me/Decks/with%20space.stage']);
@@ -189,7 +189,7 @@ describe('attachDesktopFileOpen', () => {
 
   it('unsubscribe is idempotent and silent when called twice', async () => {
     installFakeInternals();
-    const { attachDesktopFileOpen } = await import('./fileOpen');
+    const { attachDesktopFileOpen } = await import('@slidestage/lite-preset/desktop/fileOpen');
     const handle = await attachDesktopFileOpen(async () => {});
     expect(() => {
       handle.unsubscribe();

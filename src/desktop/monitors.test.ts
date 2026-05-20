@@ -45,12 +45,12 @@ function installFakeInternals(handler: (cmd: string) => unknown): void {
 
 describe('monitors.defaultAudienceMonitor', () => {
   it('returns null on an empty list', async () => {
-    const { defaultAudienceMonitor } = await import('./monitors');
+    const { defaultAudienceMonitor } = await import('@slidestage/lite-preset/desktop/monitors');
     expect(defaultAudienceMonitor([])).toBe(null);
   });
 
   it('prefers the first non-primary monitor', async () => {
-    const { defaultAudienceMonitor } = await import('./monitors');
+    const { defaultAudienceMonitor } = await import('@slidestage/lite-preset/desktop/monitors');
     const picked = defaultAudienceMonitor([
       { ...PRIMARY, scaleFactor: PRIMARY.scale_factor, isPrimary: true },
       { ...EXTERNAL_RIGHT, scaleFactor: EXTERNAL_RIGHT.scale_factor, isPrimary: false },
@@ -59,7 +59,7 @@ describe('monitors.defaultAudienceMonitor', () => {
   });
 
   it('falls back to the primary when only one monitor is attached', async () => {
-    const { defaultAudienceMonitor } = await import('./monitors');
+    const { defaultAudienceMonitor } = await import('@slidestage/lite-preset/desktop/monitors');
     const picked = defaultAudienceMonitor([
       { ...PRIMARY, scaleFactor: PRIMARY.scale_factor, isPrimary: true },
     ]);
@@ -81,7 +81,7 @@ describe('monitors.listMonitors', () => {
       if (cmd === 'list_monitors') return [PRIMARY, EXTERNAL_RIGHT];
       throw new Error(`unexpected ${cmd}`);
     });
-    const { listMonitors } = await import('./monitors');
+    const { listMonitors } = await import('@slidestage/lite-preset/desktop/monitors');
     const result = await listMonitors();
     expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({ isPrimary: true, scaleFactor: 2 });
@@ -93,7 +93,7 @@ describe('monitors.listMonitors', () => {
       if (cmd === 'list_monitors') return [EXTERNAL_RIGHT, PRIMARY, EXTERNAL_LEFT];
       throw new Error(`unexpected ${cmd}`);
     });
-    const { listMonitors } = await import('./monitors');
+    const { listMonitors } = await import('@slidestage/lite-preset/desktop/monitors');
     const result = await listMonitors();
     expect(result.map((m) => m.id)).toEqual([0, 1, 2]);
   });
@@ -106,7 +106,7 @@ describe('monitors.listMonitors', () => {
       if (cmd.startsWith('plugin:window|')) return null;
       throw new Error(`unexpected ${cmd}`);
     });
-    const { listMonitors } = await import('./monitors');
+    const { listMonitors } = await import('@slidestage/lite-preset/desktop/monitors');
     const result = await listMonitors();
     expect(result).toEqual([]);
   });

@@ -3,7 +3,7 @@ import {
   clearTrustGrant,
   loadTrustGrant,
   saveTrustGrant,
-} from './trustStore';
+} from '@slidestage/lite-preset/persistence/trustStore';
 
 const FP = 'sha256-deadbeef';
 const OTHER_FP = 'sha256-cafef00d';

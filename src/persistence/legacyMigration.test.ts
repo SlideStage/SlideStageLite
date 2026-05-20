@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { runLegacyMigration, __test } from './legacyMigration';
+import {
+  runLegacyMigration,
+  __test,
+} from '@slidestage/lite-preset/persistence/legacyMigration';
 
 const { LEGACY_PREFIX, NEW_PREFIX, MIGRATION_FLAG_KEY } = __test;
 

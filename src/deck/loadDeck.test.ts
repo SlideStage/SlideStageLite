@@ -13,12 +13,12 @@
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
-import { loadDeck } from './loadDeck';
+import { loadDeck } from '@slidestage/core/deck/loadDeck';
 import {
   DeckLoadError,
   type DeckAssetTransport,
   type StageAsset,
-} from './types';
+} from '@slidestage/core/deck/types';
 
 beforeAll(() => {
   if (typeof URL.createObjectURL !== 'function') {

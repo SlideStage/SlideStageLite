@@ -1,4 +1,4 @@
-import { shouldSkipFolderPath } from '../converter';
+import { shouldSkipFolderPath } from '@slidestage/core/converter';
 
 export interface FolderEntries {
   name: string;

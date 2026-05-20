@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import type { LoadedDeck, Manifest } from '../deck/types';
+import type { LoadedDeck, Manifest } from '@slidestage/core/deck/types';
 import { pickTransport, type SyncTransport } from './transport';
 import type { Point, PresenterState, Stroke, Tool } from './types';
 

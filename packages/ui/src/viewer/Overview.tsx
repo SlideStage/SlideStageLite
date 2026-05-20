@@ -1,5 +1,5 @@
-import type { LoadedDeck } from '../deck/types';
-import { useI18n } from '../i18n/I18nProvider';
+import type { LoadedDeck } from '@slidestage/core/deck/types';
+import { useUiTranslator } from '../i18n/translator';
 
 interface OverviewProps {
   deck: LoadedDeck;
@@ -9,7 +9,7 @@ interface OverviewProps {
 }
 
 export function Overview({ deck, currentIndex, onSelect, onClose }: OverviewProps) {
-  const { t } = useI18n();
+  const { t } = useUiTranslator();
   return (
     <section className="overview-panel" aria-label={t('overview.aria')}>
       <div className="panel-heading">

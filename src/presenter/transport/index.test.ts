@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { pickTransport, broadcastChannelFactory, tauriEventFactory } from './index';
+import {
+  pickTransport,
+  broadcastChannelFactory,
+  tauriEventFactory,
+} from '@slidestage/ui/presenter/transport';
 
 describe('pickTransport', () => {
   afterEach(() => {

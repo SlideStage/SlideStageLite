@@ -18,7 +18,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { Spotlight } from './Spotlight';
+import { Spotlight } from '@slidestage/ui/presenter/Spotlight';
 
 let container: HTMLDivElement;
 let root: Root;

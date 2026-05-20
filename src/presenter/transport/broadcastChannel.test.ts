@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AudienceMessage } from '../usePresentationSync';
-import { broadcastChannelFactory } from './broadcastChannel';
+import type { AudienceMessage } from '@slidestage/ui/presenter/usePresentationSync';
+import { broadcastChannelFactory } from '@slidestage/ui/presenter/transport/broadcastChannel';
 
 describe('broadcastChannelFactory', () => {
   beforeEach(() => {

@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { clearNotes, loadNotes, saveNotes } from './notesStore';
+import {
+  clearNotes,
+  loadNotes,
+  saveNotes,
+} from '@slidestage/lite-preset/persistence/notesStore';
 
 const FINGERPRINT = 'fingerprint-test';
 

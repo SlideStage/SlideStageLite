@@ -1,7 +1,7 @@
 import { unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import type { Manifest } from '../deck/types';
-import { packStage, asPlainUint8, bytesFromString } from './pack';
+import type { Manifest } from '@slidestage/core/deck/types';
+import { packStage, asPlainUint8, bytesFromString } from '@slidestage/core/converter/pack';
 
 function makeManifest(overrides: Partial<Manifest> = {}): Manifest {
   return {

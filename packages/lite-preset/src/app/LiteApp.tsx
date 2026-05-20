@@ -1,20 +1,23 @@
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { PanelsTopLeft, ShieldCheck, Sparkles, UploadCloud, Wand2 } from 'lucide-react';
-import { loadDeck } from '../deck/loadDeck';
+import { loadDeck } from '@slidestage/core/deck/loadDeck';
 import {
   BASE_SANDBOX_TOKEN,
   normalizeCapabilities,
   sandboxTokensFor,
-} from '../deck/trustCapabilities';
-import { DeckLoadError, type DeckAssetTransport, type LoadedDeck, type TrustCapability } from '../deck/types';
+} from '@slidestage/core/deck/trustCapabilities';
+import {
+  DeckLoadError,
+  type DeckAssetTransport,
+  type LoadedDeck,
+  type TrustCapability,
+} from '@slidestage/core/deck/types';
 import {
   cleanupDecks as cleanupStageDecks,
   getStageServiceWorkerClient,
-  registerStageServiceWorker,
 } from '../browser/stageServiceWorker';
 import { isTauri } from '../desktop/env';
 import { useI18n } from '../i18n/I18nProvider';
-import { runLegacyMigration } from '../persistence/legacyMigration';
 import { loadTrustGrant, saveTrustGrant } from '../persistence/trustStore';
 import { AudienceView } from '../viewer/AudienceView';
 import { DeckViewer } from '../viewer/DeckViewer';
@@ -28,22 +31,18 @@ interface PendingTrust {
   capabilities: TrustCapability[];
 }
 
-// Drain any legacy `hcslides-lite:*` localStorage entries the user may have
-// from before the SlideStage brand rename. We do this at module load (not
-// in a useEffect) so persistence reads inside the first render already see
-// the migrated values.
-runLegacyMigration();
-
-// Kick the service worker registration as soon as the SPA module loads so
-// the controller is usually `activated` by the time the user opens their
-// first deck. The browser worker is what serves the same-origin virtual
-// URLs that deck slides now use (`/__stage/<deckId>/...`); registering
-// late means the first deck load has to wait for activation before the
-// publish round-trip can complete. The call is a no-op in Tauri /
-// file:// hosts (it just resolves to null).
-void registerStageServiceWorker();
-
-export function App() {
+/**
+ * Lite's React app shell. Mounted by `litePreset()` which is the
+ * SlideStage plugin handed to `createSlideStage()` from the host
+ * bootstrap (`src/main.tsx`).
+ *
+ * Side-effecty bootstrap (legacy localStorage migration, service
+ * worker registration, desktop file-open subscription) used to live
+ * here as module-load side effects but moved into `litePreset.mount()`
+ * during Phase 4 so the same component is import-safe in tests and
+ * Storybook-style isolation.
+ */
+export function LiteApp() {
   const isAudienceWindow = new URLSearchParams(window.location.search).get('audience') === '1';
   const { t, tFormat } = useI18n();
   const [deck, setDeck] = useState<LoadedDeck | null>(null);

@@ -20,6 +20,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { UiTranslatorProvider } from '@slidestage/ui/i18n/translator';
 import {
   DEFAULT_LOCALE,
   LOCALES,
@@ -85,7 +86,16 @@ export function I18nProvider({ children, initialLocale }: I18nProviderProps) {
     [locale, setLocale],
   );
 
-  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+  const uiTranslator = useMemo(
+    () => ({ t: value.t, tFormat: value.tFormat }),
+    [value.t, value.tFormat],
+  );
+
+  return (
+    <I18nContext.Provider value={value}>
+      <UiTranslatorProvider value={uiTranslator}>{children}</UiTranslatorProvider>
+    </I18nContext.Provider>
+  );
 }
 
 export function useI18n(): I18nContextValue {

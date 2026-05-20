@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { rewriteHtmlAssetReferences, stripExternalLinkReferences } from './rewriteHtml';
+import { rewriteHtmlAssetReferences, stripExternalLinkReferences } from '@slidestage/core/deck/rewriteHtml';
 
 function makeLookup(map: Record<string, string>) {
   return (path: string) => map[path] ?? null;

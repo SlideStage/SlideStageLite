@@ -15,8 +15,8 @@
  *      requested locale.
  */
 import { describe, expect, it } from 'vitest';
-import { LOCALES, type Locale } from './locales';
-import { format, messages, translate } from './messages';
+import { LOCALES, type Locale } from '@slidestage/lite-preset/i18n/locales';
+import { format, messages, translate } from '@slidestage/lite-preset/i18n/messages';
 
 const englishKeys = new Set(Object.keys(messages.en));
 const otherLocales: Locale[] = LOCALES.filter((l) => l !== 'en');

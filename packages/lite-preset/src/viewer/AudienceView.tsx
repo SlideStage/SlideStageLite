@@ -5,22 +5,22 @@ import {
   normalizeCapabilities,
   sandboxAllowsSameOrigin,
   sandboxTokensFor,
-} from '../deck/trustCapabilities';
-import type { LoadedDeck } from '../deck/types';
+} from '@slidestage/core/deck/trustCapabilities';
+import type { LoadedDeck } from '@slidestage/core/deck/types';
 import { isTauri } from '../desktop/env';
 import { useI18n } from '../i18n/I18nProvider';
 import { loadTrustGrant } from '../persistence/trustStore';
-import { AnnotationOverlay } from '../presenter/AnnotationOverlay';
-import { Blackout } from '../presenter/Blackout';
-import { LaserPointer } from '../presenter/LaserPointer';
-import { Spotlight } from '../presenter/Spotlight';
+import { AnnotationOverlay } from '@slidestage/ui/presenter/AnnotationOverlay';
+import { Blackout } from '@slidestage/ui/presenter/Blackout';
+import { LaserPointer } from '@slidestage/ui/presenter/LaserPointer';
+import { Spotlight } from '@slidestage/ui/presenter/Spotlight';
 import {
   deserializeAudienceDeck,
   usePresentationSync,
   type AudienceMessage,
   type AudiencePresentationState,
-} from '../presenter/usePresentationSync';
-import { DeckStage } from './DeckStage';
+} from '@slidestage/ui/presenter/usePresentationSync';
+import { DeckStage } from '@slidestage/ui/viewer/DeckStage';
 
 const INITIAL_PRESENTATION: AudiencePresentationState = {
   currentIndex: 0,

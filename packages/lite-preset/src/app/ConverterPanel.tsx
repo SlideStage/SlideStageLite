@@ -15,8 +15,8 @@ import {
   type ConvertMode,
   type ConvertResult,
   type MirrorProgress,
-} from '../converter';
-import { DeckLoadError } from '../deck/types';
+} from '@slidestage/core/converter';
+import { DeckLoadError } from '@slidestage/core/deck/types';
 import { useI18n } from '../i18n/I18nProvider';
 import { readFolderFromDataTransfer, readFolderFromFileList, type FolderEntries } from './readFolderInput';
 

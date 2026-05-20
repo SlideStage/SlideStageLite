@@ -1,5 +1,5 @@
 import { useCallback, useRef, type ReactNode } from 'react';
-import { BASE_SANDBOX_TOKEN } from '../deck/trustCapabilities';
+import { BASE_SANDBOX_TOKEN } from '@slidestage/core/deck/trustCapabilities';
 import { useStageLayout } from './useStageLayout';
 
 /**

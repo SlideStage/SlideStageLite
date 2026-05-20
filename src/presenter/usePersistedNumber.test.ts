@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { usePersistedNumber } from './usePersistedNumber';
+import { usePersistedNumber } from '@slidestage/ui/presenter/usePersistedNumber';
 
 describe('usePersistedNumber', () => {
   beforeEach(() => {

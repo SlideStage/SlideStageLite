@@ -1,8 +1,8 @@
-import type { TrustCapability } from '../deck/types';
+import type { TrustCapability } from '@slidestage/core/deck/types';
 import {
   capabilitiesEqual,
   normalizeCapabilities,
-} from '../deck/trustCapabilities';
+} from '@slidestage/core/deck/trustCapabilities';
 
 const keyPrefix = 'slidestage-lite:trust:';
 

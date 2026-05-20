@@ -1,0 +1,26 @@
+{
+  "name": "@slidestage/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless SlideStage runtime and converter primitives.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./createSlideStage": "./src/createSlideStage.ts",
+    "./deck/*": "./src/deck/*.ts",
+    "./converter": "./src/converter/index.ts",
+    "./converter/*": "./src/converter/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2",
+    "zod": "^4.4.3"
+  }
+}

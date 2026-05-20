@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
-import type { Manifest, TrustCapability } from '../deck/types';
+import type { Manifest, TrustCapability } from '@slidestage/core/deck/types';
 
 interface TrustPromptProps {
   manifest: Manifest;

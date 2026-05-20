@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MonitorInfo } from './monitors';
+import type { MonitorInfo } from '@slidestage/lite-preset/desktop/monitors';
 
 /**
  * `audienceWindow` is mostly an orchestration layer over the Tauri
@@ -84,7 +84,7 @@ describe('openAudienceWindow', () => {
   });
 
   it('creates a windowed audience for the picked monitor in fullscreen', async () => {
-    const { openAudienceWindow } = await import('./audienceWindow');
+    const { openAudienceWindow } = await import('@slidestage/lite-preset/desktop/audienceWindow');
     const fingerprint = 'abc123def';
     await openAudienceWindow(fingerprint, { monitor: SECONDARY, fullscreen: true });
 
@@ -97,7 +97,7 @@ describe('openAudienceWindow', () => {
   });
 
   it('opens windowed (no fullscreen call) when fullscreen=false', async () => {
-    const { openAudienceWindow } = await import('./audienceWindow');
+    const { openAudienceWindow } = await import('@slidestage/lite-preset/desktop/audienceWindow');
     await openAudienceWindow('abc', { monitor: SECONDARY, fullscreen: false });
     const created = FakeWebviewWindow.instances[0];
     expect(created.setFullscreen).not.toHaveBeenCalled();
@@ -109,7 +109,7 @@ describe('openAudienceWindow', () => {
     FAKE_WINDOWS.push(existing);
     const before = FakeWebviewWindow.instances.length;
 
-    const { openAudienceWindow } = await import('./audienceWindow');
+    const { openAudienceWindow } = await import('@slidestage/lite-preset/desktop/audienceWindow');
     await openAudienceWindow('abc', { monitor: SECONDARY, fullscreen: true });
 
     expect(FakeWebviewWindow.instances.length).toBe(before);
@@ -128,13 +128,15 @@ describe('setAudienceFullscreen / closeAudienceWindow', () => {
   it('toggles fullscreen on the matching window', async () => {
     const win = new FakeWebviewWindow('audience-xyz', {});
     FAKE_WINDOWS.push(win);
-    const { setAudienceFullscreen } = await import('./audienceWindow');
+    const { setAudienceFullscreen } = await import('@slidestage/lite-preset/desktop/audienceWindow');
     await setAudienceFullscreen('xyz', false);
     expect(win.setFullscreen).toHaveBeenCalledWith(false);
   });
 
   it('is a no-op when no audience window exists', async () => {
-    const { setAudienceFullscreen, closeAudienceWindow } = await import('./audienceWindow');
+    const { setAudienceFullscreen, closeAudienceWindow } = await import(
+      '@slidestage/lite-preset/desktop/audienceWindow'
+    );
     await expect(setAudienceFullscreen('missing', true)).resolves.toBeUndefined();
     await expect(closeAudienceWindow('missing')).resolves.toBeUndefined();
   });
@@ -142,7 +144,7 @@ describe('setAudienceFullscreen / closeAudienceWindow', () => {
   it('closes the matching window', async () => {
     const win = new FakeWebviewWindow('audience-xyz', {});
     FAKE_WINDOWS.push(win);
-    const { closeAudienceWindow } = await import('./audienceWindow');
+    const { closeAudienceWindow } = await import('@slidestage/lite-preset/desktop/audienceWindow');
     await closeAudienceWindow('xyz');
     expect(win.close).toHaveBeenCalled();
   });

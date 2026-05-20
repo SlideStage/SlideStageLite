@@ -12,7 +12,7 @@ import {
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
-import { useI18n } from '../i18n/I18nProvider';
+import { useUiTranslator } from '../i18n/translator';
 import {
   PEN_COLORS,
   SPOTLIGHT_MAX_RADIUS,
@@ -63,7 +63,7 @@ function getDisplayedColor(tool: Tool, color: PenColor): string {
 
 export function Toolbar({ presenter, slideIdx, mode = 'right-dock', hostRef }: ToolbarProps) {
   const { state, setTool, setColor, setSpotlightRadius, undo, clearSlide } = presenter;
-  const { t, tFormat } = useI18n();
+  const { t, tFormat } = useUiTranslator();
   const isDock = mode === 'right-dock';
   const [visible, setVisible] = useState(!isDock);
   const [expanded, setExpanded] = useState(false);
@@ -364,7 +364,7 @@ interface SpotlightSizeControlProps {
 }
 
 function SpotlightSizeControl({ value, onChange, layout = 'dock' }: SpotlightSizeControlProps) {
-  const { t, tFormat } = useI18n();
+  const { t, tFormat } = useUiTranslator();
   return (
     <div
       className={`spotlight-size-control spotlight-size-control-${layout}`}

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { isTauri } from './env';
+import { isTauri } from '@slidestage/lite-preset/desktop/env';
 
 describe('isTauri', () => {
   afterEach(() => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sniffDeck } from './sniffer';
+import { sniffDeck } from '@slidestage/core/converter/sniffer';
 
 const encoder = new TextEncoder();
 

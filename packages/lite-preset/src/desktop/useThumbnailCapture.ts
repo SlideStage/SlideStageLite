@@ -17,7 +17,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import type { LoadedDeck } from '../deck/types';
+import type { LoadedDeck } from '@slidestage/core/deck/types';
 import { isTauri } from './env';
 import {
   runCaptureQueue,

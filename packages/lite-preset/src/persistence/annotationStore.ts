@@ -1,4 +1,4 @@
-import type { Stroke } from '../presenter/types';
+import type { Stroke } from '@slidestage/ui/presenter/types';
 
 const keyPrefix = 'slidestage-lite:annotations:';
 

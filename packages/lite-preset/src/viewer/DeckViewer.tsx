@@ -17,8 +17,8 @@ import {
   Radio,
   StickyNote,
 } from 'lucide-react';
-import { sandboxAllowsSameOrigin } from '../deck/trustCapabilities';
-import type { LoadedDeck } from '../deck/types';
+import { sandboxAllowsSameOrigin } from '@slidestage/core/deck/trustCapabilities';
+import type { LoadedDeck } from '@slidestage/core/deck/types';
 import { isTauri } from '../desktop/env';
 import { MonitorPicker } from '../desktop/MonitorPicker';
 import { listMonitors, type MonitorInfo } from '../desktop/monitors';
@@ -26,14 +26,14 @@ import { useThumbnailCapture } from '../desktop/useThumbnailCapture';
 import { useI18n } from '../i18n/I18nProvider';
 import { loadAnnotations, saveAnnotations } from '../persistence/annotationStore';
 import { loadNotes, saveNotes, type StoredNotes } from '../persistence/notesStore';
-import { AnnotationOverlay } from '../presenter/AnnotationOverlay';
-import { Blackout } from '../presenter/Blackout';
-import { LaserPointer } from '../presenter/LaserPointer';
-import { Spotlight } from '../presenter/Spotlight';
-import { Toolbar } from '../presenter/Toolbar';
-import type { Point, Stroke } from '../presenter/types';
-import { usePersistedNumber } from '../presenter/usePersistedNumber';
-import { usePresenter, usePresenterShortcuts } from '../presenter/usePresenter';
+import { AnnotationOverlay } from '@slidestage/ui/presenter/AnnotationOverlay';
+import { Blackout } from '@slidestage/ui/presenter/Blackout';
+import { LaserPointer } from '@slidestage/ui/presenter/LaserPointer';
+import { Spotlight } from '@slidestage/ui/presenter/Spotlight';
+import { Toolbar } from '@slidestage/ui/presenter/Toolbar';
+import type { Point, Stroke } from '@slidestage/ui/presenter/types';
+import { usePersistedNumber } from '@slidestage/ui/presenter/usePersistedNumber';
+import { usePresenter, usePresenterShortcuts } from '@slidestage/ui/presenter/usePresenter';
 import {
   makeAudiencePresentation,
   serializeAudienceDeck,
@@ -41,9 +41,9 @@ import {
   type AudienceMessage,
   type AudiencePointer,
   type AudiencePresentationState,
-} from '../presenter/usePresentationSync';
-import { DeckStage } from './DeckStage';
-import { Overview } from './Overview';
+} from '@slidestage/ui/presenter/usePresentationSync';
+import { DeckStage } from '@slidestage/ui/viewer/DeckStage';
+import { Overview } from '@slidestage/ui/viewer/Overview';
 
 const SIDE_WIDTH_KEY = 'slidestage-lite:side-w';
 const NOTES_HEIGHT_KEY = 'slidestage-lite:notes-h';

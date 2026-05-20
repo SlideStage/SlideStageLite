@@ -26,10 +26,11 @@ playwright-report/
 .env.*
 !.env.example
 
-# AI-generated process artefacts — kept on disk, never committed
+# AI-generated process artefacts — kept on disk unless explicitly allowlisted
 docs/
 tests/
 design-system/
 .cursor/
+.memory/
 
 dist-desktop/

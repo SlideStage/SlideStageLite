@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AudienceMessage } from '../usePresentationSync';
+import type { AudienceMessage } from '@slidestage/ui/presenter/usePresentationSync';
 
 /**
  * Strategy: instead of mocking `@tauri-apps/api/event` itself (the real
@@ -114,7 +114,7 @@ describe('tauriEventFactory', () => {
   });
 
   it('reports unavailable until the Tauri internals global is present', async () => {
-    const { tauriEventFactory } = await import('./tauriEvent');
+    const { tauriEventFactory } = await import('@slidestage/ui/presenter/transport/tauriEvent');
     expect(tauriEventFactory.isAvailable()).toBe(false);
 
     installFakeInternals();
@@ -123,7 +123,7 @@ describe('tauriEventFactory', () => {
 
   it('namespaces the event channel under slidestage: and round-trips messages', async () => {
     const { invokeSpy } = installFakeInternals();
-    const { tauriEventFactory } = await import('./tauriEvent');
+    const { tauriEventFactory } = await import('@slidestage/ui/presenter/transport/tauriEvent');
 
     const a = tauriEventFactory.create('alpha');
     const b = tauriEventFactory.create('alpha');
@@ -147,7 +147,7 @@ describe('tauriEventFactory', () => {
 
   it('skips emit after close so unmount during a flush is safe', async () => {
     const { invokeSpy } = installFakeInternals();
-    const { tauriEventFactory } = await import('./tauriEvent');
+    const { tauriEventFactory } = await import('@slidestage/ui/presenter/transport/tauriEvent');
 
     const t = tauriEventFactory.create('beta');
     t.close();

@@ -12,7 +12,7 @@ import {
   SPOTLIGHT_MIN_RADIUS,
   SPOTLIGHT_STEP,
   spotlightGradient,
-} from './types';
+} from '@slidestage/ui/presenter/types';
 
 describe('spotlightGradient', () => {
   it('emits a radial-gradient centred on the supplied point', () => {

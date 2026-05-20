@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { virtualUrlFor } from './stageServiceWorker';
+import { virtualUrlFor } from '@slidestage/lite-preset/browser/stageServiceWorker';
 
 describe('virtualUrlFor', () => {
   it('builds the documented /__stage/<deckId>/<path> shape', () => {
@@ -49,13 +49,13 @@ describe('registerStageServiceWorker', () => {
   it('returns null when navigator.serviceWorker is unavailable', async () => {
     // jsdom does not ship a service-worker container; the helper should
     // detect that and degrade silently rather than throw.
-    const mod = await import('./stageServiceWorker');
+    const mod = await import('@slidestage/lite-preset/browser/stageServiceWorker');
     const reg = await mod.registerStageServiceWorker();
     expect(reg).toBeNull();
   });
 
   it('publishDeck rejects when the host has no SW controller', async () => {
-    const mod = await import('./stageServiceWorker');
+    const mod = await import('@slidestage/lite-preset/browser/stageServiceWorker');
     await expect(
       mod.publishDeck('abc', [
         { path: 'a.html', type: 'text/html;charset=utf-8', bytes: new Uint8Array([1]) },
@@ -64,13 +64,13 @@ describe('registerStageServiceWorker', () => {
   });
 
   it('unpublishDeck and cleanupDecks are no-ops when SW is unavailable', async () => {
-    const mod = await import('./stageServiceWorker');
+    const mod = await import('@slidestage/lite-preset/browser/stageServiceWorker');
     await expect(mod.unpublishDeck('abc')).resolves.toBeUndefined();
     await expect(mod.cleanupDecks(['abc'])).resolves.toBeUndefined();
   });
 
   it('getStageServiceWorkerClient resolves null when registration cannot happen', async () => {
-    const mod = await import('./stageServiceWorker');
+    const mod = await import('@slidestage/lite-preset/browser/stageServiceWorker');
     const client = await mod.getStageServiceWorkerClient();
     expect(client).toBeNull();
   });

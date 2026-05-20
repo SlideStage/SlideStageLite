@@ -7,7 +7,7 @@ import {
   tauriThumbnailCache,
   thumbnailBytesToObjectUrl,
   __setInvokeForTests,
-} from './thumbnailCache';
+} from '@slidestage/lite-preset/desktop/thumbnailCache';
 
 const invokeMock = vi.fn();
 

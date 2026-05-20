@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shouldSkipFolderPath } from './folderFilter';
+import { shouldSkipFolderPath } from '@slidestage/core/converter/folderFilter';
 
 describe('shouldSkipFolderPath', () => {
   it('keeps unremarkable paths', () => {
