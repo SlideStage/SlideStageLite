@@ -24,7 +24,9 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "tauri:smoke": "node scripts/desktop-smoke.mjs"
+    "tauri:smoke": "node scripts/desktop-smoke.mjs",
+    "release:macos": "node scripts/release-macos.mjs",
+    "check:macos-signing": "node scripts/check-macos-signing.mjs"
   },
   "engines": {
     "node": ">=20"
