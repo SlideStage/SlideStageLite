@@ -1,12 +1,52 @@
-# SlideStageLite
+<p align="center">
+  <a href="https://slidestage.dev">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="public/brand/png/slidestage-logo-horizontal-on-dark@2x.png">
+      <img src="public/brand/png/slidestage-logo-horizontal@2x.png" alt="SlideStageLite" width="520">
+    </picture>
+  </a>
+</p>
 
-> 在浏览器里打开、演示、转换 `.stage` 演示包。
-> 零后端、零账号、零上传。
+<p align="center">
+  <strong>在浏览器里打开、演示、转换 <code>.stage</code> 演示包。</strong><br/>
+  零后端 · 零账号 · 零上传。
+</p>
+
+<p align="center">
+  <a href="https://slidestage.dev"><img alt="官网" src="https://img.shields.io/badge/%E5%AE%98%E7%BD%91-slidestage.dev-06B6D4?style=flat-square"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-111827?style=flat-square"></a>
+  <a href="README.md"><img alt="English" src="https://img.shields.io/badge/lang-English-F59E0B?style=flat-square"></a>
+</p>
+
+---
 
 SlideStageLite 可以直接从 `file://`、GitHub Pages、Netlify、Vercel、
 内网 Nginx 或任意静态托管打开的静态构建产物。
 
-🇬🇧 [English README](README.md)
+### SlideStage 全家桶
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <a href="https://github.com/SlideStage/SlideStageLite"><img src="public/brand/png/slidestage-mark.png" width="84" alt="SlideStageLite"></a><br/>
+      <strong>SlideStageLite</strong><br/>
+      <sub>本地优先运行时 · MIT</sub><br/>
+      <sub>在任意浏览器里打开、演示、转换 <code>.stage</code>。</sub>
+    </td>
+    <td align="center" width="33%">
+      <a href="https://github.com/SlideStage/SlideStagePro"><img src="public/brand/png/slidestage-pro-mark.png" width="84" alt="SlideStagePro"></a><br/>
+      <strong>SlideStagePro</strong><br/>
+      <sub>自托管平台 · MIT</sub><br/>
+      <sub>多人 deck 库、注释批注、Docker Compose 部署。</sub>
+    </td>
+    <td align="center" width="33%">
+      <a href="https://github.com/SlideStage/slidestage-pack"><img src="public/brand/png/slidestage-pack-mark.png" width="84" alt="slidestage-pack"></a><br/>
+      <strong>slidestage-pack</strong><br/>
+      <sub>Agent skill 打包器 · MIT</sub><br/>
+      <sub>把任意 HTML deck 打包成 <code>.stage</code> 文件。</sub>
+    </td>
+  </tr>
+</table>
 
 ---
 

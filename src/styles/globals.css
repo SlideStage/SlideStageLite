@@ -307,18 +307,17 @@ code {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
-  background: linear-gradient(135deg, var(--primary), var(--primary-strong));
-  color: var(--ink-strong);
-  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3);
+  overflow: hidden;
 }
 
+.app-brand-mark img,
 .app-brand-mark svg {
-  width: 16px;
-  height: 16px;
-  stroke-width: 2.4;
+  width: 32px;
+  height: 32px;
+  display: block;
 }
 
 .app-brand-name {

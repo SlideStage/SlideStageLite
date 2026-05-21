@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
-import { PanelsTopLeft, ShieldCheck, Sparkles, UploadCloud, Wand2 } from 'lucide-react';
+import { ShieldCheck, Sparkles, UploadCloud, Wand2 } from 'lucide-react';
 import { loadDeck } from '@slidestage/core/deck/loadDeck';
 import {
   BASE_SANDBOX_TOKEN,
@@ -415,7 +415,12 @@ export function LiteApp() {
       <header className="app-header" data-testid="app-header">
         <span className="app-brand" aria-label={t('app.brand.aria')}>
           <span className="app-brand-mark" aria-hidden>
-            <PanelsTopLeft />
+            <img
+              src="/brand/slidestage-favicon.svg"
+              alt=""
+              width={32}
+              height={32}
+            />
           </span>
           <span>
             <span className="app-brand-name">{t('app.brand.name')}</span>
