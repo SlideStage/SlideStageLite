@@ -1,13 +1,27 @@
-import { useCallback, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { BASE_SANDBOX_TOKEN } from '@slidestage/core/deck/trustCapabilities';
 import { useStageLayout } from './useStageLayout';
 
 /**
- * Pull keyboard focus back to the outer container after a slide iframe
- * loads. Otherwise WKWebView (Tauri) parks focus inside the iframe and
- * the top-level `window.addEventListener('keydown', ...)` in App.tsx
- * never sees Arrow / PageUp / Space. Doing this every load is cheap and
- * works for both the Web and Desktop builds.
+ * Pull keyboard focus back to the outer container.
+ *
+ * We do this in three places so the App-level `keydown` listener keeps
+ * receiving Arrow / PageUp / Space even when WKWebView's tendency to
+ * park focus inside the slide iframe would otherwise swallow them:
+ *
+ *  1. After every iframe `load` (the page just navigated, focus needs
+ *     to come back to the host shell).
+ *  2. On pointerdown on the outer container (user clicked the
+ *     letterbox / non-iframe chrome — they're "back" in the host UI).
+ *  3. When the host window regains focus from another app
+ *     (`window.addEventListener('focus', …)` — see the effect below).
+ *
+ * SlideStage deliberately does NOT register OS-level global shortcuts
+ * to paper over iframe focus theft. That would steal keys from other
+ * apps when SlideStage isn't focused, and ship a Mac App Store
+ * entitlement we'd rather not request. Window-scoped focus is the
+ * source of truth: when this window has focus, presentation shortcuts
+ * must work.
  */
 function pullFocusToContainer(container: HTMLElement | null): void {
   if (!container) return;
@@ -74,6 +88,25 @@ export function DeckStage({
     // Mouse / touch interactions on slide content can also push focus
     // into the iframe; recover it on the very next frame.
     requestAnimationFrame(() => pullFocusToContainer(containerRef.current));
+  }, []);
+
+  // When the host window regains focus (Alt/Cmd-Tab, clicking the
+  // SlideStage window after working in another app, dismissing a system
+  // dialog), pull focus back to the deck container so presentation
+  // shortcuts are available immediately. This is the primary mechanism
+  // that lets us rely on window-scoped shortcuts instead of OS-level
+  // ones.
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onWindowFocus = (): void => {
+      requestAnimationFrame(() =>
+        pullFocusToContainer(containerRef.current),
+      );
+    };
+    window.addEventListener('focus', onWindowFocus);
+    return () => {
+      window.removeEventListener('focus', onWindowFocus);
+    };
   }, []);
 
   return (

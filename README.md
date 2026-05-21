@@ -2,7 +2,7 @@
   <a href="https://slidestage.dev">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="public/brand/png/slidestage-logo-horizontal-on-dark@2x.png">
-      <img src="public/brand/png/slidestage-logo-horizontal@2x.png" alt="SlideStageLite" width="520">
+      <img src="public/brand/png/slidestage-logo-horizontal@2x.png" alt="SlideStage Lite" width="520">
     </picture>
   </a>
 </p>
@@ -20,7 +20,7 @@
 
 ---
 
-SlideStageLite is the **local-first sibling** of [SlideStagePro](https://github.com/SlideStage/SlideStagePro)
+SlideStage Lite is the **local-first sibling** of [SlideStage Pro](https://github.com/SlideStage/SlideStagePro)
 (self-hosted platform). They share design tokens, the `.stage` container
 contract, and the presenter ergonomics — Lite just trades the server for
 a single static bundle you can run from `file://`, deploy to **Cloudflare
@@ -32,14 +32,14 @@ static-file host (GitHub Pages, internal Nginx, …).
 <table>
   <tr>
     <td align="center" width="33%">
-      <a href="https://github.com/SlideStage/SlideStageLite"><img src="public/brand/png/slidestage-mark.png" width="84" alt="SlideStageLite"></a><br/>
-      <strong>SlideStageLite</strong><br/>
+      <a href="https://github.com/SlideStage/SlideStageLite"><img src="public/brand/png/slidestage-mark.png" width="84" alt="SlideStage Lite"></a><br/>
+      <strong>SlideStage Lite</strong><br/>
       <sub>Local-first runtime</sub><br/>
       <sub>Open, present, convert <code>.stage</code> in any browser.</sub>
     </td>
     <td align="center" width="33%">
-      <a href="https://github.com/SlideStage/SlideStagePro"><img src="public/brand/png/slidestage-pro-mark.png" width="84" alt="SlideStagePro"></a><br/>
-      <strong>SlideStagePro</strong><br/>
+      <a href="https://github.com/SlideStage/SlideStagePro"><img src="public/brand/png/slidestage-pro-mark.png" width="84" alt="SlideStage Pro"></a><br/>
+      <strong>SlideStage Pro</strong><br/>
       <sub>Self-hosted platform</sub><br/>
       <sub>Multi-user library, notes &amp; annotations, Docker-deployable.</sub>
     </td>
@@ -54,7 +54,7 @@ static-file host (GitHub Pages, internal Nginx, …).
 
 ---
 
-## Why SlideStageLite?
+## Why SlideStage Lite?
 
 Most slide tools force a tradeoff between **fidelity** (raw HTML/CSS/JS
 animations) and **portability** (a single file you can hand off). The
@@ -115,7 +115,7 @@ pnpm build                   # tsc -b && vite build → dist/
 
 ## Deploy to Production
 
-SlideStageLite builds to a vanilla static bundle (`dist/index.html`,
+SlideStage Lite builds to a vanilla static bundle (`dist/index.html`,
 `dist/assets/*`, `dist/stage-sw.js`, `dist/fixtures/*`). The supported
 production host is **Cloudflare Workers** (static-assets binding).
 
@@ -216,7 +216,7 @@ SlideStageLite/
 └── .env.example              # Beian env template — copy to .env on your deploy
 ```
 
-### Twin Contract with SlideStagePro
+### Twin Contract with SlideStage Pro
 
 `src/styles/tokens.test.ts` reads `globals.css` on disk and asserts that
 every design token (color, radius, shadow, typography) Lite borrows from
@@ -312,7 +312,7 @@ PRs and issues welcome — please read
 [`design-system/slidestagelite/MASTER.md`](design-system/slidestagelite/MASTER.md)
 before touching anything visual; Lite intentionally has a **single**
 button system, a fixed token palette, and a "no emoji as icon"
-anti-pattern list. The twin contract with SlideStagePro is enforced by
+anti-pattern list. The twin contract with SlideStage Pro is enforced by
 unit tests, so design drift fails CI.
 
 For Chinese mainland deploys, follow

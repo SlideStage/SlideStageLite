@@ -1,6 +1,6 @@
 {
   "name": "@slidestage/lite-preset",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Default Lite feature preset: i18n, local persistence, app shell.",
   "sideEffects": false,
@@ -12,6 +12,7 @@
     "./app/LiteApp": "./src/app/LiteApp.tsx",
     "./app/ConverterPanel": "./src/app/ConverterPanel.tsx",
     "./app/TrustPrompt": "./src/app/TrustPrompt.tsx",
+    "./app/UpdateBanner": "./src/app/UpdateBanner.tsx",
     "./app/Footer": "./src/app/Footer.tsx",
     "./app/LanguageSwitcher": "./src/app/LanguageSwitcher.tsx",
     "./app/readFolderInput": "./src/app/readFolderInput.ts",
@@ -27,12 +28,13 @@
     "./persistence/trustStore": "./src/persistence/trustStore.ts",
     "./desktop/env": "./src/desktop/env.ts",
     "./desktop/fileOpen": "./src/desktop/fileOpen.ts",
-    "./desktop/globalShortcuts": "./src/desktop/globalShortcuts.ts",
     "./desktop/monitors": "./src/desktop/monitors.ts",
     "./desktop/audienceWindow": "./src/desktop/audienceWindow.ts",
+    "./desktop/openExternal": "./src/desktop/openExternal.ts",
     "./desktop/thumbnailCache": "./src/desktop/thumbnailCache.ts",
     "./desktop/thumbnailCapture": "./src/desktop/thumbnailCapture.ts",
     "./desktop/useThumbnailCapture": "./src/desktop/useThumbnailCapture.ts",
+    "./desktop/updateCheck": "./src/desktop/updateCheck.ts",
     "./desktop/MonitorPicker": "./src/desktop/MonitorPicker.tsx",
     "./browser/stageServiceWorker": "./src/browser/stageServiceWorker.ts",
     "./package.json": "./package.json"
@@ -55,16 +57,12 @@
   },
   "peerDependencies": {
     "@tauri-apps/api": "^2.11.0",
-    "@tauri-apps/plugin-global-shortcut": "^2.3.1",
     "lucide-react": "^1.14.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
   "peerDependenciesMeta": {
     "@tauri-apps/api": {
-      "optional": true
-    },
-    "@tauri-apps/plugin-global-shortcut": {
       "optional": true
     }
   },
@@ -98,6 +96,11 @@
         "types": "./dist/app/TrustPrompt.d.ts",
         "import": "./dist/app/TrustPrompt.js",
         "default": "./dist/app/TrustPrompt.js"
+      },
+      "./app/UpdateBanner": {
+        "types": "./dist/app/UpdateBanner.d.ts",
+        "import": "./dist/app/UpdateBanner.js",
+        "default": "./dist/app/UpdateBanner.js"
       },
       "./app/Footer": {
         "types": "./dist/app/Footer.d.ts",
@@ -174,11 +177,6 @@
         "import": "./dist/desktop/fileOpen.js",
         "default": "./dist/desktop/fileOpen.js"
       },
-      "./desktop/globalShortcuts": {
-        "types": "./dist/desktop/globalShortcuts.d.ts",
-        "import": "./dist/desktop/globalShortcuts.js",
-        "default": "./dist/desktop/globalShortcuts.js"
-      },
       "./desktop/monitors": {
         "types": "./dist/desktop/monitors.d.ts",
         "import": "./dist/desktop/monitors.js",
@@ -188,6 +186,11 @@
         "types": "./dist/desktop/audienceWindow.d.ts",
         "import": "./dist/desktop/audienceWindow.js",
         "default": "./dist/desktop/audienceWindow.js"
+      },
+      "./desktop/openExternal": {
+        "types": "./dist/desktop/openExternal.d.ts",
+        "import": "./dist/desktop/openExternal.js",
+        "default": "./dist/desktop/openExternal.js"
       },
       "./desktop/thumbnailCache": {
         "types": "./dist/desktop/thumbnailCache.d.ts",
@@ -203,6 +206,11 @@
         "types": "./dist/desktop/useThumbnailCapture.d.ts",
         "import": "./dist/desktop/useThumbnailCapture.js",
         "default": "./dist/desktop/useThumbnailCapture.js"
+      },
+      "./desktop/updateCheck": {
+        "types": "./dist/desktop/updateCheck.d.ts",
+        "import": "./dist/desktop/updateCheck.js",
+        "default": "./dist/desktop/updateCheck.js"
       },
       "./desktop/MonitorPicker": {
         "types": "./dist/desktop/MonitorPicker.d.ts",

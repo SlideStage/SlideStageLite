@@ -1,5 +1,5 @@
 /**
- * Tiny React context for SlideStageLite localisation.
+ * Tiny React context for SlideStage Lite localisation.
  *
  * We intentionally avoid pulling in `react-intl` / `i18next` — Lite is the
  * no-backend twin of Pro and ships a single ~7 KB locale bundle. The

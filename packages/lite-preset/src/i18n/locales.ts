@@ -1,5 +1,5 @@
 /**
- * Supported UI locales for SlideStageLite.
+ * Supported UI locales for SlideStage Lite.
  *
  * Keep this list small on purpose — every entry must have a complete
  * translation in `messages.ts` (enforced by `messages.test.ts`). Add a new

@@ -160,7 +160,7 @@ export function buildManifestFromSource(
     title,
     subtitle: null,
     author: null,
-    description: `Synthesized by SlideStageLite sniffer (kind=${sniff.kind}).`,
+    description: `Synthesized by SlideStage Lite sniffer (kind=${sniff.kind}).`,
     createdAt,
     updatedAt: createdAt,
     architecture,

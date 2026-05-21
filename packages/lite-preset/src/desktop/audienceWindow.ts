@@ -108,7 +108,7 @@ export async function openAudienceWindow(
   const { WebviewWindow } = await loadWebviewWindow();
   const win = new WebviewWindow(label, {
     url,
-    title: 'SlideStageLite — Audience',
+    title: 'SlideStage Lite — Audience',
     width: Math.min(1280, Math.floor(initialWidth / (monitor?.scaleFactor ?? 1))),
     height: Math.min(720, Math.floor(initialHeight / (monitor?.scaleFactor ?? 1))),
     x: initialX,

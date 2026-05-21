@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
- * Desktop smoke test for the bundled SlideStageLite.app.
+ * Desktop smoke test for the bundled SlideStage Lite app (productName
+ * rename → bundle is now `SlideStage Lite.app`; legacy `SlideStageLite.app`
+ * is still probed for backwards compatibility).
  *
  * What we verify (all without needing macOS Accessibility permissions):
  *   1. The `.app` bundle exists at the expected path.
@@ -42,15 +44,23 @@ const TARGET_CANDIDATES = [
     value !== undefined && all.indexOf(value) === index,
 );
 
+// The productName rename ("SlideStageLite" → "SlideStage Lite") shifts
+// the .app filename. We probe the new spaced name first; if a stale
+// pre-rename build is still on disk we fall back to the old name so the
+// smoke test does not regress while a release machine catches up.
+const APP_BASENAMES = ['SlideStage Lite.app', 'SlideStageLite.app'];
+
 function resolveBundle() {
   for (const target of TARGET_CANDIDATES) {
     const base = target
       ? resolve(ROOT, 'src-tauri/target', target, 'release')
       : resolve(ROOT, 'src-tauri/target/release');
-    const app = resolve(base, 'bundle/macos/SlideStageLite.app');
     const bin = resolve(base, 'slidestage-lite-desktop');
-    if (existsSync(app)) {
-      return { app, bin, target };
+    for (const name of APP_BASENAMES) {
+      const app = resolve(base, 'bundle/macos', name);
+      if (existsSync(app)) {
+        return { app, bin, target };
+      }
     }
   }
   return null;
@@ -78,16 +88,26 @@ function tryExec(cmd, timeout = 5000) {
 }
 
 function isRunning() {
-  // lsappinfo lists every running app by bundle id.
-  return tryExec('lsappinfo list').includes('SlideStageLite');
+  // lsappinfo prints both the CFBundleName and the .app filename.
+  // After the productName rename to "SlideStage Lite" both forms can
+  // appear depending on whether the build is fresh or stale, so we
+  // match either spelling.
+  const listing = tryExec('lsappinfo list');
+  return listing.includes('SlideStage Lite') || listing.includes('SlideStageLite');
 }
 
 function quitApp() {
   if (isRunning()) {
+    // Tell the most likely display name first, then the legacy one.
+    tryExec('osascript -e \'tell application "SlideStage Lite" to quit\'', 5000);
     tryExec('osascript -e \'tell application "SlideStageLite" to quit\'', 5000);
   }
-  // Belt-and-braces in case `osascript` was blocked by sandboxing.
+  // Belt-and-braces in case `osascript` was blocked by sandboxing. We
+  // also kill the new spaceless executable name that the binary may
+  // adopt; today it remains `slidestage-lite-desktop` so this is a
+  // future-proofing guard.
   tryExec('pkill -x slidestage-lite-desktop');
+  tryExec("pkill -fx 'SlideStage Lite'");
   tryExec('pkill -x SlideStageLite');
 }
 
@@ -100,7 +120,7 @@ async function main() {
   const bundle = resolveBundle();
   if (!bundle) {
     die(
-      `app not found under src-tauri/target/{release,<triple>/release}/bundle/macos/SlideStageLite.app\n` +
+      `app not found under src-tauri/target/{release,<triple>/release}/bundle/macos/{${APP_BASENAMES.join(',')}}\n` +
         `        Did you run \`pnpm tauri build\` (optionally with \`--target <triple>\`) first?`,
     );
   }
@@ -133,7 +153,7 @@ async function main() {
       await sleep(500);
       if (isRunning()) {
         saw = true;
-        info(`OK — SlideStageLite running (lsappinfo confirms)`);
+        info(`OK — SlideStage Lite running (lsappinfo confirms)`);
         break;
       }
     }

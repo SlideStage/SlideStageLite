@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * SlideStageLite — macOS signing/notarization sanity check.
+ * SlideStage Lite — macOS signing/notarization sanity check.
  *
  * This is the "did the release pipeline actually do its job?" probe.
  * It exits 0 only when *all* of the following hold:
@@ -90,15 +90,21 @@ if (process.platform !== 'darwin') {
 
 section(`Inspecting target ${TARGET}`);
 
-const APP = resolve(
-  ROOT,
-  'src-tauri/target',
-  TARGET,
-  'release/bundle/macos/SlideStageLite.app',
-);
-if (!existsSync(APP)) {
+// Resolve the bundled .app. The productName rename
+// (`SlideStageLite` → `SlideStage Lite`) means new builds land under
+// `bundle/macos/SlideStage Lite.app`. We try the new name first and
+// fall back to the legacy spaceless name so the verifier still works
+// against bundles produced before the rename.
+const APP_BASE = resolve(ROOT, 'src-tauri/target', TARGET, 'release/bundle/macos');
+const APP_CANDIDATES = [
+  resolve(APP_BASE, 'SlideStage Lite.app'),
+  resolve(APP_BASE, 'SlideStageLite.app'),
+];
+const APP = APP_CANDIDATES.find((p) => existsSync(p));
+if (!APP) {
   abort(
-    `no .app at ${APP}. Did you run \`pnpm tauri build --target ${TARGET}\` ` +
+    `no .app under ${APP_BASE} (tried: ${APP_CANDIDATES.map((p) => `"${p}"`).join(', ')}). ` +
+      `Did you run \`pnpm tauri build --target ${TARGET}\` ` +
       `(or \`pnpm release:macos\`) first?`,
   );
 }

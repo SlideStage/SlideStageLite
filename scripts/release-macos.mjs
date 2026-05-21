@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * SlideStageLite — macOS release orchestrator.
+ * SlideStage Lite — macOS release orchestrator.
  *
  * Pipeline (per the agreed plan: 1B + 2B + 3C + 4A):
  *
@@ -260,9 +260,21 @@ if (build.status !== 0) {
 
 step('Resolving build artifacts');
 
-const APP = resolve(TARGET_BUNDLE, 'macos/SlideStageLite.app');
-if (!existsSync(APP)) {
-  die(`expected .app missing at ${APP}`);
+// Tauri 2 uses `productName` verbatim for the .app filename. After we
+// renamed productName from "SlideStageLite" to "SlideStage Lite" the
+// new builds land under `macos/SlideStage Lite.app`. We keep the old
+// path as a fallback so a release machine that still has the
+// pre-rename bundle from a previous build does not silently fail.
+const APP_CANDIDATES = [
+  resolve(TARGET_BUNDLE, 'macos/SlideStage Lite.app'),
+  resolve(TARGET_BUNDLE, 'macos/SlideStageLite.app'),
+];
+const APP = APP_CANDIDATES.find((p) => existsSync(p));
+if (!APP) {
+  die(
+    `expected .app missing at any of:\n` +
+      APP_CANDIDATES.map((p) => `    - ${p}`).join('\n'),
+  );
 }
 info(`app: ${APP}`);
 

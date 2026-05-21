@@ -25,6 +25,7 @@ import { ConverterPanel } from './ConverterPanel';
 import { Footer } from './Footer';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { TrustPrompt } from './TrustPrompt';
+import { UpdateBanner } from './UpdateBanner';
 
 interface PendingTrust {
   deck: LoadedDeck;
@@ -412,6 +413,7 @@ export function LiteApp() {
 
   return (
     <div className="app-shell deck-closed">
+      <UpdateBanner />
       <header className="app-header" data-testid="app-header">
         <span className="app-brand" aria-label={t('app.brand.aria')}>
           <span className="app-brand-mark" aria-hidden>

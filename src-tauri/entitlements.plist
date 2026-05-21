@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  SlideStageLite — macOS Hardened Runtime entitlements.
+  SlideStage Lite — macOS Hardened Runtime entitlements.
 
   Notarization REQUIRES the Hardened Runtime, which Tauri's bundler
   enables automatically as soon as `bundle.macOS.signingIdentity` is set
@@ -42,7 +42,7 @@
         Anything that lets external processes attach to the running
         binary. Notarization will FAIL if get-task-allow is true.
     - app-sandbox:
-        SlideStageLite intentionally runs without the App Sandbox so
+        SlideStage Lite intentionally runs without the App Sandbox so
         users can open `.stage` files anywhere on disk. The Sandbox
         would require a long set of `files.user-selected` /
         `files.bookmarks.app-scope` workarounds that are out of scope

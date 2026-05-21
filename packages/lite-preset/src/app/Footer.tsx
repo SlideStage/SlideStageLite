@@ -20,6 +20,7 @@
  * the presenter's stage nor the projected audience output gets occluded.
  */
 import { ExternalLink } from 'lucide-react';
+import { withDesktopOpener } from '../desktop/openExternal';
 import { useI18n } from '../i18n/I18nProvider';
 
 const DEFAULT_ICP_URL = 'https://beian.miit.gov.cn/';
@@ -61,6 +62,7 @@ export function Footer() {
           target="_blank"
           rel="noopener noreferrer"
           data-testid="app-footer-site"
+          onClick={withDesktopOpener(SLIDESTAGE_SITE_URL)}
         >
           {t('footer.site')}
           <ExternalLink size={11} strokeWidth={2.2} aria-hidden />
@@ -77,6 +79,7 @@ export function Footer() {
               target="_blank"
               rel="noopener noreferrer"
               data-testid="app-footer-icp"
+              onClick={withDesktopOpener(icpUrl)}
             >
               {icpText}
             </a>
@@ -95,6 +98,7 @@ export function Footer() {
                 target="_blank"
                 rel="noopener noreferrer"
                 data-testid="app-footer-mps"
+                onClick={withDesktopOpener(mpsUrl)}
               >
                 <img
                   src="/mpslogo.png"

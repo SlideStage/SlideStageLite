@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Baseline capabilities: main + audience windows can manage their lifecycle, emit/listen events, query monitors, register global shortcuts while presenting, and read deck files the user explicitly chose via dialog or file-association.",
+  "description": "Baseline capabilities: main + audience windows can manage their lifecycle, emit/listen events, query monitors, open external URLs via the OS, and read deck files the user explicitly chose via dialog or file-association.",
   "windows": ["main", "audience-*"],
   "permissions": [
     "core:default",
@@ -29,9 +29,6 @@
     "fs:allow-read-file",
     "fs:default",
     "deep-link:default",
-    "global-shortcut:allow-register",
-    "global-shortcut:allow-unregister",
-    "global-shortcut:allow-unregister-all",
-    "global-shortcut:allow-is-registered"
+    "opener:default"
   ]
 }

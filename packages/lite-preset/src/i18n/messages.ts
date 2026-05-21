@@ -18,9 +18,9 @@ export type MessageDict = Readonly<Record<string, string>>;
 
 export const messages: Readonly<Record<Locale, MessageDict>> = {
   en: {
-    'app.brand.name': 'SlideStageLite',
+    'app.brand.name': 'SlideStage Lite',
     'app.brand.tag': 'lite',
-    'app.brand.aria': 'SlideStageLite home',
+    'app.brand.aria': 'SlideStage Lite home',
     'app.header.meta': 'Local · no server',
 
     'language.aria': 'Interface language',
@@ -47,14 +47,14 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
       'or repackage the deck with smaller fonts/images.',
 
     'viewer.notice.autoElevatedSize':
-      'This deck weighs in at {mb} MB. To render it efficiently, SlideStageLite ' +
+      'This deck weighs in at {mb} MB. To render it efficiently, SlideStage Lite ' +
       'mounted it with same-origin access (so the in-tab service worker can serve ' +
       'its assets without inlining every byte as a data: URL). The deck can read ' +
       'browser storage for this site while it is open.',
     'viewer.notice.dismiss': 'Dismiss',
 
     'trust.eyebrow': 'Trust required',
-    'trust.lead.before': 'This deck was packaged in a mode that needs extra browser capabilities to render faithfully. SlideStageLite will not enable them until you grant trust for',
+    'trust.lead.before': 'This deck was packaged in a mode that needs extra browser capabilities to render faithfully. SlideStage Lite will not enable them until you grant trust for',
     'trust.lead.emphasis': 'this specific deck',
     'trust.lead.after': '.',
     'trust.producerNote': 'Producer note:',
@@ -232,12 +232,17 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
 
     'footer.local': 'Runs locally · no server',
     'footer.site': 'slidestage.dev',
+
+    'update.body':
+      'A new version ({version}) of SlideStage Lite is available.',
+    'update.cta': 'Download',
+    'update.dismiss': 'Dismiss update notice',
   },
 
   'zh-CN': {
-    'app.brand.name': 'SlideStageLite',
+    'app.brand.name': 'SlideStage Lite',
     'app.brand.tag': 'lite',
-    'app.brand.aria': 'SlideStageLite 主页',
+    'app.brand.aria': 'SlideStage Lite 主页',
     'app.header.meta': '本地运行 · 无服务端',
 
     'language.aria': '界面语言',
@@ -261,12 +266,12 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
       'E_TOO_LARGE_FOR_INLINE：该 deck 超过 inline 预算，当前浏览器环境也无法承载用来高效渲染的 service worker。请改用 Chrome / Brave / SlideStage 桌面版打开，或者把字体/图片瘦身后重新打包。',
 
     'viewer.notice.autoElevatedSize':
-      '该 deck 体积达 {mb} MB。为了高效渲染，SlideStageLite 已用同源（same-origin）方式装载它，让标签内的 Service Worker 直接提供资源，而非把每个字节 inline 成 data: URL。在打开期间，该 deck 可以读取本站浏览器存储。',
+      '该 deck 体积达 {mb} MB。为了高效渲染，SlideStage Lite 已用同源（same-origin）方式装载它，让标签内的 Service Worker 直接提供资源，而非把每个字节 inline 成 data: URL。在打开期间，该 deck 可以读取本站浏览器存储。',
     'viewer.notice.dismiss': '关闭提示',
 
     'trust.eyebrow': '需要信任授权',
     'trust.lead.before':
-      '此演示打包时声明需要额外的浏览器能力才能完整呈现。SlideStageLite 在你为',
+      '此演示打包时声明需要额外的浏览器能力才能完整呈现。SlideStage Lite 在你为',
     'trust.lead.emphasis': '该具体演示',
     'trust.lead.after': '授权之前不会启用这些能力。',
     'trust.producerNote': '作者备注：',
@@ -441,6 +446,10 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
 
     'footer.local': '本地运行 · 无服务端',
     'footer.site': 'slidestage.dev',
+
+    'update.body': 'SlideStage Lite 有新版本 {version} 可下载。',
+    'update.cta': '下载',
+    'update.dismiss': '不再提醒此版本',
   },
 };
 

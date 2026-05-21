@@ -2,7 +2,7 @@
   <a href="https://slidestage.dev">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="public/brand/png/slidestage-logo-horizontal-on-dark@2x.png">
-      <img src="public/brand/png/slidestage-logo-horizontal@2x.png" alt="SlideStageLite" width="520">
+      <img src="public/brand/png/slidestage-logo-horizontal@2x.png" alt="SlideStage Lite" width="520">
     </picture>
   </a>
 </p>
@@ -20,7 +20,7 @@
 
 ---
 
-SlideStageLite 可以直接从 `file://`、GitHub Pages、Netlify、Vercel、
+SlideStage Lite 可以直接从 `file://`、GitHub Pages、Netlify、Vercel、
 内网 Nginx 或任意静态托管打开的静态构建产物。
 
 ### SlideStage 全家桶
@@ -28,14 +28,14 @@ SlideStageLite 可以直接从 `file://`、GitHub Pages、Netlify、Vercel、
 <table>
   <tr>
     <td align="center" width="33%">
-      <a href="https://github.com/SlideStage/SlideStageLite"><img src="public/brand/png/slidestage-mark.png" width="84" alt="SlideStageLite"></a><br/>
-      <strong>SlideStageLite</strong><br/>
+      <a href="https://github.com/SlideStage/SlideStageLite"><img src="public/brand/png/slidestage-mark.png" width="84" alt="SlideStage Lite"></a><br/>
+      <strong>SlideStage Lite</strong><br/>
       <sub>本地优先运行时</sub><br/>
       <sub>在任意浏览器里打开、演示、转换 <code>.stage</code>。</sub>
     </td>
     <td align="center" width="33%">
-      <a href="https://github.com/SlideStage/SlideStagePro"><img src="public/brand/png/slidestage-pro-mark.png" width="84" alt="SlideStagePro"></a><br/>
-      <strong>SlideStagePro</strong><br/>
+      <a href="https://github.com/SlideStage/SlideStagePro"><img src="public/brand/png/slidestage-pro-mark.png" width="84" alt="SlideStage Pro"></a><br/>
+      <strong>SlideStage Pro</strong><br/>
       <sub>自托管平台</sub><br/>
       <sub>多人 deck 库、注释批注、Docker Compose 部署。</sub>
     </td>
@@ -50,7 +50,7 @@ SlideStageLite 可以直接从 `file://`、GitHub Pages、Netlify、Vercel、
 
 ---
 
-## 为什么用 SlideStageLite？
+## 为什么用 SlideStage Lite？
 
 大多数演示文稿工具会让你在**保真度**（原生 HTML/CSS/JS 动画）和**便携性**
 （一个能整体交付的文件）之间二选一。`.stage` 容器调和了二者：
@@ -109,7 +109,7 @@ pnpm build                   # tsc -b && vite build → dist/
 
 ## 生产部署
 
-SlideStageLite 产物是一份纯静态包（`dist/index.html` + `dist/assets/*`），
+SlideStage Lite 产物是一份纯静态包（`dist/index.html` + `dist/assets/*`），
 任何静态托管都能跑。
 
 ### 1. 配置环境变量（可选）

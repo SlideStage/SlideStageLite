@@ -24,10 +24,16 @@ describe('broadcastChannelFactory', () => {
       const unsubscribe = b.subscribe((msg) => received.push(msg));
 
       a.postMessage({ type: 'hello', role: 'presenter' });
-      // BroadcastChannel delivery is async; flush microtasks + a tick.
-      await new Promise((r) => setTimeout(r, 0));
-
-      expect(received).toHaveLength(1);
+      // BroadcastChannel delivery is asynchronous; jsdom's implementation
+      // routes the postMessage through a microtask + setTimeout pump, so a
+      // single `await setTimeout(0)` is enough on most runs but flakes
+      // when the worker thread is under load. Poll up to a few hundred
+      // milliseconds — the message either arrives within one or two
+      // event-loop turns or it never will.
+      await vi.waitFor(() => expect(received).toHaveLength(1), {
+        timeout: 500,
+        interval: 5,
+      });
       expect(received[0]).toEqual({ type: 'hello', role: 'presenter' });
 
       unsubscribe();
@@ -50,9 +56,11 @@ describe('broadcastChannelFactory', () => {
       raw.postMessage('not-an-object');
       raw.postMessage({ noType: true });
       a.postMessage({ type: 'goodbye', role: 'audience' });
-      await new Promise((r) => setTimeout(r, 0));
-
-      expect(received).toEqual([{ type: 'goodbye', role: 'audience' }]);
+      await vi.waitFor(
+        () =>
+          expect(received).toEqual([{ type: 'goodbye', role: 'audience' }]),
+        { timeout: 500, interval: 5 },
+      );
     } finally {
       a.close();
       b.close();

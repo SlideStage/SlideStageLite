@@ -62,4 +62,49 @@ describe('DeckStage focus recovery', () => {
     activeIframe.dispatchEvent(new Event('load'));
     expect(focusSpy).toHaveBeenCalled();
   });
+
+  it('reclaims focus when the host window regains focus', async () => {
+    const { getByTestId } = render(
+      <DeckStage
+        src="blob:nope"
+        title="Slide 1"
+        width={1280}
+        height={720}
+      />,
+    );
+    const card = getByTestId('deck-stage');
+    // Patch requestAnimationFrame so the test runs synchronously rather
+    // than waiting on a real frame.
+    const rafSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((cb: FrameRequestCallback) => {
+        cb(0);
+        return 0;
+      });
+    try {
+      const focusSpy = vi.spyOn(card, 'focus');
+      window.dispatchEvent(new Event('focus'));
+      expect(focusSpy).toHaveBeenCalled();
+    } finally {
+      rafSpy.mockRestore();
+    }
+  });
+
+  it('removes the window-focus listener on unmount', () => {
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+    const { unmount } = render(
+      <DeckStage
+        src="blob:nope"
+        title="Slide 1"
+        width={1280}
+        height={720}
+      />,
+    );
+    unmount();
+    const calls = removeSpy.mock.calls.filter(
+      ([type]) => type === 'focus',
+    );
+    expect(calls.length).toBeGreaterThan(0);
+    removeSpy.mockRestore();
+  });
 });

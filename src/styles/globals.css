@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────────────── */
-/* SlideStageLite design tokens — mirrors SlideStagePro globals.css.       */
+/* SlideStage Lite design tokens — mirrors SlideStage Pro globals.css.     */
 /* Twin-product palette: teal primary (#14b8a6), orange CTA (#f97316),     */
 /* Plus Jakarta Sans typography, dark-only surfaces. Page-specific tweaks  */
 /* should consume CSS variables defined here rather than introduce new     */
@@ -1052,6 +1052,81 @@ code {
 }
 .auto-elevated-notice-dismiss:hover {
   background: rgba(255, 255, 255, 0.16);
+}
+
+/* GitHub Release update banner (landing surface, Tauri-only). Visually
+ * sibling to .auto-elevated-notice but anchored beneath the app header
+ * instead of as a floating chip so it does not occlude the deck
+ * dropzone. Quiet teal accent → consistent with our primary token,
+ * never red because "update available" is not an error. */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px auto 0;
+  padding: 8px 10px 8px 12px;
+  width: min(640px, calc(100vw - 32px));
+  background: rgba(20, 184, 166, 0.08);
+  border: 1px solid rgba(20, 184, 166, 0.32);
+  border-radius: 10px;
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.update-banner-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(20, 184, 166, 0.18);
+  color: #2dd4bf;
+  flex-shrink: 0;
+}
+
+.update-banner-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.update-banner-cta {
+  flex-shrink: 0;
+  appearance: none;
+  background: rgba(20, 184, 166, 0.92);
+  border: 1px solid rgba(20, 184, 166, 1);
+  color: #0f172a;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.update-banner-cta:hover {
+  background: rgba(45, 212, 191, 1);
+}
+
+.update-banner-dismiss {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: inherit;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.update-banner-dismiss:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .deck-open .viewer {

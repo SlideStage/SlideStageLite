@@ -77,9 +77,16 @@ interface DeckViewerProps {
  * Owns the lite-flavored adapters that aren't part of the
  * `@slidestage/ui` contract: localStorage-backed layout state,
  * annotation/notes persistence, thumbnail capture (Tauri only), the
- * presentation sync transport (BroadcastChannel / Tauri event), the
- * Tauri global-shortcut registration, and the audience window spawn
- * logic (Web popup + Tauri WebviewWindow + MonitorPicker UI).
+ * presentation sync transport (BroadcastChannel / Tauri event), and
+ * the audience window spawn logic (Web popup + Tauri WebviewWindow +
+ * MonitorPicker UI).
+ *
+ * Keyboard shortcuts are intentionally window-scoped only — see
+ * `LiteApp.tsx` (`window.addEventListener('keydown')`) and the
+ * `DeckStage` focus-reclaim helper. We do NOT register OS-level global
+ * shortcuts; that would steal keys from other apps when SlideStage Lite
+ * isn't focused, and it adds a Mac App Store entitlement we'd rather
+ * not request.
  */
 export function DeckViewer({
   deck,
@@ -343,86 +350,6 @@ export function DeckViewer({
       audienceWindowRef.current = null;
     };
   }, []);
-
-  // ---------- Tauri global shortcuts ----------
-
-  const onNavigateRef = useRef(onNavigate);
-  onNavigateRef.current = onNavigate;
-  const currentIndexRef = useRef(currentIndex);
-  currentIndexRef.current = currentIndex;
-  const totalSlidesRef = useRef(deck.manifest.totalSlides);
-  totalSlidesRef.current = deck.manifest.totalSlides;
-  const presenterRef = useRef(presenter);
-  presenterRef.current = presenter;
-
-  // While the audience window is live in the Tauri build, register a
-  // global-shortcut belt-and-braces layer so presentation keys keep
-  // working even if a slide iframe steals focus on the audience side.
-  // We deliberately scope this to (a) Tauri only, (b) only while the
-  // audience is connected, so we never claim system shortcuts during a
-  // plain Web session or while the user is just browsing decks.
-  useEffect(() => {
-    if (!isTauri() || !audienceConnected) return undefined;
-    let cancelled = false;
-    let handle: { unregister(): Promise<void> } | null = null;
-    (async () => {
-      try {
-        const { registerPresentationShortcuts } = await import(
-          '../desktop/globalShortcuts'
-        );
-        const registered = await registerPresentationShortcuts((action) => {
-          const total = totalSlidesRef.current;
-          const idx = currentIndexRef.current;
-          switch (action) {
-            case 'next-slide':
-              onNavigateRef.current(Math.min(idx + 1, total - 1));
-              break;
-            case 'prev-slide':
-              onNavigateRef.current(Math.max(idx - 1, 0));
-              break;
-            case 'first-slide':
-              onNavigateRef.current(0);
-              break;
-            case 'last-slide':
-              onNavigateRef.current(total - 1);
-              break;
-            case 'toggle-blackout': {
-              const api = presenterRef.current;
-              api.setTool(api.state.tool === 'blackout' ? 'mouse' : 'blackout');
-              break;
-            }
-            case 'exit-fullscreen':
-              // Best-effort: tell the audience window to leave fullscreen.
-              void (async () => {
-                try {
-                  const { setAudienceFullscreen } = await import(
-                    '../desktop/audienceWindow'
-                  );
-                  await setAudienceFullscreen(deck.fingerprint, false);
-                } catch {
-                  // ignore
-                }
-              })();
-              break;
-            default:
-              break;
-          }
-        });
-        if (cancelled) {
-          await registered.unregister();
-        } else {
-          handle = registered;
-        }
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('global shortcuts setup failed', err);
-      }
-    })();
-    return () => {
-      cancelled = true;
-      void handle?.unregister();
-    };
-  }, [audienceConnected, deck.fingerprint]);
 
   const monitorPickerOverlay = useMemo(() => {
     if (!monitorPickerOpen || availableMonitors.length === 0) return null;
