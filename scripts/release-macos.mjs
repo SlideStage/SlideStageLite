@@ -33,6 +33,9 @@
  *
  *   APPLE_TEAM_ID              only needed when signing identity is ambiguous
  *   TAURI_BUNDLE_ARGS          extra args appended after `pnpm tauri build`
+ *   RELEASE_TARGET             Rust triple to build, defaults to
+ *                              aarch64-apple-darwin. Use
+ *                              x86_64-apple-darwin to ship for Intel Macs.
  *
  * Usage:
  *
@@ -40,6 +43,7 @@
  *   pnpm release:macos --dry-run
  *   pnpm release:macos --skip-notarize          # adhoc-only build (no Apple creds)
  *   pnpm release:macos --skip-stapling          # initial notarization pass only
+ *   RELEASE_TARGET=x86_64-apple-darwin pnpm release:macos   # Intel build
  */
 
 import { execSync, spawnSync } from 'node:child_process';
@@ -57,7 +61,15 @@ import { createHash } from 'node:crypto';
 import { resolve, basename } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const TARGET = 'aarch64-apple-darwin';
+const TARGET = process.env.RELEASE_TARGET || 'aarch64-apple-darwin';
+// Map Rust triple to the human-friendly suffix used in dist-desktop file
+// names. Anything unrecognised falls back to the triple itself so we never
+// silently lose architecture info.
+const TARGET_NAME_SUFFIX = {
+  'aarch64-apple-darwin': 'AppleSilicon',
+  'x86_64-apple-darwin': 'Intel',
+  'universal-apple-darwin': 'universal',
+}[TARGET] || TARGET;
 const TARGET_BUNDLE = resolve(
   ROOT,
   'src-tauri/target',
@@ -375,7 +387,7 @@ step('Publishing to dist-desktop/');
 
 if (!existsSync(DIST_DESKTOP)) mkdirSync(DIST_DESKTOP, { recursive: true });
 
-const FINAL_NAME = `SlideStageLite-${versionFromConf}-macOS-AppleSilicon.dmg`;
+const FINAL_NAME = `SlideStageLite-${versionFromConf}-macOS-${TARGET_NAME_SUFFIX}.dmg`;
 const FINAL_PATH = resolve(DIST_DESKTOP, FINAL_NAME);
 copyFileSync(DMG_ORIG, FINAL_PATH);
 info(`copied: ${FINAL_NAME}`);
