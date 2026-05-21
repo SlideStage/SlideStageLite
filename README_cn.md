@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://slidestage.dev"><img alt="官网" src="https://img.shields.io/badge/%E5%AE%98%E7%BD%91-slidestage.dev-06B6D4?style=flat-square"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-111827?style=flat-square"></a>
+  <!-- <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-111827?style=flat-square"></a> -->
   <a href="README.md"><img alt="English" src="https://img.shields.io/badge/lang-English-F59E0B?style=flat-square"></a>
 </p>
 
@@ -30,19 +30,19 @@ SlideStageLite 可以直接从 `file://`、GitHub Pages、Netlify、Vercel、
     <td align="center" width="33%">
       <a href="https://github.com/SlideStage/SlideStageLite"><img src="public/brand/png/slidestage-mark.png" width="84" alt="SlideStageLite"></a><br/>
       <strong>SlideStageLite</strong><br/>
-      <sub>本地优先运行时 · MIT</sub><br/>
+      <sub>本地优先运行时</sub><br/>
       <sub>在任意浏览器里打开、演示、转换 <code>.stage</code>。</sub>
     </td>
     <td align="center" width="33%">
       <a href="https://github.com/SlideStage/SlideStagePro"><img src="public/brand/png/slidestage-pro-mark.png" width="84" alt="SlideStagePro"></a><br/>
       <strong>SlideStagePro</strong><br/>
-      <sub>自托管平台 · MIT</sub><br/>
+      <sub>自托管平台</sub><br/>
       <sub>多人 deck 库、注释批注、Docker Compose 部署。</sub>
     </td>
     <td align="center" width="33%">
       <a href="https://github.com/SlideStage/slidestage-pack"><img src="public/brand/png/slidestage-pack-mark.png" width="84" alt="slidestage-pack"></a><br/>
       <strong>slidestage-pack</strong><br/>
-      <sub>Agent skill 打包器 · MIT</sub><br/>
+      <sub>Agent skill 打包器</sub><br/>
       <sub>把任意 HTML deck 打包成 <code>.stage</code> 文件。</sub>
     </td>
   </tr>

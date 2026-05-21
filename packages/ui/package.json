@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Reusable SlideStage React UI: viewer, presenter, and overlays.",
-  "license": "MIT",
   "sideEffects": false,
   "main": "./src/index.ts",
   "types": "./src/index.ts",
