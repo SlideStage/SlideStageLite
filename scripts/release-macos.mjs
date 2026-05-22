@@ -2,22 +2,32 @@
 /**
  * SlideStage Lite — macOS release orchestrator.
  *
- * Pipeline (per the agreed plan: 1B + 2B + 3C + 4A):
+ * Pipeline (per the agreed plan: 1B + 2B + 3C + 4A, plus auto-updater
+ * hand-off):
  *
- *   1. Load .env.local so APPLE_* vars become available to Tauri's
- *      bundler (Tauri picks them up automatically from process.env).
+ *   1. Load .env.local so APPLE_* and TAURI_SIGNING_* vars become
+ *      available to Tauri's bundler (Tauri picks them up automatically
+ *      from process.env).
  *   2. Detect mode:
  *        - dry-run            → validate config + env, exit.
  *        - skip-notarize      → adhoc sign only, useful when the user
  *                               has no Developer ID cert yet.
  *        - full (default)     → sign + notarize + staple via Tauri,
  *                               then run all post-build verifications.
- *   3. Invoke `pnpm tauri build --target aarch64-apple-darwin`.
+ *   3. Invoke `pnpm tauri build --target aarch64-apple-darwin`. With
+ *      `bundle.createUpdaterArtifacts=true` and `TAURI_SIGNING_*`
+ *      present, this also emits `<app>.app.tar.gz` + `.sig`.
  *   4. Verify .app codesign, dmg signature, dmg stapling, Gatekeeper
  *      acceptance (`spctl --assess --type install`).
  *   5. Rename artifacts to the dist-desktop naming scheme and copy
  *      them next to the existing platform binaries.
- *   6. Rewrite dist-desktop/SHA256SUMS.txt deterministically.
+ *   6. Build the static `latest.json` updater manifest (delegates to
+ *      `scripts/build-update-manifest.mjs`) so the Tauri client can
+ *      discover the new release.
+ *   7. Rewrite dist-desktop/SHA256SUMS.txt deterministically.
+ *   8. Optional: `--upload` attaches every dist-desktop artifact to the
+ *      matching GitHub Release via `gh release upload`. Requires `gh`
+ *      to be authenticated and the `v<version>` tag to already exist.
  *
  * The script is intentionally chatty: every transition prints a marker
  * so a CI log or `tail -f` reader can see where we are.
@@ -29,6 +39,11 @@
  *   APPLE_API_ISSUER           ASC API Issuer ID (UUID)
  *   APPLE_API_KEY_PATH         absolute path to AuthKey_<KEYID>.p8
  *
+ * Auto-updater env vars (skipped when --skip-updater is passed):
+ *
+ *   TAURI_SIGNING_PRIVATE_KEY           path to / contents of the minisign key
+ *   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  password used to encrypt the key
+ *
  * Optional:
  *
  *   APPLE_TEAM_ID              only needed when signing identity is ambiguous
@@ -36,6 +51,9 @@
  *   RELEASE_TARGET             Rust triple to build, defaults to
  *                              aarch64-apple-darwin. Use
  *                              x86_64-apple-darwin to ship for Intel Macs.
+ *   UPDATER_ASSET_BASE_URL     override the GitHub Releases base URL
+ *                              embedded into latest.json (useful when
+ *                              mirroring to Cloudflare R2 etc.)
  *
  * Usage:
  *
@@ -43,6 +61,8 @@
  *   pnpm release:macos --dry-run
  *   pnpm release:macos --skip-notarize          # adhoc-only build (no Apple creds)
  *   pnpm release:macos --skip-stapling          # initial notarization pass only
+ *   pnpm release:macos --skip-updater           # legacy build, no .app.tar.gz / latest.json
+ *   pnpm release:macos --upload                 # upload artifacts to gh release v<version>
  *   RELEASE_TARGET=x86_64-apple-darwin pnpm release:macos   # Intel build
  */
 
@@ -87,6 +107,8 @@ const ARGS = new Set(process.argv.slice(2));
 const DRY_RUN = ARGS.has('--dry-run');
 const SKIP_NOTARIZE = ARGS.has('--skip-notarize');
 const SKIP_STAPLING = ARGS.has('--skip-stapling');
+const SKIP_UPDATER = ARGS.has('--skip-updater');
+const UPLOAD = ARGS.has('--upload');
 const VERBOSE = ARGS.has('--verbose') || !!process.env.CI;
 
 // ---- Logging ------------------------------------------------------------
@@ -181,11 +203,29 @@ const hasApiKey = checkEnv('APPLE_API_KEY');
 const hasApiIssuer = checkEnv('APPLE_API_ISSUER');
 const hasApiKeyPath = checkEnv('APPLE_API_KEY_PATH');
 const hasTeamId = checkEnv('APPLE_TEAM_ID');
+const hasUpdaterKey = checkEnv('TAURI_SIGNING_PRIVATE_KEY');
+const hasUpdaterKeyPassword = checkEnv('TAURI_SIGNING_PRIVATE_KEY_PASSWORD');
 
 if (hasApiKeyPath && !existsSync(process.env.APPLE_API_KEY_PATH)) {
   die(
     `APPLE_API_KEY_PATH points to ${process.env.APPLE_API_KEY_PATH}, but no file exists there.`,
   );
+}
+
+// TAURI_SIGNING_PRIVATE_KEY accepts either a file path or the raw key
+// content. If it looks like a path (no embedded "untrusted" marker),
+// verify the file exists so we don't waste a 15-minute build only to
+// fail on the final sign step.
+if (
+  !SKIP_UPDATER &&
+  hasUpdaterKey &&
+  !process.env.TAURI_SIGNING_PRIVATE_KEY.includes('untrusted comment')
+) {
+  if (!existsSync(process.env.TAURI_SIGNING_PRIVATE_KEY)) {
+    die(
+      `TAURI_SIGNING_PRIVATE_KEY="${process.env.TAURI_SIGNING_PRIVATE_KEY}" looks like a path but no file exists there. Run \`pnpm updater:keygen\` first.`,
+    );
+  }
 }
 
 if (mode === 'full') {
@@ -202,6 +242,25 @@ if (mode === 'full') {
         `    a) put them in .env.local (see .env.example), or\n` +
         `    b) re-run with --skip-notarize for an adhoc-only build, or\n` +
         `    c) re-run with --dry-run to validate config without building.`,
+    );
+  }
+}
+
+// Updater signing creds: required unless --skip-updater. Missing key →
+// `pnpm tauri build` quietly produces an unsigned `.app.tar.gz` that
+// every client will reject; far better to fail fast here.
+if (!SKIP_UPDATER && mode !== 'dry-run') {
+  if (!hasUpdaterKey) {
+    die(
+      'TAURI_SIGNING_PRIVATE_KEY is missing. Either:\n' +
+        '    a) put it in .env.local (see .env.example), then re-run, or\n' +
+        '    b) re-run with --skip-updater to ship without an auto-updater artifact.\n' +
+        '\n  Run `pnpm updater:keygen` once if you have not generated a keypair yet.',
+    );
+  }
+  if (!hasUpdaterKeyPassword) {
+    warn(
+      'TAURI_SIGNING_PRIVATE_KEY_PASSWORD is empty. That works only if the keypair was generated without a password (NOT recommended).',
     );
   }
 }
@@ -234,6 +293,10 @@ if (mode === 'dry-run') {
   step('Dry run complete — no build performed');
   info(`Would invoke: pnpm tauri build --target ${TARGET}`);
   info(`Would write artifacts to: ${DIST_DESKTOP}`);
+  info(
+    `Updater step: ${SKIP_UPDATER ? 'SKIPPED (--skip-updater)' : 'would run scripts/build-update-manifest.mjs'}`,
+  );
+  info(`Upload step: ${UPLOAD ? 'would run gh release upload' : 'skipped (pass --upload to enable)'}`);
   process.exit(0);
 }
 
@@ -404,25 +467,69 @@ const FINAL_PATH = resolve(DIST_DESKTOP, FINAL_NAME);
 copyFileSync(DMG_ORIG, FINAL_PATH);
 info(`copied: ${FINAL_NAME}`);
 
+// ---- Build updater manifest (latest.json) ------------------------------
+
+if (!SKIP_UPDATER) {
+  step('Building updater manifest (latest.json) + publishing .app.tar.gz');
+  const manifestResult = spawnSync(
+    'node',
+    [
+      resolve(ROOT, 'scripts/build-update-manifest.mjs'),
+      '--target',
+      TARGET,
+    ],
+    {
+      stdio: 'inherit',
+      cwd: ROOT,
+      env: process.env,
+    },
+  );
+  if (manifestResult.status !== 0) {
+    die(
+      'build-update-manifest.mjs exited non-zero. The DMG is still valid but the auto-updater will not pick this release up.',
+    );
+  }
+} else {
+  warn('Skipping updater manifest (--skip-updater was passed).');
+}
+
 // ---- Refresh SHA256SUMS.txt --------------------------------------------
 
-step('Refreshing dist-desktop/SHA256SUMS.txt');
+// build-update-manifest.mjs already refreshes SHA256SUMS.txt with the
+// updater archives included. Re-run the original DMG-only refresh only
+// when the updater step was skipped, otherwise we'd lose the .app.tar.gz
+// entries the manifest step just wrote.
+if (SKIP_UPDATER) {
+  step('Refreshing dist-desktop/SHA256SUMS.txt');
 
-const dmgEntriesAll = readdirSync(DIST_DESKTOP)
-  .filter((f) => /\.(dmg|exe)$/i.test(f))
-  .sort();
+  const dmgEntriesAll = readdirSync(DIST_DESKTOP)
+    .filter((f) => /\.(dmg|exe)$/i.test(f))
+    .sort();
 
-const lines = [];
-for (const file of dmgEntriesAll) {
-  const hash = await sha256(resolve(DIST_DESKTOP, file));
-  lines.push(`${hash}  ${file}`);
+  const lines = [];
+  for (const file of dmgEntriesAll) {
+    const hash = await sha256(resolve(DIST_DESKTOP, file));
+    lines.push(`${hash}  ${file}`);
+  }
+  writeFileSync(SHA256SUMS, lines.join('\n') + '\n', 'utf8');
+  info(`rewrote ${SHA256SUMS} (${lines.length} entries)`);
 }
-writeFileSync(SHA256SUMS, lines.join('\n') + '\n', 'utf8');
-info(`rewrote ${SHA256SUMS} (${lines.length} entries)`);
+
+// ---- Optional: upload to GitHub Release --------------------------------
+
+if (UPLOAD) {
+  step(`Uploading artifacts to GitHub release v${versionFromConf}`);
+  uploadToGithubRelease(versionFromConf);
+} else {
+  info('Skipping GitHub upload (pass --upload to enable).');
+}
 
 step('Done');
 info(`Final artifact: ${FINAL_PATH}`);
 info(`Mode: ${mode}${SKIP_STAPLING ? ' (skip-stapling)' : ''}`);
+if (!SKIP_UPDATER) {
+  info('Updater manifest: dist-desktop/latest.json');
+}
 if (mode === 'skip-notarize') {
   warn(
     'This build is adhoc-signed and NOT notarized. Do not ship it to end users.',
@@ -430,6 +537,68 @@ if (mode === 'skip-notarize') {
 }
 
 // ---- Helpers ------------------------------------------------------------
+
+/**
+ * Upload every dist-desktop artifact that matches the running version
+ * to the matching GitHub Release tag (v<version>). Uses `gh release
+ * upload --clobber` so a re-run replaces the existing assets without
+ * failing.
+ *
+ * Requires the user to have `gh` authenticated AND the tag to exist
+ * (this script does NOT create the release — that's a manual `gh
+ * release create v<version>` step we want to keep human-gated).
+ */
+function uploadToGithubRelease(version) {
+  const tag = `v${version}`;
+  // Sanity: does gh exist?
+  const ghCheck = spawnSync('gh', ['--version'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (ghCheck.status !== 0) {
+    die(
+      'gh CLI is required for --upload but `gh --version` failed. Install with `brew install gh` and run `gh auth login`.',
+    );
+  }
+  // Sanity: does the release exist?
+  const exists = spawnSync('gh', ['release', 'view', tag], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (exists.status !== 0) {
+    die(
+      `GitHub release ${tag} does not exist yet. Create it first with:\n` +
+        `    gh release create ${tag} --title "${tag}" --notes-from-tag\n` +
+        `Then re-run with --upload.`,
+    );
+  }
+  // Collect everything we want to ship. Updater archives + .sig +
+  // latest.json + DMGs + (eventually) Windows/Linux installers.
+  const all = readdirSync(DIST_DESKTOP)
+    .filter((f) =>
+      /^(latest\.json|SHA256SUMS\.txt|SlideStageLite-.+\.(dmg|exe|msi|app\.tar\.gz|app\.tar\.gz\.sig))$/.test(
+        f,
+      ),
+    )
+    .filter((f) => !f.includes(' ')) // Defensive: HTTP-mangled spaces.
+    .sort();
+  if (all.length === 0) {
+    die('Nothing to upload — dist-desktop is empty.');
+  }
+  const paths = all.map((f) => resolve(DIST_DESKTOP, f));
+  info(`uploading ${all.length} asset(s) to ${tag}: ${all.join(', ')}`);
+  const upload = spawnSync(
+    'gh',
+    ['release', 'upload', tag, ...paths, '--clobber'],
+    {
+      stdio: 'inherit',
+    },
+  );
+  if (upload.status !== 0) {
+    die(
+      'gh release upload failed. Check the gh stderr above; the release tag exists but at least one asset could not be attached.',
+    );
+  }
+  info(`uploaded ${all.length} asset(s) to ${tag}`);
+}
 
 function tryExec(cmd) {
   try {

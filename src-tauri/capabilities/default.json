@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Baseline capabilities: main + audience windows can manage their lifecycle, emit/listen events, query monitors, open external URLs via the OS, and read deck files the user explicitly chose via dialog or file-association.",
+  "description": "Baseline capabilities: main + audience windows can manage their lifecycle, emit/listen events, query monitors, open external URLs via the OS, read deck files the user explicitly chose via dialog or file-association, and run the in-app auto-updater (download + signature-verified install + relaunch).",
   "windows": ["main", "audience-*"],
   "permissions": [
     "core:default",
@@ -29,6 +29,9 @@
     "fs:allow-read-file",
     "fs:default",
     "deep-link:default",
-    "opener:default"
+    "opener:default",
+    "updater:default",
+    "process:default",
+    "process:allow-restart"
   ]
 }

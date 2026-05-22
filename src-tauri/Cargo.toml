@@ -1,6 +1,6 @@
 [package]
 name = "slidestage-lite-desktop"
-version = "0.1.1"
+version = "0.2.0"
 description = "SlideStage Lite — pure local .stage presentation runtime"
 authors = ["SlideStage"]
 edition = "2021"
@@ -22,6 +22,14 @@ tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# Updater + process plugins are only meaningful on desktop targets. The
+# `target` predicate matches Tauri's own guidance and keeps the Rust
+# graph clean if/when we add a mobile target. `process` is bundled in
+# because the front-end calls `relaunch()` after install completes.
+[target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 [profile.release]
 panic = "abort"

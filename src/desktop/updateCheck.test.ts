@@ -1,292 +1,285 @@
 /**
- * Unit tests for the GitHub Release update probe.
+ * Unit tests for the native Tauri updater wrapper.
  *
- * The module under test is intentionally tiny and dependency-free
- * (parse a semver, compare two, fetch JSON, remember a dismiss).
- * We cover:
- *   1. Semver comparison — major/minor/patch ordering, v-prefix, equal
- *      versions, pre-release vs stable, malformed input.
- *   2. `fetchLatestRelease` — happy path, HTTP 404, HTTP 5xx, malformed
- *      JSON, abort signal.
- *   3. `checkForUpdate` — returns the release when newer, returns null
- *      when same, null when older, null when dismissed.
- *   4. `dismissUpdate` / `isDismissed` — round-trip via localStorage,
- *      survives storage failure.
+ * The module under test is intentionally a thin policy layer:
+ *   1. Branch on `isTauri()` — return null outside Tauri.
+ *   2. Dynamic-import `@tauri-apps/plugin-updater::check()`.
+ *   3. Remember the most-recent update handle so a subsequent
+ *      `installUpdate()` can call `downloadAndInstall()` + relaunch.
+ *   4. Honor a per-version dismiss persisted in localStorage.
+ *
+ * We exercise:
+ *   - `getCurrentDesktopVersion`  → null outside Tauri.
+ *   - `checkForUpdate`            → null outside Tauri, null when the
+ *                                    Tauri runtime returns null, null
+ *                                    when the user dismissed that
+ *                                    version, the release otherwise.
+ *   - `installUpdate`             → forwards progress, calls relaunch,
+ *                                    clears the cached handle.
+ *   - `dismissUpdate` / `isDismissed` → round-trip through localStorage,
+ *                                    survives storage failures.
  */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
-import {
-  __resetUpdateDismissForTests,
+  __resetUpdateStateForTests,
+  __setCachedHandleForTests,
   checkForUpdate,
-  compareSemver,
   dismissUpdate,
-  fetchLatestRelease,
+  installUpdate,
   isDismissed,
   UPDATE_DISMISS_STORAGE_KEY,
+  type InstallProgress,
 } from '@slidestage/lite-preset/desktop/updateCheck';
 
-function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status: init.status ?? 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+// ---- Tauri runtime mocks ------------------------------------------------
+
+type TauriCheckResult = {
+  version: string;
+  currentVersion: string;
+  body?: string;
+  date?: string;
+  available?: boolean;
+  downloadAndInstall: ReturnType<typeof vi.fn>;
+} | null;
+
+let pluginCheckImpl: () => Promise<TauriCheckResult> = async () => null;
+let relaunchImpl: () => Promise<void> = async () => undefined;
+
+vi.mock('@tauri-apps/plugin-updater', () => ({
+  check: vi.fn((..._args: unknown[]) => pluginCheckImpl()),
+}));
+
+vi.mock('@tauri-apps/plugin-process', () => ({
+  relaunch: vi.fn(() => relaunchImpl()),
+}));
+
+vi.mock('@tauri-apps/api/app', () => ({
+  getVersion: vi.fn(async () => '0.1.1'),
+}));
+
+// ---- isTauri() stub via window.__TAURI_INTERNALS__ ----------------------
+
+function setTauriRuntime(present: boolean) {
+  if (typeof window === 'undefined') return;
+  if (present) {
+    Object.defineProperty(window, '__TAURI_INTERNALS__', {
+      configurable: true,
+      value: {},
+    });
+  } else if ('__TAURI_INTERNALS__' in window) {
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+  }
 }
 
-describe('compareSemver', () => {
-  it('orders major.minor.patch correctly', () => {
-    expect(compareSemver('1.2.3', '1.2.4')).toBeLessThan(0);
-    expect(compareSemver('1.3.0', '1.2.9')).toBeGreaterThan(0);
-    expect(compareSemver('2.0.0', '1.99.99')).toBeGreaterThan(0);
-  });
-
-  it('treats v-prefix as cosmetic', () => {
-    expect(compareSemver('v1.2.3', '1.2.3')).toBe(0);
-    expect(compareSemver('v1.2.3', '1.2.4')).toBeLessThan(0);
-  });
-
-  it('treats identical versions as equal', () => {
-    expect(compareSemver('0.1.0', '0.1.0')).toBe(0);
-  });
-
-  it('ranks pre-release lower than stable for the same triple', () => {
-    expect(compareSemver('1.0.0-rc.1', '1.0.0')).toBeLessThan(0);
-    expect(compareSemver('1.0.0', '1.0.0-rc.1')).toBeGreaterThan(0);
-  });
-
-  it('falls back to lex ordering between two pre-releases of the same triple', () => {
-    expect(compareSemver('1.0.0-alpha.1', '1.0.0-beta.1')).toBeLessThan(0);
-  });
-
-  it('returns 0 for malformed input (so we never falsely flag an update)', () => {
-    expect(compareSemver('not-a-version', '0.1.0')).toBe(0);
-    expect(compareSemver('0.1.0', 'not-a-version')).toBe(0);
-    expect(compareSemver('0.1', '0.1.0')).toBe(0);
-  });
+beforeEach(() => {
+  __resetUpdateStateForTests();
+  pluginCheckImpl = async () => null;
+  relaunchImpl = async () => undefined;
 });
 
-describe('fetchLatestRelease', () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
-
-  beforeEach(() => {
-    fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('extracts tag + version + url + body from a happy-path payload', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        tag_name: 'v0.2.0',
-        html_url: 'https://github.com/SlideStage/SlideStageLite/releases/tag/v0.2.0',
-        published_at: '2026-06-01T12:00:00Z',
-        body: 'Speaker tools polish.',
-      }),
-    );
-    const release = await fetchLatestRelease('SlideStage/SlideStageLite');
-    expect(release).not.toBeNull();
-    expect(release).toMatchObject({
-      tag: 'v0.2.0',
-      version: '0.2.0',
-      releaseUrl:
-        'https://github.com/SlideStage/SlideStageLite/releases/tag/v0.2.0',
-      publishedAt: '2026-06-01T12:00:00Z',
-      notes: 'Speaker tools polish.',
-    });
-    const call = fetchMock.mock.calls[0];
-    expect(call[0]).toBe(
-      'https://api.github.com/repos/SlideStage/SlideStageLite/releases/latest',
-    );
-    expect(call[1]?.method).toBe('GET');
-  });
-
-  it('returns null on HTTP 404 (no releases yet)', async () => {
-    fetchMock.mockResolvedValueOnce(
-      new Response('', { status: 404 }),
-    );
-    const r = await fetchLatestRelease('SlideStage/SlideStageLite');
-    expect(r).toBeNull();
-  });
-
-  it('returns null on HTTP 5xx (rate limit, outage, …)', async () => {
-    fetchMock.mockResolvedValueOnce(
-      new Response('rate limited', { status: 503 }),
-    );
-    const r = await fetchLatestRelease('SlideStage/SlideStageLite');
-    expect(r).toBeNull();
-  });
-
-  it('returns null on malformed JSON', async () => {
-    fetchMock.mockResolvedValueOnce(
-      new Response('this is not json', {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-    const r = await fetchLatestRelease('SlideStage/SlideStageLite');
-    expect(r).toBeNull();
-  });
-
-  it('returns null when the response lacks tag_name', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        html_url: 'https://example.com/r',
-      }),
-    );
-    expect(await fetchLatestRelease('owner/repo')).toBeNull();
-  });
-
-  it('returns null on a network throw', async () => {
-    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
-    const r = await fetchLatestRelease('owner/repo');
-    expect(r).toBeNull();
-  });
+afterEach(() => {
+  setTauriRuntime(false);
+  __resetUpdateStateForTests();
 });
+
+// ---- checkForUpdate -----------------------------------------------------
 
 describe('checkForUpdate', () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
-
-  beforeEach(() => {
-    fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-    __resetUpdateDismissForTests();
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    __resetUpdateDismissForTests();
-  });
-
-  it('returns the release when the published version is strictly newer', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        tag_name: 'v0.2.0',
-        html_url: 'https://example.com/r',
-        published_at: '2026-06-01T12:00:00Z',
-        body: '',
-      }),
-    );
-    const release = await checkForUpdate({
-      repo: 'owner/repo',
-      current: '0.1.0',
+  it('returns null when not running inside Tauri', async () => {
+    setTauriRuntime(false);
+    pluginCheckImpl = async () => ({
+      version: '0.2.0',
+      currentVersion: '0.1.0',
+      downloadAndInstall: vi.fn(),
     });
-    expect(release?.version).toBe('0.2.0');
+    const result = await checkForUpdate();
+    expect(result).toBeNull();
   });
 
-  it('returns null when the published version equals the running one', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        tag_name: 'v0.1.0',
-        html_url: 'https://example.com/r',
-        published_at: '2026-06-01T12:00:00Z',
-        body: '',
-      }),
-    );
-    const release = await checkForUpdate({
-      repo: 'owner/repo',
-      current: '0.1.0',
-    });
-    expect(release).toBeNull();
+  it('returns null when the Tauri runtime says there is no update', async () => {
+    setTauriRuntime(true);
+    pluginCheckImpl = async () => null;
+    const result = await checkForUpdate();
+    expect(result).toBeNull();
   });
 
-  it('returns null when the running version is newer (dev builds)', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        tag_name: 'v0.1.0',
-        html_url: 'https://example.com/r',
-        published_at: '2026-06-01T12:00:00Z',
-        body: '',
-      }),
-    );
-    const release = await checkForUpdate({
-      repo: 'owner/repo',
-      current: '0.2.0',
+  it('returns null when the Tauri runtime reports available=false (older shape)', async () => {
+    setTauriRuntime(true);
+    pluginCheckImpl = async () => ({
+      version: '0.1.0',
+      currentVersion: '0.1.0',
+      available: false,
+      downloadAndInstall: vi.fn(),
     });
-    expect(release).toBeNull();
+    const result = await checkForUpdate();
+    expect(result).toBeNull();
   });
 
-  it('returns null when the user has dismissed that exact tag', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        tag_name: 'v0.2.0',
-        html_url: 'https://example.com/r',
-        published_at: '2026-06-01T12:00:00Z',
-        body: '',
-      }),
-    );
-    dismissUpdate('v0.2.0');
-    const release = await checkForUpdate({
-      repo: 'owner/repo',
-      current: '0.1.0',
+  it('returns the release metadata when an update is available', async () => {
+    setTauriRuntime(true);
+    pluginCheckImpl = async () => ({
+      version: '0.2.0',
+      currentVersion: '0.1.1',
+      body: 'Speaker tools polish.',
+      date: '2026-06-01T12:00:00Z',
+      downloadAndInstall: vi.fn(),
     });
-    expect(release).toBeNull();
+    const result = await checkForUpdate();
+    expect(result).toEqual({
+      version: '0.2.0',
+      currentVersion: '0.1.1',
+      notes: 'Speaker tools polish.',
+      publishedAt: '2026-06-01T12:00:00Z',
+    });
   });
 
-  it('un-suppresses dismissal when a newer tag arrives', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        tag_name: 'v0.3.0',
-        html_url: 'https://example.com/r',
-        published_at: '2026-06-01T12:00:00Z',
-        body: '',
-      }),
-    );
-    dismissUpdate('v0.2.0');
-    const release = await checkForUpdate({
-      repo: 'owner/repo',
-      current: '0.1.0',
+  it('omits the release when the exact version has been dismissed', async () => {
+    setTauriRuntime(true);
+    pluginCheckImpl = async () => ({
+      version: '0.2.0',
+      currentVersion: '0.1.1',
+      downloadAndInstall: vi.fn(),
     });
-    expect(release?.tag).toBe('v0.3.0');
+    dismissUpdate('0.2.0');
+    const result = await checkForUpdate();
+    expect(result).toBeNull();
   });
 
-  it('returns null when no current version can be resolved', async () => {
-    const release = await checkForUpdate({
-      repo: 'owner/repo',
-      current: null,
+  it('un-suppresses dismissal when a newer version arrives', async () => {
+    setTauriRuntime(true);
+    pluginCheckImpl = async () => ({
+      version: '0.3.0',
+      currentVersion: '0.1.1',
+      downloadAndInstall: vi.fn(),
     });
-    expect(release).toBeNull();
-    expect(fetchMock).not.toHaveBeenCalled();
+    dismissUpdate('0.2.0');
+    const result = await checkForUpdate();
+    expect(result?.version).toBe('0.3.0');
+  });
+
+  it('returns null when the plugin throws (network, signature error, etc.)', async () => {
+    setTauriRuntime(true);
+    pluginCheckImpl = async () => {
+      throw new Error('boom');
+    };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const result = await checkForUpdate();
+      expect(result).toBeNull();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
+
+// ---- installUpdate ------------------------------------------------------
+
+describe('installUpdate', () => {
+  it('throws when called outside Tauri', async () => {
+    setTauriRuntime(false);
+    await expect(installUpdate()).rejects.toThrowError(/only available/);
+  });
+
+  it('throws when no pending update is cached', async () => {
+    setTauriRuntime(true);
+    await expect(installUpdate()).rejects.toThrowError(/pending update/);
+  });
+
+  it('forwards progress events, finishes, and relaunches', async () => {
+    setTauriRuntime(true);
+
+    // Capture progress callbacks the wrapper emits to the UI.
+    const events: InstallProgress[] = [];
+
+    // The shape we hand the wrapper is the same one `@tauri-apps/plugin-
+    // updater` would return on the wire: object with version + a
+    // downloadAndInstall(callback) method.
+    const downloadAndInstall = vi.fn(
+      async (cb: (e: { event: string; data?: Record<string, number> }) => void) => {
+        cb({ event: 'Started', data: { contentLength: 200 } });
+        cb({ event: 'Progress', data: { chunkLength: 80 } });
+        cb({ event: 'Progress', data: { chunkLength: 120 } });
+        cb({ event: 'Finished' });
+      },
+    );
+
+    const relaunch = vi.fn(async () => undefined);
+    relaunchImpl = relaunch;
+
+    __setCachedHandleForTests({
+      version: '0.2.0',
+      currentVersion: '0.1.1',
+      downloadAndInstall,
+    } as unknown as Parameters<typeof __setCachedHandleForTests>[0]);
+
+    await installUpdate((event) => {
+      events.push(event);
+    });
+
+    expect(downloadAndInstall).toHaveBeenCalledOnce();
+    expect(relaunch).toHaveBeenCalledOnce();
+
+    // Started → Progress (80) → Progress (200) → Finished → Installed.
+    expect(events.map((e) => e.phase)).toEqual([
+      'started',
+      'progress',
+      'progress',
+      'finished',
+      'installed',
+    ]);
+    const startedEvent = events[0] as Extract<
+      InstallProgress,
+      { phase: 'started' }
+    >;
+    expect(startedEvent.totalBytes).toBe(200);
+    const progressEvents = events.filter(
+      (e) => e.phase === 'progress',
+    ) as Extract<InstallProgress, { phase: 'progress' }>[];
+    expect(progressEvents.map((e) => e.bytesDownloaded)).toEqual([80, 200]);
+    expect(progressEvents.every((e) => e.totalBytes === 200)).toBe(true);
+  });
+
+  it('clears the cached handle after a successful install (cannot re-install)', async () => {
+    setTauriRuntime(true);
+    const downloadAndInstall = vi.fn(async () => undefined);
+    __setCachedHandleForTests({
+      version: '0.2.0',
+      currentVersion: '0.1.1',
+      downloadAndInstall,
+    } as unknown as Parameters<typeof __setCachedHandleForTests>[0]);
+    await installUpdate();
+    await expect(installUpdate()).rejects.toThrowError(/pending update/);
+  });
+});
+
+// ---- dismissUpdate / isDismissed ---------------------------------------
 
 describe('dismissUpdate / isDismissed', () => {
   beforeEach(() => {
     window.localStorage.clear();
   });
 
-  it('round-trips the tag via localStorage', () => {
-    dismissUpdate('v0.5.0');
+  it('round-trips the version via localStorage', () => {
+    dismissUpdate('0.5.0');
     expect(window.localStorage.getItem(UPDATE_DISMISS_STORAGE_KEY)).toBe(
-      'v0.5.0',
+      '0.5.0',
     );
-    expect(isDismissed('v0.5.0')).toBe(true);
-    expect(isDismissed('v0.6.0')).toBe(false);
+    expect(isDismissed('0.5.0')).toBe(true);
+    expect(isDismissed('0.6.0')).toBe(false);
   });
 
   it('treats missing storage gracefully', () => {
-    expect(isDismissed('v0.5.0')).toBe(false);
+    expect(isDismissed('0.5.0')).toBe(false);
   });
 
   it('survives storage that throws on access', () => {
-    // Use vi.spyOn so the mock is restored automatically when the spy
-    // goes out of scope — manually patching Storage.prototype is racy
-    // if any other test in the worker happens to touch localStorage
-    // between the patch and the restore.
     const spy = vi
       .spyOn(Storage.prototype, 'setItem')
       .mockImplementation(() => {
         throw new Error('quota');
       });
     try {
-      expect(() => dismissUpdate('v0.5.0')).not.toThrow();
+      expect(() => dismissUpdate('0.5.0')).not.toThrow();
     } finally {
       spy.mockRestore();
     }

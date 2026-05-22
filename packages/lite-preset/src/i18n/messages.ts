@@ -235,8 +235,15 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
 
     'update.body':
       'A new version ({version}) of SlideStage Lite is available.',
-    'update.cta': 'Download',
+    'update.cta.install': 'Install update',
+    'update.cta.retry': 'Try again',
     'update.dismiss': 'Dismiss update notice',
+    'update.progress.body': 'Downloading SlideStage Lite {version}…',
+    'update.progress.detail': '{downloaded} / {total}',
+    'update.progress.detailUnknown': '{downloaded} downloaded',
+    'update.installing': 'Installing update… don’t quit the app.',
+    'update.restarting': 'Update installed — relaunching SlideStage Lite.',
+    'update.error': 'Update failed: {message}',
   },
 
   'zh-CN': {
@@ -448,8 +455,15 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'footer.site': 'slidestage.dev',
 
     'update.body': 'SlideStage Lite 有新版本 {version} 可下载。',
-    'update.cta': '下载',
+    'update.cta.install': '安装更新',
+    'update.cta.retry': '重试',
     'update.dismiss': '不再提醒此版本',
+    'update.progress.body': '正在下载 SlideStage Lite {version}…',
+    'update.progress.detail': '{downloaded} / {total}',
+    'update.progress.detailUnknown': '已下载 {downloaded}',
+    'update.installing': '正在安装更新…请勿退出应用。',
+    'update.restarting': '更新已安装，正在重新启动 SlideStage Lite。',
+    'update.error': '更新失败：{message}',
   },
 };
 

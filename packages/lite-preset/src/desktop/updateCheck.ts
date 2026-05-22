@@ -1,125 +1,109 @@
 /**
- * Passive update checker for self-distributed (GitHub Releases) builds.
+ * Native Tauri auto-updater for the SlideStage Lite desktop app.
  *
  * Why this module exists:
  *   SlideStage Lite ships outside the Mac App Store as a notarized DMG
- *   on GitHub Releases. Without an explicit update path the user has no
- *   way to know a newer version exists. The Tauri 2 "updater" plugin
- *   solves this for auto-installing flows but requires a separate
- *   signing-keypair + manifest service — overkill for our cadence.
+ *   on GitHub Releases. The runtime here uses Tauri 2's official
+ *   `@tauri-apps/plugin-updater` to fetch a static `latest.json`
+ *   manifest, verify the bundled `.app.tar.gz.sig` against the minisign
+ *   public key baked into `tauri.conf.json`, download, install, and
+ *   relaunch — all with a single trusted code path.
  *
- *   Instead we do the lightest thing that works: at startup, hit the
- *   public GitHub Releases API for the latest release, compare its
- *   semver tag to the running version, and surface a sticky-but-
- *   dismissible banner. Clicking the banner opens the release page in
- *   the OS browser (via `openExternal` → `tauri-plugin-opener`).
+ *   We previously implemented a "passive banner" that polled the GitHub
+ *   Releases API and opened the release page in the browser. That
+ *   surface is gone now: the user no longer has to download a DMG and
+ *   drag it into Applications. They click "Install update" and the app
+ *   takes care of the rest.
  *
- *   Web builds never call this code: there is no `tauri-apps/api/app`
- *   to dynamic-import, no DMG to download, and the web app updates
- *   itself on every server deploy.
+ *   Web builds NEVER hit this code. Everything Tauri-flavoured is
+ *   dynamic-imported so the Vite bundle stays clean of native chunks.
  *
- * Failure mode contract:
- *   - Network failure → no banner, no error UI, single console.warn.
- *   - GitHub rate-limited (60 req/h unauth) → silently skip.
- *   - Tag that does not parse as semver → silently skip.
- *   - User explicitly dismissed this version → silently skip until a
- *     newer release appears (dismiss is keyed by version, not "ever").
- *
- * Everything related to Tauri is dynamic-imported so the Web bundle
- * stays clean of `@tauri-apps/*` modules.
+ * Failure contract:
+ *   - Outside Tauri  → `checkForUpdate` returns null (the React shell
+ *                       short-circuits before mount).
+ *   - Network down   → null + single console.warn; no error UI.
+ *   - Endpoint 404   → null; both endpoints in tauri.conf.json are tried
+ *                       in order by the Tauri runtime.
+ *   - Bad signature  → `downloadAndInstall()` throws; the React shell
+ *                       surfaces a sticky-but-dismissible error state.
+ *   - User dismissed → suppressed for that exact version, then re-armed
+ *                       as soon as a strictly-newer version ships.
  */
 import { isTauri } from './env';
 
-/** GitHub repository for the official Lite distribution. */
-export const DEFAULT_RELEASE_REPO = 'SlideStage/SlideStageLite';
-
-/** localStorage key — value is the `tag` of the most recently dismissed update. */
+/** localStorage key — value is the most recently dismissed update version. */
 export const UPDATE_DISMISS_STORAGE_KEY = 'slidestage-lite:update-dismiss';
 
 /**
- * Minimal subset of a GitHub `releases/latest` payload that we care
- * about. We deliberately don't pull in a typed GitHub client here — the
- * payload surface we use is tiny and stable.
+ * Minimal shape we expose to the UI. We deliberately do NOT export the
+ * raw `Update` instance from `@tauri-apps/plugin-updater` because it
+ * doesn't serialize cleanly across React renders and we'd rather force
+ * UI code to go through `installUpdate()` below.
  */
-export interface ReleaseInfo {
-  /** Original tag (e.g. `"v0.2.0"`). Useful for the dismiss key. */
-  tag: string;
-  /** Tag with a leading `v` stripped (e.g. `"0.2.0"`). */
+export interface PendingUpdate {
+  /** Semver string of the new release (e.g. `"0.2.0"`). */
   version: string;
-  /** HTML URL of the release page on github.com. */
-  releaseUrl: string;
-  /** ISO-8601 published timestamp from GitHub. */
-  publishedAt: string;
-  /** Optional release notes (may be empty). */
+  /** Semver of the currently-running app, useful for "from X to Y" copy. */
+  currentVersion: string;
+  /** Release notes from `latest.json`. Empty string when not provided. */
   notes: string;
+  /** Publish date (RFC 3339) from `latest.json`. Empty when not provided. */
+  publishedAt: string;
 }
 
 /**
- * Parsed semver triple. Pre-release/build metadata are dropped — the
- * comparison only needs major/minor/patch, and we treat a pre-release
- * version as **older** than the same major.minor.patch baseline so a
- * stable release of the same number is correctly flagged as new.
+ * Progress events forwarded to the React shell while
+ * `downloadAndInstall()` runs. Mirrors the Tauri callback API but
+ * already accumulates `bytesDownloaded` for us (the raw callback only
+ * gives a per-chunk delta).
  */
-interface SemverParts {
-  major: number;
-  minor: number;
-  patch: number;
-  /** "" for a stable release, otherwise the pre-release identifier. */
-  pre: string;
+export type InstallProgress =
+  | { phase: 'started'; totalBytes: number | null }
+  | { phase: 'progress'; bytesDownloaded: number; totalBytes: number | null }
+  | { phase: 'finished' }
+  | { phase: 'installed' };
+
+interface TauriUpdaterModule {
+  check: (opts?: { timeout?: number }) => Promise<TauriUpdate | null>;
 }
 
-function parseSemver(input: string): SemverParts | null {
-  const trimmed = input.trim();
-  if (trimmed.length === 0) return null;
-  const stripped = trimmed.startsWith('v') ? trimmed.slice(1) : trimmed;
-  // Accept "0.1.0", "0.1.0-rc.1", "0.1.0+build.42". Reject anything that
-  // does not at least have three numeric segments separated by dots.
-  const match = stripped.match(
-    /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/,
-  );
-  if (!match) return null;
-  return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
-    pre: match[4] ?? '',
-  };
+interface TauriProcessModule {
+  relaunch: () => Promise<void>;
 }
 
-/**
- * Compare two semver strings (with optional leading `v`).
- *
- * Returns a negative number when `a < b`, zero when they are equal,
- * positive when `a > b`. Returns `0` (treated as "no update") when
- * either input fails to parse — we'd rather miss an update than
- * surface a confusing banner for an unknown version.
- */
-export function compareSemver(a: string, b: string): number {
-  const ap = parseSemver(a);
-  const bp = parseSemver(b);
-  if (!ap || !bp) return 0;
-  if (ap.major !== bp.major) return ap.major - bp.major;
-  if (ap.minor !== bp.minor) return ap.minor - bp.minor;
-  if (ap.patch !== bp.patch) return ap.patch - bp.patch;
-  // Stable > pre-release; both stable → equal; both pre-release → lex.
-  if (ap.pre === bp.pre) return 0;
-  if (ap.pre === '') return 1;
-  if (bp.pre === '') return -1;
-  return ap.pre < bp.pre ? -1 : 1;
+interface TauriAppModule {
+  getVersion: () => Promise<string>;
 }
+
+interface TauriDownloadEvent {
+  event: 'Started' | 'Progress' | 'Finished';
+  data?: { contentLength?: number; chunkLength?: number };
+}
+
+interface TauriUpdate {
+  version: string;
+  currentVersion: string;
+  body?: string;
+  date?: string;
+  available?: boolean;
+  downloadAndInstall: (
+    onEvent?: (event: TauriDownloadEvent) => void,
+  ) => Promise<void>;
+}
+
+/** Cached reference to the most recently-checked Tauri update handle. */
+let cachedHandle: TauriUpdate | null = null;
 
 /**
  * Pull the running app's version. Returns `null` outside Tauri (web
  * builds have no concept of a "release version" — the bundle is
  * whatever the CDN served last). The import is dynamic so the Tauri
- * runtime client never lands in the Web chunk.
+ * runtime client never lands in the web chunk.
  */
 export async function getCurrentDesktopVersion(): Promise<string | null> {
   if (!isTauri()) return null;
   try {
-    const mod = (await import('@tauri-apps/api/app')) as {
-      getVersion: () => Promise<string>;
-    };
+    const mod = (await import('@tauri-apps/api/app')) as TauriAppModule;
     return await mod.getVersion();
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -129,132 +113,155 @@ export async function getCurrentDesktopVersion(): Promise<string | null> {
 }
 
 /**
- * Hit the GitHub Releases API for the latest stable release of a repo.
+ * High-level: "is there a newer release we should offer to install?".
+ * Returns `null` when there is no update, we can't tell, or the user
+ * has dismissed this exact version.
  *
- * Notes:
- *   - We send `Accept: application/vnd.github+json` and `X-GitHub-Api-
- *     Version: 2022-11-28` to lock the response shape against future
- *     GitHub Mardown-rendering changes that would otherwise reshape
- *     `body`.
- *   - We do NOT send a Personal Access Token. The unauth quota (60
- *     req/h per IP) is fine for a startup-only check.
- *   - `releases/latest` already filters out drafts and pre-releases on
- *     GitHub's side, which is exactly what we want for the auto-banner.
- *     Power users can still grab a beta from `/releases`.
+ * Side effect: caches the underlying Tauri `Update` handle on success
+ * so a follow-up `installUpdate()` call doesn't have to re-fetch the
+ * manifest (and re-verify the signature) just to start the download.
  */
-export async function fetchLatestRelease(
-  repo: string,
-  signal?: AbortSignal,
-): Promise<ReleaseInfo | null> {
-  const url = `https://api.github.com/repos/${repo}/releases/latest`;
-  let response: Response;
+export async function checkForUpdate(): Promise<PendingUpdate | null> {
+  if (!isTauri()) return null;
+  let mod: TauriUpdaterModule;
   try {
-    response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-      signal,
-      // Be friendly to corporate proxies that disallow credentials on
-      // cross-origin requests.
-      credentials: 'omit',
-      cache: 'no-store',
-    });
-  } catch (err) {
-    if (signal?.aborted) return null;
-    // eslint-disable-next-line no-console
-    console.warn('fetchLatestRelease network error', err);
-    return null;
-  }
-  if (!response.ok) {
-    // 404 means the repo has no releases yet — that's the common case
-    // before the first ship, not a bug worth logging loudly.
-    if (response.status !== 404) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `fetchLatestRelease HTTP ${response.status} for ${repo}`,
-      );
-    }
-    return null;
-  }
-  let payload: unknown;
-  try {
-    payload = await response.json();
+    mod = (await import(
+      '@tauri-apps/plugin-updater'
+    )) as unknown as TauriUpdaterModule;
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.warn('fetchLatestRelease JSON parse failed', err);
+    console.warn('failed to load @tauri-apps/plugin-updater', err);
     return null;
   }
-  if (!payload || typeof payload !== 'object') return null;
-  const obj = payload as Record<string, unknown>;
-  const tag = typeof obj.tag_name === 'string' ? obj.tag_name : '';
-  const releaseUrl = typeof obj.html_url === 'string' ? obj.html_url : '';
-  const publishedAt =
-    typeof obj.published_at === 'string' ? obj.published_at : '';
-  const notes = typeof obj.body === 'string' ? obj.body : '';
-  if (!tag || !releaseUrl) return null;
+  let update: TauriUpdate | null;
+  try {
+    // 30s timeout: GitHub Releases CDN is usually fast, but the second
+    // endpoint (slidestage.dev) can take a beat to wake up.
+    update = await mod.check({ timeout: 30_000 });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('Tauri updater check failed', err);
+    cachedHandle = null;
+    return null;
+  }
+  if (!update) {
+    cachedHandle = null;
+    return null;
+  }
+  // Tauri 2 has flirted with both shapes here — older versions returned
+  // a plain object with an `available: boolean` field, newer ones
+  // return `null` when there's nothing to install. We accept both so a
+  // dependency bump doesn't silently mask updates.
+  if (update.available === false) {
+    cachedHandle = null;
+    return null;
+  }
+  if (isDismissed(update.version)) {
+    cachedHandle = null;
+    return null;
+  }
+  cachedHandle = update;
   return {
-    tag,
-    version: tag.startsWith('v') ? tag.slice(1) : tag,
-    releaseUrl,
-    publishedAt,
-    notes,
+    version: update.version,
+    currentVersion: update.currentVersion,
+    notes: update.body ?? '',
+    publishedAt: update.date ?? '',
   };
 }
 
 /**
- * High-level: "is there a newer release than what we're running?".
- * Returns `null` when there is no update, we can't tell, or the user
- * has dismissed this exact tag.
+ * Drive the auto-installer for the most recently-checked update.
  *
- * @param opts.repo       GitHub `owner/repo`. Defaults to the official
- *                        Lite distribution.
- * @param opts.current    Override the auto-detected current version.
- *                        Mostly useful for tests.
- * @param opts.signal     Cancel mid-flight (e.g. component unmounted).
+ * Returns nothing on success; the OS process will be replaced by the
+ * relaunched binary after this function resolves (on macOS the call
+ * here finishes BEFORE the app exits, but on Windows the installer
+ * forcibly quits the running process).
+ *
+ * Throws on:
+ *   - no pending update (caller didn't run `checkForUpdate` first)
+ *   - signature mismatch
+ *   - download error
+ *   - relaunch error
+ *
+ * The caller is expected to wrap the call in a try/catch and surface
+ * the error to the user.
  */
-export interface CheckForUpdateOptions {
-  repo?: string;
-  current?: string | null;
-  signal?: AbortSignal;
-}
-
-export async function checkForUpdate(
-  opts: CheckForUpdateOptions = {},
-): Promise<ReleaseInfo | null> {
-  const repo = opts.repo ?? DEFAULT_RELEASE_REPO;
-  const currentRaw =
-    opts.current === undefined
-      ? await getCurrentDesktopVersion()
-      : opts.current;
-  if (!currentRaw) return null;
-  const latest = await fetchLatestRelease(repo, opts.signal);
-  if (!latest) return null;
-  if (compareSemver(latest.version, currentRaw) <= 0) return null;
-  if (isDismissed(latest.tag)) return null;
-  return latest;
+export async function installUpdate(
+  onProgress?: (event: InstallProgress) => void,
+): Promise<void> {
+  if (!isTauri()) {
+    throw new Error('installUpdate is only available inside Tauri');
+  }
+  const handle = cachedHandle;
+  if (!handle) {
+    throw new Error(
+      'installUpdate called without a pending update; run checkForUpdate() first.',
+    );
+  }
+  let bytesDownloaded = 0;
+  let totalBytes: number | null = null;
+  await handle.downloadAndInstall((event: TauriDownloadEvent) => {
+    switch (event.event) {
+      case 'Started': {
+        totalBytes =
+          typeof event.data?.contentLength === 'number'
+            ? event.data.contentLength
+            : null;
+        onProgress?.({ phase: 'started', totalBytes });
+        break;
+      }
+      case 'Progress': {
+        const chunk =
+          typeof event.data?.chunkLength === 'number'
+            ? event.data.chunkLength
+            : 0;
+        bytesDownloaded += chunk;
+        onProgress?.({ phase: 'progress', bytesDownloaded, totalBytes });
+        break;
+      }
+      case 'Finished': {
+        onProgress?.({ phase: 'finished' });
+        break;
+      }
+      default:
+        break;
+    }
+  });
+  // Install completed. Clear the cached handle so a second click on the
+  // button doesn't accidentally re-install. Then relaunch.
+  cachedHandle = null;
+  onProgress?.({ phase: 'installed' });
+  try {
+    const proc = (await import(
+      '@tauri-apps/plugin-process'
+    )) as unknown as TauriProcessModule;
+    await proc.relaunch();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('relaunch failed; user will need to restart manually', err);
+    throw err;
+  }
 }
 
 /**
- * Remember that the user dismissed a specific release tag so we don't
- * keep nagging on every cold start. Stored per-tag so a future release
+ * Remember that the user dismissed a specific release so we don't keep
+ * nagging on every cold start. Stored per-version so a future release
  * automatically un-suppresses the banner.
  */
-export function dismissUpdate(tag: string): void {
+export function dismissUpdate(version: string): void {
   try {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem(UPDATE_DISMISS_STORAGE_KEY, tag);
+    window.localStorage.setItem(UPDATE_DISMISS_STORAGE_KEY, version);
   } catch {
     // Storage may be disabled / quota-exceeded; degrade silently.
   }
 }
 
-export function isDismissed(tag: string): boolean {
+export function isDismissed(version: string): boolean {
   try {
     if (typeof window === 'undefined') return false;
     const stored = window.localStorage.getItem(UPDATE_DISMISS_STORAGE_KEY);
-    return stored === tag;
+    return stored === version;
   } catch {
     return false;
   }
@@ -262,12 +269,22 @@ export function isDismissed(tag: string): boolean {
 
 /**
  * Test seam — clears the persisted dismiss so a fresh probe sees a
- * pristine state.
+ * pristine state and resets the cached Tauri update handle.
  */
-export function __resetUpdateDismissForTests(): void {
+export function __resetUpdateStateForTests(): void {
   try {
     window.localStorage.removeItem(UPDATE_DISMISS_STORAGE_KEY);
   } catch {
     // ignore
   }
+  cachedHandle = null;
+}
+
+/**
+ * Test seam — injects a fake Tauri `Update` handle so the install path
+ * can be exercised without a real Tauri runtime. The injected handle
+ * stays in place for exactly one `installUpdate()` call.
+ */
+export function __setCachedHandleForTests(handle: TauriUpdate | null): void {
+  cachedHandle = handle;
 }

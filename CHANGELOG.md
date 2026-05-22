@@ -10,6 +10,70 @@ This project follows [Semantic Versioning](https://semver.org/). Until
 
 ---
 
+## 0.2.0 — 2026-05-22
+
+Native in-app auto-updater on the desktop.
+
+### Highlights
+
+- **Tauri 2 native auto-updater.** The desktop build now uses
+  `@tauri-apps/plugin-updater` to fetch a static `latest.json`
+  manifest, verify the bundled `.app.tar.gz.sig` against a minisign
+  public key baked into `tauri.conf.json`, download the new build,
+  install it, and relaunch — all inside the running app. No more
+  "click the link, drag the DMG to Applications" two-step.
+- **Dual endpoints.** Tauri tries the GitHub Releases manifest first
+  (`releases/latest/download/latest.json`) and falls back to a
+  mirror at `updates.slidestage.dev/latest.json` if GitHub is
+  unreachable. Both URLs return the same signed manifest.
+- **Per-version dismissal.** The banner remembers the version the
+  user dismissed and stays quiet until a strictly newer release
+  appears.
+- **Five-state UI.** The new banner walks the user through
+  `available → downloading → installing → restarting`, with a
+  fifth `error` state that supports retry. Progress is byte-accurate
+  when the server returns Content-Length; a striped indeterminate
+  bar covers the case when it doesn't.
+- **Release pipeline upgrades.** `pnpm release:macos` now also
+  emits `<app>.app.tar.gz` + `.sig`, runs
+  `scripts/build-update-manifest.mjs` to write `dist-desktop/latest.json`,
+  and accepts a new `--upload` flag that attaches every artifact to
+  the matching GitHub Release via `gh release upload --clobber`.
+- **Web build is untouched.** All `@tauri-apps/plugin-updater` and
+  `@tauri-apps/plugin-process` imports are dynamic and gated by
+  `isTauri()`, so the Vite bundle never ships the updater code to
+  browser users — the chunks split out to ~1.4 KB of lazy-loaded JS
+  that web users will never download.
+
+### Breaking changes
+
+- `packages/lite-preset/src/desktop/updateCheck.ts` public API
+  changed: `checkForUpdate(opts)` now takes no arguments and
+  returns `{ version, currentVersion, notes, publishedAt }` instead
+  of `{ tag, version, releaseUrl, publishedAt, notes }`. New
+  `installUpdate(onProgress)` API replaces "open the release page
+  in the browser". The semver helpers (`compareSemver`,
+  `fetchLatestRelease`) are gone — Tauri's plugin owns the
+  comparison and the network call.
+- `update.cta` i18n key replaced by `update.cta.install` (and
+  `update.cta.retry`); new keys `update.progress.body`,
+  `update.progress.detail`, `update.progress.detailUnknown`,
+  `update.installing`, `update.restarting`, `update.error`.
+- `bundle.createUpdaterArtifacts` is `true` by default. Pass
+  `pnpm release:macos --skip-updater` for the legacy DMG-only flow.
+
+### Operational notes
+
+- Run `pnpm updater:keygen` once to produce the minisign keypair,
+  paste the public key into `tauri.conf.json > plugins.updater.pubkey`,
+  and set `TAURI_SIGNING_PRIVATE_KEY` + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+  in `.env.local`. Losing either makes shipping updates the existing
+  fleet accepts impossible — back the keypair up offline.
+- Full setup walkthrough lives in `docs/AUTO_UPDATER.md`; condensed
+  reference in `.memory/desktop-tauri.md`.
+
+---
+
 ## 0.1.1 — 2026-05-21
 
 Desktop polish + Mac App Store prep.

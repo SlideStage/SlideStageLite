@@ -1129,6 +1129,101 @@ code {
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* Updater progress bar — shown in place of the CTA while the native
+ * downloadAndInstall() callback streams bytes back. Keeps the same teal
+ * accent so the user reads "this is the same banner just in a busy
+ * state", not "something different". */
+.update-banner-progress {
+  flex: 1 1 140px;
+  min-width: 80px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.update-banner-progress-bar {
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(20, 184, 166, 0.85),
+    rgba(45, 212, 191, 1)
+  );
+  transition: width 160ms ease;
+}
+
+/* Striped animation while we don't know the total size (server omitted
+ * Content-Length). Keeps the user oriented that the app is busy. */
+.update-banner-progress-bar[data-indeterminate='true'] {
+  background-image: linear-gradient(
+    -45deg,
+    rgba(45, 212, 191, 0.9) 25%,
+    rgba(20, 184, 166, 0.6) 25%,
+    rgba(20, 184, 166, 0.6) 50%,
+    rgba(45, 212, 191, 0.9) 50%,
+    rgba(45, 212, 191, 0.9) 75%,
+    rgba(20, 184, 166, 0.6) 75%
+  );
+  background-size: 18px 18px;
+  animation: update-banner-stripes 900ms linear infinite;
+}
+
+@keyframes update-banner-stripes {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 18px 0;
+  }
+}
+
+.update-banner-progress-detail {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #94a3b8;
+  min-width: 92px;
+  text-align: right;
+}
+
+/* Spinning icon used during the "installing" phase between download
+ * finish and relaunch. The same .update-banner-icon container, just
+ * with a CSS-driven rotation so we don't need an extra dep. */
+.update-banner-icon-spin {
+  animation: update-banner-spin 1.2s linear infinite;
+}
+
+@keyframes update-banner-spin {
+  from {
+    transform: rotate(0);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Error variant — amber/red accent so the user notices, but the layout
+ * stays identical so the banner doesn't jump around between states. */
+.update-banner.update-banner-error {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.update-banner.update-banner-error .update-banner-icon {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+}
+
+.update-banner.update-banner-error .update-banner-cta {
+  background: rgba(239, 68, 68, 0.92);
+  border-color: rgba(239, 68, 68, 1);
+  color: #f8fafc;
+}
+
+.update-banner.update-banner-error .update-banner-cta:hover {
+  background: rgba(248, 113, 113, 1);
+}
+
 .deck-open .viewer {
   display: grid;
   height: 100vh;
