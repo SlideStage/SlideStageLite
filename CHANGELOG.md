@@ -10,13 +10,15 @@ This project follows [Semantic Versioning](https://semver.org/). Until
 
 ---
 
-## Unreleased
+## 0.2.1 — 2026-05-24
 
 Windows desktop bundle reaches feature parity with macOS: NSIS installer,
-native auto-updater (sharing the macOS minisign keypair and the same
+in-app auto-updater (sharing the macOS minisign keypair and the same
 `latest.json` manifest), and a `Help → Check for Updates…` / `Help →
-About SlideStage Lite` menu surface. The macOS application-menu
-`Check for Updates…` item shipped earlier in this cycle.
+About SlideStage Lite` menu surface. This release also introduces the
+macOS application-menu `Check for Updates…` item; both platforms now
+drive the manual update flow through the same `runManualUpdateCheck`
+entry point.
 
 ### Highlights — Windows
 
