@@ -244,6 +244,21 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'update.installing': 'Installing update… don’t quit the app.',
     'update.restarting': 'Update installed — relaunching SlideStage Lite.',
     'update.error': 'Update failed: {message}',
+
+    'menu.checkUpdate.upToDate.title': 'You’re up to date',
+    'menu.checkUpdate.upToDate.body':
+      'SlideStage Lite is up to date.\nYou’re running v{version}.',
+    'menu.checkUpdate.available.title': 'Update available',
+    'menu.checkUpdate.available.body':
+      'SlideStage Lite v{version} is available. Install it now? The app will relaunch when the install finishes.',
+    'menu.checkUpdate.available.install': 'Install Now',
+    'menu.checkUpdate.available.later': 'Later',
+    'menu.checkUpdate.error.title': 'Update check failed',
+    'menu.checkUpdate.error.body':
+      'Could not check for updates: {message}',
+    'menu.checkUpdate.installError.title': 'Update failed',
+    'menu.checkUpdate.installError.body':
+      'The update could not be installed: {message}',
   },
 
   'zh-CN': {
@@ -464,6 +479,19 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'update.installing': '正在安装更新…请勿退出应用。',
     'update.restarting': '更新已安装，正在重新启动 SlideStage Lite。',
     'update.error': '更新失败：{message}',
+
+    'menu.checkUpdate.upToDate.title': '已是最新版本',
+    'menu.checkUpdate.upToDate.body':
+      'SlideStage Lite 已是最新版本。\n当前版本：v{version}。',
+    'menu.checkUpdate.available.title': '有可用更新',
+    'menu.checkUpdate.available.body':
+      'SlideStage Lite v{version} 可下载，是否立即安装？安装完成后应用会自动重新启动。',
+    'menu.checkUpdate.available.install': '立即安装',
+    'menu.checkUpdate.available.later': '稍后',
+    'menu.checkUpdate.error.title': '更新检查失败',
+    'menu.checkUpdate.error.body': '无法检查更新：{message}',
+    'menu.checkUpdate.installError.title': '更新失败',
+    'menu.checkUpdate.installError.body': '更新无法完成：{message}',
   },
 };
 

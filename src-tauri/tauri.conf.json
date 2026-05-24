@@ -57,6 +57,15 @@
       "minimumSystemVersion": "12.0",
       "signingIdentity": "-",
       "entitlements": "entitlements.plist"
+    },
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper" },
+      "allowDowngrades": false,
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false,
+        "languages": ["English", "SimpChinese"]
+      }
     }
   },
   "plugins": {

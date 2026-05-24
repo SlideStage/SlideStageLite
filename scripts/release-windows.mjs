@@ -1,0 +1,413 @@
+#!/usr/bin/env node
+/**
+ * SlideStage Lite — Windows release orchestrator.
+ *
+ * Pipeline (Track 2, NSIS-only, unsigned MVP):
+ *
+ *   1. Load .env.local so TAURI_SIGNING_* vars become available to Tauri's
+ *      bundler. The Apple-* vars are deliberately ignored here.
+ *   2. Validate environment (TAURI_SIGNING_PRIVATE_KEY{,_PASSWORD} required
+ *      unless --skip-updater is passed).
+ *   3. Invoke `pnpm tauri build --target x86_64-pc-windows-msvc`. With
+ *      `bundle.createUpdaterArtifacts=true` (set in tauri.conf.json) this
+ *      emits:
+ *        target/<triple>/release/bundle/nsis/<productName>_<version>_x64-setup.exe
+ *        target/<triple>/release/bundle/nsis/<productName>_<version>_x64-setup.nsis.zip
+ *        target/<triple>/release/bundle/nsis/<productName>_<version>_x64-setup.nsis.zip.sig
+ *   4. Rename + copy artifacts to dist-desktop/ using the same hyphenated
+ *      scheme we use on macOS (no spaces — some HTTP clients mangle them).
+ *   5. Invoke scripts/build-update-manifest.mjs with --merge-existing so
+ *      a previously-generated macOS manifest keeps its `darwin-*` blocks.
+ *   6. Optional: `--upload` attaches every dist-desktop artifact to the
+ *      matching GitHub Release via `gh release upload`. Same flag as the
+ *      mac release script.
+ *
+ * Why no codesign / SmartScreen handling:
+ *   Track 2 is the MVP path — we ship unsigned NSIS installers and rely on
+ *   README guidance + SmartScreen reputation accrual. See
+ *   docs/WINDOWS_DISTRIBUTION.md for the upgrade path
+ *   (Azure Trusted Signing / SignPath / MSIX-via-Store).
+ *
+ * Required env vars (unless --skip-updater):
+ *
+ *   TAURI_SIGNING_PRIVATE_KEY           path to / contents of the minisign key
+ *   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  password used to encrypt the key
+ *
+ *   On GHA we pass these as repository secrets and reference them in the
+ *   workflow with the same names — Tauri's bundler reads them from the
+ *   process environment, so no extra wiring needed.
+ *
+ *   It is IMPORTANT that the keypair is the same as the one in
+ *   tauri.conf.json > plugins.updater.pubkey. The Windows artifact must
+ *   be signed by the same key the existing macOS clients trust.
+ *
+ * Optional:
+ *
+ *   RELEASE_TARGET                Rust triple to build, defaults to
+ *                                 x86_64-pc-windows-msvc. Use
+ *                                 aarch64-pc-windows-msvc for ARM64
+ *                                 (requires --target rustup to be added).
+ *   TAURI_BUNDLE_ARGS             extra args appended to `pnpm tauri build`
+ *   UPDATER_ASSET_BASE_URL        override the GitHub Releases base URL
+ *                                 embedded into latest.json
+ *
+ * Usage:
+ *
+ *   pnpm release:windows
+ *   pnpm release:windows --dry-run
+ *   pnpm release:windows --skip-updater
+ *   pnpm release:windows --upload
+ *   RELEASE_TARGET=aarch64-pc-windows-msvc pnpm release:windows
+ */
+
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
+import { resolve } from 'node:path';
+
+const ROOT = resolve(import.meta.dirname, '..');
+const TARGET = process.env.RELEASE_TARGET || 'x86_64-pc-windows-msvc';
+const TARGET_NAME_SUFFIX = {
+  'x86_64-pc-windows-msvc': 'Windows-x64',
+  'aarch64-pc-windows-msvc': 'Windows-ARM',
+}[TARGET] || TARGET;
+const TARGET_BUNDLE_DIR = resolve(
+  ROOT,
+  'src-tauri/target',
+  TARGET,
+  'release/bundle/nsis',
+);
+const DIST_DESKTOP = resolve(ROOT, 'dist-desktop');
+const TAURI_CONF = resolve(ROOT, 'src-tauri/tauri.conf.json');
+const ENV_LOCAL = resolve(ROOT, '.env.local');
+const SHA256SUMS = resolve(DIST_DESKTOP, 'SHA256SUMS.txt');
+
+// ---- Args --------------------------------------------------------------
+
+const ARGS = new Set(process.argv.slice(2));
+const DRY_RUN = ARGS.has('--dry-run');
+const SKIP_UPDATER = ARGS.has('--skip-updater');
+const UPLOAD = ARGS.has('--upload');
+const VERBOSE = ARGS.has('--verbose') || !!process.env.CI;
+
+// ---- Logging -----------------------------------------------------------
+
+function step(msg) {
+  console.log(`\n[release-windows] ▶ ${msg}`);
+}
+
+function info(msg) {
+  console.log(`[release-windows]   ${msg}`);
+}
+
+function warn(msg) {
+  console.warn(`[release-windows] ⚠  ${msg}`);
+}
+
+function die(msg) {
+  console.error(`\n[release-windows] ✖ ${msg}\n`);
+  process.exit(1);
+}
+
+// ---- .env.local loader (no dotenv dep) ---------------------------------
+
+function loadDotenv(path) {
+  if (!existsSync(path)) return {};
+  const lines = readFileSync(path, 'utf8').split(/\r?\n/);
+  const out = {};
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
+// ---- Bootstrap ---------------------------------------------------------
+
+// We require Windows because Tauri's NSIS bundler shells out to
+// makensis.exe and produces .exe installers that only sign correctly
+// on Windows. Cross-compilation via cargo-xwin works for the binary
+// but not for makensis, so we fail fast here.
+if (process.platform !== 'win32') {
+  die(
+    'Windows release pipeline only runs on win32. Use a Windows VM or the GitHub Actions windows-latest runner. The macOS pipeline is in scripts/release-macos.mjs.',
+  );
+}
+
+const dotenv = loadDotenv(ENV_LOCAL);
+for (const [key, value] of Object.entries(dotenv)) {
+  if (process.env[key] === undefined) process.env[key] = value;
+}
+
+const versionFromConf = (() => {
+  try {
+    return JSON.parse(readFileSync(TAURI_CONF, 'utf8')).version ?? '0.0.0';
+  } catch (err) {
+    die(`failed to read ${TAURI_CONF}: ${err.message}`);
+  }
+})();
+info(`product version: ${versionFromConf}`);
+info(`target:          ${TARGET}`);
+
+// ---- Env validation ----------------------------------------------------
+
+function checkEnv(name) {
+  const present = !!process.env[name] && process.env[name].length > 0;
+  info(`  ${present ? '✓' : '✗'} ${name}${present ? '' : '  (missing)'}`);
+  return present;
+}
+
+step('Validating environment');
+
+const hasUpdaterKey = checkEnv('TAURI_SIGNING_PRIVATE_KEY');
+const hasUpdaterKeyPassword = checkEnv('TAURI_SIGNING_PRIVATE_KEY_PASSWORD');
+
+// Updater key validation: if it looks like a path (no "untrusted comment"
+// marker) but the file doesn't exist, fail fast.
+if (
+  !SKIP_UPDATER &&
+  hasUpdaterKey &&
+  !process.env.TAURI_SIGNING_PRIVATE_KEY.includes('untrusted comment') &&
+  !existsSync(process.env.TAURI_SIGNING_PRIVATE_KEY)
+) {
+  die(
+    `TAURI_SIGNING_PRIVATE_KEY="${process.env.TAURI_SIGNING_PRIVATE_KEY}" looks like a path but no file exists there. On CI, pass the raw key contents as the secret value instead.`,
+  );
+}
+
+if (!SKIP_UPDATER && !DRY_RUN) {
+  if (!hasUpdaterKey) {
+    die(
+      'TAURI_SIGNING_PRIVATE_KEY is missing. Either:\n' +
+        '    a) put it in .env.local (see .env.example), then re-run, or\n' +
+        '    b) pass it as a GHA secret named TAURI_SIGNING_PRIVATE_KEY, or\n' +
+        '    c) re-run with --skip-updater to ship without an auto-updater artifact.\n' +
+        '\n  NOTE: The Windows artifact MUST be signed with the SAME key as the macOS\n' +
+        '  builds — otherwise the existing macOS clients will reject the manifest\n' +
+        '  and vice-versa. See docs/AUTO_UPDATER.md.',
+    );
+  }
+  if (!hasUpdaterKeyPassword) {
+    warn(
+      'TAURI_SIGNING_PRIVATE_KEY_PASSWORD is empty. That works only if the keypair was generated without a password (NOT recommended).',
+    );
+  }
+}
+
+if (DRY_RUN) {
+  step('Dry run complete — no build performed');
+  info(`Would invoke: pnpm tauri build --target ${TARGET}`);
+  info(`Would write artifacts to: ${DIST_DESKTOP}`);
+  info(
+    `Updater step: ${SKIP_UPDATER ? 'SKIPPED (--skip-updater)' : 'would run scripts/build-update-manifest.mjs --merge-existing'}`,
+  );
+  info(`Upload step: ${UPLOAD ? 'would run gh release upload' : 'skipped (pass --upload to enable)'}`);
+  process.exit(0);
+}
+
+// ---- Build -------------------------------------------------------------
+
+step(`Building Tauri bundle (--target ${TARGET})`);
+
+const extraArgs = (process.env.TAURI_BUNDLE_ARGS ?? '')
+  .split(/\s+/)
+  .filter(Boolean);
+const buildArgs = ['tauri', 'build', '--target', TARGET, ...extraArgs];
+
+const build = spawnSync('pnpm', buildArgs, {
+  stdio: 'inherit',
+  cwd: ROOT,
+  env: process.env,
+  shell: true, // Windows: pnpm.cmd resolves correctly with shell:true
+});
+if (build.status !== 0) {
+  die(`tauri build failed with exit code ${build.status}`);
+}
+
+// ---- Locate artifacts --------------------------------------------------
+
+step('Resolving build artifacts');
+
+if (!existsSync(TARGET_BUNDLE_DIR)) {
+  die(`expected bundle dir missing: ${TARGET_BUNDLE_DIR}`);
+}
+
+const bundleEntries = readdirSync(TARGET_BUNDLE_DIR);
+const setupExe = bundleEntries.find((f) => f.endsWith('-setup.exe'));
+if (!setupExe) {
+  die(`no *-setup.exe found in ${TARGET_BUNDLE_DIR}`);
+}
+const SETUP_EXE_PATH = resolve(TARGET_BUNDLE_DIR, setupExe);
+info(`installer: ${SETUP_EXE_PATH}`);
+
+let updaterZipPath = null;
+let updaterSigPath = null;
+if (!SKIP_UPDATER) {
+  const updaterZip = bundleEntries.find((f) => f.endsWith('-setup.nsis.zip'));
+  if (!updaterZip) {
+    die(
+      `no *-setup.nsis.zip found in ${TARGET_BUNDLE_DIR}. Did you set bundle.createUpdaterArtifacts=true and TAURI_SIGNING_PRIVATE_KEY?`,
+    );
+  }
+  updaterZipPath = resolve(TARGET_BUNDLE_DIR, updaterZip);
+  updaterSigPath = `${updaterZipPath}.sig`;
+  if (!existsSync(updaterSigPath)) {
+    die(
+      `${updaterZip} found but its .sig sibling is missing — was TAURI_SIGNING_PRIVATE_KEY_PASSWORD wrong?`,
+    );
+  }
+  info(`updater zip: ${updaterZipPath}`);
+}
+
+// ---- Publish to dist-desktop -------------------------------------------
+
+step('Publishing to dist-desktop/');
+
+if (!existsSync(DIST_DESKTOP)) mkdirSync(DIST_DESKTOP, { recursive: true });
+
+const FINAL_EXE_NAME = `SlideStageLite-${versionFromConf}-${TARGET_NAME_SUFFIX}-setup.exe`;
+const FINAL_EXE_PATH = resolve(DIST_DESKTOP, FINAL_EXE_NAME);
+copyFileSync(SETUP_EXE_PATH, FINAL_EXE_PATH);
+info(`copied: ${FINAL_EXE_NAME}`);
+
+// ---- Build updater manifest (latest.json) ------------------------------
+
+if (!SKIP_UPDATER) {
+  step(
+    'Building updater manifest (latest.json) + publishing .nsis.zip (with --merge-existing)',
+  );
+  const manifestResult = spawnSync(
+    'node',
+    [
+      resolve(ROOT, 'scripts/build-update-manifest.mjs'),
+      '--target',
+      TARGET,
+      '--merge-existing',
+    ],
+    {
+      stdio: 'inherit',
+      cwd: ROOT,
+      env: process.env,
+    },
+  );
+  if (manifestResult.status !== 0) {
+    die(
+      'build-update-manifest.mjs exited non-zero. The .exe is still valid but the auto-updater will not pick this release up.',
+    );
+  }
+} else {
+  warn('Skipping updater manifest (--skip-updater was passed).');
+  // When the updater step is skipped, build-update-manifest.mjs is the
+  // canonical source of SHA256SUMS.txt, so we need to refresh by hand
+  // (otherwise the .exe we just copied is missing from the file).
+  step('Refreshing dist-desktop/SHA256SUMS.txt');
+  refreshShaSums();
+}
+
+// ---- Optional: upload to GitHub Release --------------------------------
+
+if (UPLOAD) {
+  step(`Uploading artifacts to GitHub release v${versionFromConf}`);
+  uploadToGithubRelease(versionFromConf);
+} else {
+  info('Skipping GitHub upload (pass --upload to enable).');
+}
+
+step('Done');
+info(`Final artifact: ${FINAL_EXE_PATH}`);
+if (!SKIP_UPDATER) {
+  info('Updater manifest: dist-desktop/latest.json');
+}
+warn(
+  'This build is UNSIGNED. Windows Defender SmartScreen may warn the user with "Unrecognized app". See docs/WINDOWS_DISTRIBUTION.md for the signing upgrade path.',
+);
+
+// ---- Helpers -----------------------------------------------------------
+
+function uploadToGithubRelease(version) {
+  const tag = `v${version}`;
+  const ghCheck = spawnSync('gh', ['--version'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: true,
+  });
+  if (ghCheck.status !== 0) {
+    die(
+      'gh CLI is required for --upload but `gh --version` failed. Install with `winget install --id GitHub.cli` and run `gh auth login`.',
+    );
+  }
+  const exists = spawnSync('gh', ['release', 'view', tag], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: true,
+  });
+  if (exists.status !== 0) {
+    die(
+      `GitHub release ${tag} does not exist yet. Create it first with:\n` +
+        `    gh release create ${tag} --title "${tag}" --notes-from-tag\n` +
+        `Then re-run with --upload.`,
+    );
+  }
+  // Same regex as release-macos.mjs so the two pipelines agree on
+  // exactly which files belong on the GitHub Release. Spaces are
+  // refused defensively (Tauri's raw bundle names have one).
+  const all = readdirSync(DIST_DESKTOP)
+    .filter((f) =>
+      /^(latest\.json|SHA256SUMS\.txt|SlideStageLite-.+\.(dmg|exe|msi|app\.tar\.gz|app\.tar\.gz\.sig|nsis\.zip|nsis\.zip\.sig))$/.test(
+        f,
+      ),
+    )
+    .filter((f) => !f.includes(' '))
+    .sort();
+  if (all.length === 0) {
+    die('Nothing to upload — dist-desktop is empty.');
+  }
+  const paths = all.map((f) => resolve(DIST_DESKTOP, f));
+  info(`uploading ${all.length} asset(s) to ${tag}: ${all.join(', ')}`);
+  const upload = spawnSync(
+    'gh',
+    ['release', 'upload', tag, ...paths, '--clobber'],
+    {
+      stdio: 'inherit',
+      shell: true,
+    },
+  );
+  if (upload.status !== 0) {
+    die(
+      'gh release upload failed. Check the gh stderr above; the release tag exists but at least one asset could not be attached.',
+    );
+  }
+  info(`uploaded ${all.length} asset(s) to ${tag}`);
+}
+
+function refreshShaSums() {
+  const trackedExtensions = /\.(dmg|exe|msi|app\.tar\.gz|nsis\.zip|AppImage\.tar\.gz)$/i;
+  const entries = readdirSync(DIST_DESKTOP)
+    .filter((f) => trackedExtensions.test(f))
+    .sort();
+  const lines = [];
+  for (const file of entries) {
+    const filePath = resolve(DIST_DESKTOP, file);
+    const buf = readFileSync(filePath);
+    const hash = createHash('sha256').update(buf).digest('hex');
+    lines.push(`${hash}  ${file}`);
+  }
+  writeFileSync(SHA256SUMS, `${lines.join('\n')}\n`, 'utf8');
+  info(`rewrote ${SHA256SUMS} (${lines.length} entries)`);
+}

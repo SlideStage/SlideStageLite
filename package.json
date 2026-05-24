@@ -27,6 +27,7 @@
     "tauri:build": "tauri build",
     "tauri:smoke": "node scripts/desktop-smoke.mjs",
     "release:macos": "node scripts/release-macos.mjs",
+    "release:windows": "node scripts/release-windows.mjs",
     "check:macos-signing": "node scripts/check-macos-signing.mjs",
     "updater:keygen": "node scripts/generate-updater-key.mjs",
     "updater:manifest": "node scripts/build-update-manifest.mjs",

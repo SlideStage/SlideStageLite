@@ -1,0 +1,132 @@
+name: Release Windows
+
+# Track 2 (NSIS unsigned MVP) — see docs/WINDOWS_DISTRIBUTION.md.
+#
+# What this workflow does:
+#   - Build the SlideStage Lite Windows desktop bundle on a clean
+#     windows-latest runner (no SignTool / no Authenticode in MVP).
+#   - Produce dist-desktop/SlideStageLite-<version>-Windows-x64-setup.exe
+#     + .nsis.zip + .nsis.zip.sig + an updater manifest entry merged into
+#     latest.json so existing macOS clients keep working.
+#   - Upload every dist-desktop artifact as a GHA build artifact (so a
+#     human can download and verify before publishing).
+#   - On a tag push (v*.*.*) ALSO attach those artifacts to the matching
+#     GitHub Release via `gh release upload --clobber`. The Release must
+#     already exist — we never auto-create one to keep humans in the loop.
+#
+# Required repository secrets:
+#   TAURI_SIGNING_PRIVATE_KEY           contents of the minisign key
+#                                       (NOT a path — the runner has no
+#                                       stable filesystem). Identical to
+#                                       the key used for macOS releases.
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  matching password.
+#
+# GITHUB_TOKEN is provided automatically; we do not need extra config.
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: "Upload artifacts to matching GitHub release (only when a v* tag also pushed)"
+        type: boolean
+        default: false
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write # required for `gh release upload`
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      # Tauri's bundler picks these up from the environment directly;
+      # we set them on the job so every step (release script + manifest
+      # generator) sees the same values.
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      # gh CLI reads this for non-interactive `gh release upload`.
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # release-windows.mjs treats any RELEASE_TARGET override as
+      # authoritative; we pin x64 explicitly for clarity.
+      RELEASE_TARGET: x86_64-pc-windows-msvc
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          # Bust the cache when Cargo.lock or tauri.conf.json change so
+          # we don't drag a stale wry build into a new Tauri version.
+          key: cargo-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/tauri.conf.json') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Sanity check (fixtures + typecheck + vitest)
+        # Run the same JS surface the macOS release pre-flights against
+        # so a Windows-only regression (path separators, line endings,
+        # cross-platform Node fs assumptions) is caught here before the
+        # ~10-minute bundler kicks in. `build-fixtures.mjs` uses pure
+        # node:fs APIs and works on both Linux and Windows.
+        run: |
+          pnpm fixtures
+          pnpm typecheck
+          pnpm test:unit
+
+      - name: Build Windows release
+        # release-windows.mjs does:
+        #   - pnpm tauri build --target x86_64-pc-windows-msvc
+        #   - rename + publish to dist-desktop/
+        #   - build-update-manifest.mjs --merge-existing
+        #   - refresh SHA256SUMS.txt
+        # The --upload flag is conditional so we can `workflow_dispatch`
+        # for a dry-run that produces artifacts without touching the GH
+        # release.
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "push" -or "${{ github.event.inputs.upload }}" -eq "true") {
+            pnpm release:windows --upload
+          } else {
+            pnpm release:windows
+          }
+
+      - name: Upload dist-desktop as workflow artifact
+        # Always upload so a human can grab the .exe without needing a
+        # GitHub Release. Excluded: SHA256SUMS.txt (regenerated per-run
+        # so it's not deterministic across multi-platform pipelines).
+        uses: actions/upload-artifact@v4
+        with:
+          name: slidestage-lite-windows-x64
+          path: |
+            dist-desktop/SlideStageLite-*-Windows-x64-setup.exe
+            dist-desktop/SlideStageLite-*-Windows-x64.nsis.zip
+            dist-desktop/SlideStageLite-*-Windows-x64.nsis.zip.sig
+            dist-desktop/latest.json
+          if-no-files-found: error
+          retention-days: 14

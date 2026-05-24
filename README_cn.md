@@ -160,6 +160,89 @@ npx gh-pages -d dist
 
 ---
 
+## 桌面版
+
+SlideStage Lite 同时提供 macOS 与 Windows 桌面版安装包，与 web 版共用
+同一份 React 界面与 `.stage` 运行时，通过 Tauri 2 打包。二者复用同一套
+in-app 自动更新流程（GitHub Releases 静态 `latest.json` + minisign
+签名校验 + `updates.slidestage.dev` 镜像兜底）。
+
+### 下载
+
+最新发布在
+<https://github.com/SlideStage/SlideStageLite/releases>。按平台选择：
+
+| 平台                         | 文件名                                                |
+| ---------------------------- | ----------------------------------------------------- |
+| macOS (Apple Silicon)        | `SlideStageLite-<version>-macOS-AppleSilicon.dmg`     |
+| macOS (Intel)                | `SlideStageLite-<version>-macOS-Intel.dmg`            |
+| Windows 10/11 (x64)          | `SlideStageLite-<version>-Windows-x64-setup.exe`      |
+
+系统要求：
+
+- macOS 12.0+（Monterey 或更新）。
+- Windows 10 1809+ 或 Windows 11；Windows 11 已预装 WebView2 Evergreen
+  Runtime，Windows 10 在首次安装时安装器会按需下载。
+
+### 安装（Windows）
+
+1. 下载 `SlideStageLite-<version>-Windows-x64-setup.exe`。
+2. 双击运行。**MVP 版本暂未代码签名**，Windows Defender SmartScreen 会
+   弹出蓝色的"无法识别的应用"对话框 —— 点 **更多信息** → **仍要运行**
+   即可。同一主版本内只需要操作一次，SmartScreen 会记住选择。
+3. NSIS 安装器会以 per-user 模式安装（不会弹 UAC 提权），并创建开始
+   菜单快捷方式。安装后双击 `.stage` 文件即可在 SlideStage Lite 中打开。
+
+如果点了"仍要运行"之后仍然无法启动安装器：
+
+- 右键下载得到的 `.exe` → **属性** → 勾选最下方"**解除锁定**" →
+  **应用** → 重新运行安装器。
+
+我们正在为 Windows 版接入代码签名。规划路线（Azure Trusted Signing /
+SignPath / MSIX → 微软商店）记录在
+[`docs/WINDOWS_DISTRIBUTION.md`](docs/WINDOWS_DISTRIBUTION.md)。
+
+### 安装（macOS）
+
+1. 下载与你 Mac 芯片匹配的 `.dmg`。
+2. 打开磁盘镜像，将 `SlideStage Lite` 图标拖入 `Applications`。
+3. macOS Gatekeeper 不会拦截 —— DMG 已通过 Developer ID 证书签名并完成
+   Apple 公证装订（notarization staple）。
+
+### 自动更新
+
+安装后，SlideStage Lite 启动时会静默检查更新；也可以通过菜单触发：
+**Help → Check for Updates…**（Windows）或 **SlideStage Lite →
+Check for Updates…**（macOS）。当有新版本可用时：
+
+- 落地页会出现更新横幅，单击 **安装更新** 即可。
+- 下载进度按字节精确显示（服务器返回 `Content-Length` 时）；新版
+  压缩包会用编译进可执行文件里的 minisign 公钥校验签名，校验通过后
+  静默安装并重启。
+
+横幅可以按版本"不再提醒"——只有严格的更高版本上线时才会再次出现。
+
+### 从源码构建桌面版
+
+除 Quickstart 列出的依赖外还需要：
+- **Rust 1.77+**（`rustup install stable`）
+- macOS：Xcode Command Line Tools（`xcode-select --install`）
+- Windows：Visual Studio Build Tools 2022 + "使用 C++ 的桌面开发"
+  工作负载 + Windows 10/11 SDK
+
+```bash
+pnpm tauri:dev      # 开发：Tauri + Vite 热重载（不打包安装器）
+pnpm tauri:build    # 发布：在 src-tauri/target/<triple>/release/bundle/
+                    #   下产出 .dmg / .exe
+```
+
+完整发布流水线参考
+[`docs/AUTO_UPDATER.md`](docs/AUTO_UPDATER.md)、
+[`docs/MACOS_NOTARIZATION.md`](docs/MACOS_NOTARIZATION.md) 与
+[`docs/WINDOWS_DISTRIBUTION.md`](docs/WINDOWS_DISTRIBUTION.md)。
+
+---
+
 ## 配置
 
 所有配置在构建时通过 Vite 环境变量打包进 bundle。

@@ -54,10 +54,13 @@
  *
  *   pnpm updater:manifest                       # default targets
  *   pnpm updater:manifest --target aarch64-apple-darwin
+ *   pnpm updater:manifest --target x86_64-pc-windows-msvc
  *   pnpm updater:manifest --notes "Bug fixes"
  *   pnpm updater:manifest --asset-base-url 'https://updates.example.com/'
- */
-import { execSync } from 'node:child_process';
+ *   pnpm updater:manifest --merge-existing      # \u589e\u91cf\u5408\u5e76\u5230\u73b0\u6709 latest.json
+ *
+ * \u4f7f\u7528 --merge-existing \u5f53\u4e0d\u540c\u5e73\u53f0\u5728\u4e0d\u540c\u673a\u5668\u4e0a\u751f\u4ea7\u65f6\uff08\u6bd4\u5982\n * mac \u672c\u5730 + Windows GHA\uff09\uff0c\u4ee5\u4fdd\u7559\u5176\u4ed6\u5e73\u53f0\u5757\u3002\u4e24\u8fb9 manifest \u7684\n * `version` \u5b57\u6bb5\u5fc5\u987b\u4e25\u683c\u76f8\u7b49\uff0c\u5426\u5219\u811a\u672c\u4f1a die\uff08\u907f\u514d\u628a\n * 0.2.0 \u7684 mac \u5757\u610f\u5916\u5b9a\u5165 0.3.0 \u7684\u65b0 manifest\uff09\u3002\n */
+import { createHash } from 'node:crypto';
 import {
   copyFileSync,
   existsSync,
@@ -106,6 +109,7 @@ const ASSET_BASE_URL =
 
 const NOTES_OVERRIDE = argMap.notes && argMap.notes !== 'true' ? argMap.notes : null;
 const NOTES_FILE = argMap['notes-file'] || null;
+const MERGE_EXISTING = argMap['merge-existing'] === 'true';
 
 // ---- Logging ------------------------------------------------------------
 
@@ -193,6 +197,16 @@ function resolveBundleDir(target) {
   return null;
 }
 
+// Per-archive-suffix metadata: which file extension the updater bundler
+// produces for that target family, and what stable extension we publish
+// it under in dist-desktop/. Order matters — we probe the array in order
+// and use the first archive we find in the bundle directory.
+const ARCHIVE_SUFFIXES = [
+  { match: '.app.tar.gz', publishedExt: 'app.tar.gz' },
+  { match: '.nsis.zip', publishedExt: 'nsis.zip' },
+  { match: '.AppImage.tar.gz', publishedExt: 'AppImage.tar.gz' },
+];
+
 function locateUpdaterArtifacts(target) {
   const bundleDir = resolveBundleDir(target);
   if (!bundleDir) {
@@ -200,11 +214,16 @@ function locateUpdaterArtifacts(target) {
     return null;
   }
   const entries = readdirSync(bundleDir);
-  // We expect exactly one *.app.tar.gz alongside its *.sig sibling. The
-  // bundler names them after `productName`, e.g. `SlideStage Lite.app.tar.gz`.
-  const archive = entries.find((f) => f.endsWith('.app.tar.gz'))
-    || entries.find((f) => f.endsWith('.nsis.zip'))
-    || entries.find((f) => f.endsWith('.AppImage.tar.gz'));
+  let archive = null;
+  let publishedExt = null;
+  for (const { match, publishedExt: ext } of ARCHIVE_SUFFIXES) {
+    const hit = entries.find((f) => f.endsWith(match));
+    if (hit) {
+      archive = hit;
+      publishedExt = ext;
+      break;
+    }
+  }
   if (!archive) {
     warn(
       `${bundleDir} has no .app.tar.gz / .nsis.zip / .AppImage.tar.gz — did you set bundle.createUpdaterArtifacts=true and rebuild?`,
@@ -219,7 +238,7 @@ function locateUpdaterArtifacts(target) {
     );
     return null;
   }
-  return { archivePath, sigPath };
+  return { archivePath, sigPath, publishedExt };
 }
 
 // ---- Main ---------------------------------------------------------------
@@ -254,13 +273,16 @@ function main() {
     }
     const located = locateUpdaterArtifacts(target);
     if (!located) continue;
-    const { archivePath, sigPath } = located;
+    const { archivePath, sigPath, publishedExt } = located;
     const suffix = PLATFORM_TO_TARGET_NAME_SUFFIX[platformKey] ?? platformKey;
     // Stable artifact name attached to the GitHub Release. The
     // bundler's name has a space ("SlideStage Lite.app.tar.gz") which
     // can mangle on some HTTP clients, so we rename to the same
-    // hyphenated scheme we already use for the DMG.
-    const publishedName = `SlideStageLite-${version}-${suffix}.app.tar.gz`;
+    // hyphenated scheme we already use for the DMG. The extension is
+    // chosen per platform family (app.tar.gz on macOS, nsis.zip on
+    // Windows, AppImage.tar.gz on Linux) so the URL in latest.json
+    // points to the right Tauri-recognised archive type.
+    const publishedName = `SlideStageLite-${version}-${suffix}.${publishedExt}`;
     const publishedPath = resolve(DIST_DESKTOP, publishedName);
     copyFileSync(archivePath, publishedPath);
     copyFileSync(sigPath, `${publishedPath}.sig`);
@@ -283,14 +305,57 @@ function main() {
     );
   }
 
+  // --merge-existing: when the macOS pipeline and the Windows pipeline
+  // run on separate machines (typically mac local + Windows GHA), the
+  // second runner sees a `latest.json` that already contains the first
+  // runner's platform block. Wholesale-overwriting it would drop that
+  // block and break auto-update on the platform that ran first. We
+  // merge by `platforms` key, keeping any blocks the new run did not
+  // produce. The `version` field MUST agree on both sides — a mismatch
+  // means somebody bumped the version on one side but not the other,
+  // and we'd rather fail loudly than ship a Frankenstein manifest.
+  const manifestPath = resolve(DIST_DESKTOP, 'latest.json');
+  let mergedPlatforms = platforms;
+  let mergedNotes = notes;
+  let mergedPubDate = pubDate;
+  if (MERGE_EXISTING && existsSync(manifestPath)) {
+    try {
+      const existing = JSON.parse(readFileSync(manifestPath, 'utf8'));
+      if (existing.version && existing.version !== version) {
+        die(
+          `--merge-existing: existing latest.json has version "${existing.version}" but this build is ${version}. Bump both sides to the same version before merging.`,
+        );
+      }
+      mergedPlatforms = { ...(existing.platforms ?? {}), ...platforms };
+      // Notes / pub_date: prefer the new values when explicitly
+      // provided, otherwise keep whatever was there. This keeps the
+      // first run's release notes intact across follow-up platform
+      // builds that don't supply --notes.
+      if (!NOTES_OVERRIDE && !NOTES_FILE && existing.notes) {
+        mergedNotes = existing.notes;
+      }
+      if (existing.pub_date) {
+        mergedPubDate = existing.pub_date;
+      }
+      info(
+        `merged with existing ${manifestPath} (kept platforms: ${Object.keys(
+          existing.platforms ?? {},
+        )
+          .filter((k) => !(k in platforms))
+          .join(', ') || '(none)'})`,
+      );
+    } catch (err) {
+      die(`--merge-existing: failed to parse ${manifestPath}: ${err.message}`);
+    }
+  }
+
   const manifest = {
     version,
-    notes,
-    pub_date: pubDate,
-    platforms,
+    notes: mergedNotes,
+    pub_date: mergedPubDate,
+    platforms: mergedPlatforms,
   };
 
-  const manifestPath = resolve(DIST_DESKTOP, 'latest.json');
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   info(`wrote ${manifestPath}`);
 
@@ -302,15 +367,18 @@ function main() {
 
 function refreshShaSums(version, publishedAssets) {
   const sumsPath = resolve(DIST_DESKTOP, 'SHA256SUMS.txt');
-  const trackedExtensions = /\.(dmg|exe|msi|app\.tar\.gz)$/i;
+  const trackedExtensions = /\.(dmg|exe|msi|app\.tar\.gz|nsis\.zip|AppImage\.tar\.gz)$/i;
   const entries = readdirSync(DIST_DESKTOP)
     .filter((f) => trackedExtensions.test(f))
     .sort();
   const lines = [];
   for (const file of entries) {
     const filePath = resolve(DIST_DESKTOP, file);
-    const hash = execSync(`shasum -a 256 "${filePath}"`).toString().trim();
-    lines.push(hash.replace(/\s+.*$/, `  ${file}`));
+    // Node-native hash so this works on Windows runners too (where
+    // `shasum -a 256` is not on PATH by default).
+    const buf = readFileSync(filePath);
+    const hash = createHash('sha256').update(buf).digest('hex');
+    lines.push(`${hash}  ${file}`);
   }
   writeFileSync(sumsPath, `${lines.join('\n')}\n`, 'utf8');
   info(

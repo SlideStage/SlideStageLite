@@ -17,6 +17,7 @@ import {
   getStageServiceWorkerClient,
 } from '../browser/stageServiceWorker';
 import { isTauri } from '../desktop/env';
+import { runManualUpdateCheck } from '../desktop/manualUpdateCheck';
 import { useI18n } from '../i18n/I18nProvider';
 import { loadTrustGrant, saveTrustGrant } from '../persistence/trustStore';
 import { AudienceView } from '../viewer/AudienceView';
@@ -288,6 +289,44 @@ export function LiteApp() {
     return () => {
       cancelled = true;
       handle?.unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAudienceWindow]);
+
+  // macOS App menu → "Check for Updates…". The Rust side emits the
+  // event on every menu click; we drive the user-facing dialog flow
+  // here so the strings stay i18n-aware. Mounted at the LiteApp root
+  // (not the deck-closed branch) on purpose — the menu can fire while
+  // a deck is open and we still need to respond.
+  useEffect(() => {
+    if (isAudienceWindow) return undefined;
+    if (!isTauri()) return undefined;
+    let cancelled = false;
+    let unlisten: (() => void) | null = null;
+    (async () => {
+      const { listen } = await import('@tauri-apps/api/event');
+      unlisten = await listen('menu:check-update', () => {
+        if (cancelled) return;
+        void runManualUpdateCheck({
+          upToDateTitle: t('menu.checkUpdate.upToDate.title'),
+          upToDateBody: t('menu.checkUpdate.upToDate.body'),
+          availableTitle: t('menu.checkUpdate.available.title'),
+          availableBody: t('menu.checkUpdate.available.body'),
+          installButton: t('menu.checkUpdate.available.install'),
+          laterButton: t('menu.checkUpdate.available.later'),
+          errorTitle: t('menu.checkUpdate.error.title'),
+          errorBody: t('menu.checkUpdate.error.body'),
+          installErrorTitle: t('menu.checkUpdate.installError.title'),
+          installErrorBody: t('menu.checkUpdate.installError.body'),
+        });
+      });
+    })().catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('menu:check-update setup failed', err);
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAudienceWindow]);

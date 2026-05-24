@@ -176,6 +176,103 @@ That's it — no database, no API keys, no runtime config service.
 
 ---
 
+## Desktop App
+
+SlideStage Lite also ships as a self-contained desktop app on macOS and
+Windows. Both editions bundle the same React shell behind a Tauri 2
+shell, share the same `.stage` runtime, and use the same in-app
+auto-updater driven by a static `latest.json` manifest hosted on GitHub
+Releases (with a `updates.slidestage.dev` fallback for networks where
+GitHub is unreachable).
+
+### Download
+
+Latest releases live at
+<https://github.com/SlideStage/SlideStageLite/releases>. Pick:
+
+| Platform                          | File                                                   |
+| --------------------------------- | ------------------------------------------------------ |
+| macOS (Apple Silicon)             | `SlideStageLite-<version>-macOS-AppleSilicon.dmg`      |
+| macOS (Intel)                     | `SlideStageLite-<version>-macOS-Intel.dmg`             |
+| Windows 10/11 (x64)               | `SlideStageLite-<version>-Windows-x64-setup.exe`       |
+
+System requirements:
+
+- macOS 12.0+ (Monterey or later)
+- Windows 10 version 1809+ or Windows 11; the WebView2 Evergreen Runtime
+  (preinstalled on Windows 11; the installer offers to fetch it for
+  Windows 10).
+
+### Install (Windows)
+
+1. Download `SlideStageLite-<version>-Windows-x64-setup.exe`.
+2. Double-click it. Windows Defender SmartScreen may show a blue
+   "Unrecognized app" dialog because the MVP build is **not yet code
+   signed** — click **More info** → **Run anyway**. You only have to
+   do this once per major version; SmartScreen remembers the choice.
+3. NSIS installs the app per-user (no admin / UAC prompt) and adds a
+   Start menu shortcut. Double-clicking a `.stage` file from Explorer
+   will now open SlideStage Lite directly.
+
+If SmartScreen still refuses to launch the installer after "Run
+anyway":
+
+- Right-click the downloaded `.exe` → **Properties** → tick
+  **Unblock** at the bottom of the General tab → **Apply** → re-run
+  the installer.
+
+We are working on code-signing the Windows build. The
+[`docs/WINDOWS_DISTRIBUTION.md`](docs/WINDOWS_DISTRIBUTION.md) doc
+tracks the planned upgrade paths (Azure Trusted Signing, SignPath,
+or MSIX → Microsoft Store).
+
+### Install (macOS)
+
+1. Download the `.dmg` matching your Mac's chip.
+2. Open the disk image and drag the `SlideStage Lite` icon to the
+   `Applications` folder.
+3. macOS Gatekeeper accepts the build immediately because the DMG is
+   signed with a Developer ID certificate and stapled with an Apple
+   notarization ticket.
+
+### Auto-updates
+
+After installation, SlideStage Lite checks for updates at launch and
+when you click **Help → Check for Updates…** (Windows) or
+**SlideStage Lite → Check for Updates…** (macOS, in the application
+menu). When a new version is available:
+
+- An update banner appears on the landing page with a single
+  "Install update" button.
+- The download progress is byte-accurate when the server reports
+  `Content-Length`; the new build is signature-verified against the
+  minisign public key baked into the running binary, then installed
+  and relaunched silently.
+
+You can dismiss the banner per-version — it stays hidden until a
+strictly-newer release ships.
+
+### Build the desktop app from source
+
+Requirements (in addition to the Quickstart):
+- **Rust 1.77+** (`rustup install stable`)
+- macOS: Xcode Command Line Tools (`xcode-select --install`)
+- Windows: Visual Studio Build Tools 2022 with the "Desktop
+  development with C++" workload and the Windows 10/11 SDK
+
+```bash
+pnpm tauri:dev      # dev: hot-reload Tauri + Vite (no installer)
+pnpm tauri:build    # release: builds .dmg / .exe under
+                    #   src-tauri/target/<triple>/release/bundle/
+```
+
+See [`docs/AUTO_UPDATER.md`](docs/AUTO_UPDATER.md),
+[`docs/MACOS_NOTARIZATION.md`](docs/MACOS_NOTARIZATION.md), and
+[`docs/WINDOWS_DISTRIBUTION.md`](docs/WINDOWS_DISTRIBUTION.md) for the
+full release pipeline.
+
+---
+
 ## Configuration
 
 All configuration is baked at build time via Vite environment variables.

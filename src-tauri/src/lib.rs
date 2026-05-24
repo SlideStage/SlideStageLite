@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde::Serialize;
+use tauri::menu::MenuItemKind;
 use tauri::{AppHandle, Emitter, Manager, RunEvent};
 
 /// Queue of `.stage` paths captured BEFORE the front-end is ready to
@@ -232,6 +233,55 @@ fn thumbnail_cache_clear(
     }
 }
 
+/// Toggle the menu-bar "Check for Updates…" item between its idle state
+/// and the in-flight "Checking for Updates…" state. The front-end calls
+/// this around the manual update probe driven by the menu trigger so the
+/// user gets immediate visual feedback in the same place they clicked.
+///
+/// No-op when the menu / item is missing — keeps the front-end code path
+/// platform-agnostic. On macOS the item sits directly under the App
+/// submenu (top-level after `menu.get`); on Windows the item is nested
+/// inside `Help`, so we fall back to one level of submenu recursion.
+/// `Menu::get` / `Submenu::get` are NOT recursive in Tauri 2 — this is
+/// the documented contract, and a flat get-by-id is silently None when
+/// the target lives inside a submenu.
+#[tauri::command]
+fn set_check_update_menu_state(app: AppHandle, checking: bool) -> Result<(), String> {
+    let Some(menu) = app.menu() else { return Ok(()); };
+
+    let text_item = match menu.get("check_updates") {
+        Some(MenuItemKind::MenuItem(item)) => Some(item),
+        _ => menu
+            .items()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|kind| {
+                let MenuItemKind::Submenu(sub) = kind else { return None };
+                match sub.get("check_updates") {
+                    Some(MenuItemKind::MenuItem(item)) => Some(item),
+                    _ => None,
+                }
+            })
+            .next(),
+    };
+
+    let Some(text_item) = text_item else { return Ok(()); };
+
+    let (text, enabled) = if checking {
+        ("Checking for Updates…", false)
+    } else {
+        ("Check for Updates…", true)
+    };
+
+    text_item
+        .set_text(text)
+        .map_err(|e| format!("set_text failed: {e}"))?;
+    text_item
+        .set_enabled(enabled)
+        .map_err(|e| format!("set_enabled failed: {e}"))?;
+    Ok(())
+}
+
 fn handle_opened_path(app: &AppHandle, path: String) {
     if let Ok(mut slot) = app.state::<PendingFiles>().0.lock() {
         slot.push(path.clone());
@@ -279,7 +329,158 @@ pub fn run() {
             // Windows / Linux: file path arrives via argv. macOS uses
             // RunEvent::Opened (handled below in the .run callback).
             ingest_argv(&app.handle(), &std::env::args().collect::<Vec<_>>());
+
+            // macOS: rebuild the App submenu so the standard
+            //   About | --- | Check for Updates… | --- | Services | --- |
+            //   Hide | Hide Others | Show All | --- | Quit
+            // structure (Safari / Xcode / Sparkle convention) is in
+            // place. We do this in Rust because the macOS application
+            // menu is OS-owned and unreachable from the WebView.
+            //
+            // The Edit / View / Window / Help submenus produced by
+            // Menu::default are preserved by only swapping out item[0]
+            // (the App submenu).
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+
+                let handle = app.handle();
+
+                let about = PredefinedMenuItem::about(handle, None, None)?;
+                let check_updates = MenuItem::with_id(
+                    handle,
+                    "check_updates",
+                    "Check for Updates…",
+                    true,
+                    None::<&str>,
+                )?;
+                let sep_a = PredefinedMenuItem::separator(handle)?;
+                let sep_b = PredefinedMenuItem::separator(handle)?;
+                let services = PredefinedMenuItem::services(handle, None)?;
+                let sep_c = PredefinedMenuItem::separator(handle)?;
+                let hide = PredefinedMenuItem::hide(handle, None)?;
+                let hide_others = PredefinedMenuItem::hide_others(handle, None)?;
+                let show_all = PredefinedMenuItem::show_all(handle, None)?;
+                let sep_d = PredefinedMenuItem::separator(handle)?;
+                let quit = PredefinedMenuItem::quit(handle, None)?;
+
+                let app_submenu = Submenu::with_id_and_items(
+                    handle,
+                    "app",
+                    "SlideStage Lite",
+                    true,
+                    &[
+                        &about,
+                        &sep_a,
+                        &check_updates,
+                        &sep_b,
+                        &services,
+                        &sep_c,
+                        &hide,
+                        &hide_others,
+                        &show_all,
+                        &sep_d,
+                        &quit,
+                    ],
+                )?;
+
+                let menu = Menu::default(handle)?;
+                menu.remove_at(0)?;
+                menu.insert(&app_submenu, 0)?;
+                app.set_menu(menu)?;
+            }
+
+            // Windows: attach a window menu bar with a single Help
+            // submenu so we have a stable, discoverable entry point for
+            // "Check for Updates…" and "About". Windows has no
+            // equivalent of the macOS application menu, but the
+            // per-window menu bar shows at the top of the main window
+            // and is the convention used by VS Code, Slack, Discord.
+            //
+            // We reuse the same menu item id (`check_updates`) and the
+            // same Rust-side toggle command (`set_check_update_menu_state`)
+            // as macOS so the front-end's `runManualUpdateCheck` flow
+            // and the `menu:check-update` event handler work unchanged
+            // — `set_check_update_menu_state` recurses one level into
+            // submenus so the nested-under-Help layout still resolves.
+            //
+            // Help → About SlideStage Lite uses `PredefinedMenuItem::about`
+            // which on Windows pops a native dialog assembled from the
+            // metadata below (name, version, copyright, website). That
+            // mirrors the macOS About dialog driven by the App menu's
+            // `PredefinedMenuItem::about` so users see the same level of
+            // information on both OSes.
+            #[cfg(target_os = "windows")]
+            {
+                use tauri::menu::{
+                    AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu,
+                };
+
+                let handle = app.handle();
+                let check_updates = MenuItem::with_id(
+                    handle,
+                    "check_updates",
+                    "Check for Updates…",
+                    true,
+                    None::<&str>,
+                )?;
+                let sep = PredefinedMenuItem::separator(handle)?;
+                let about_metadata = AboutMetadata {
+                    name: Some("SlideStage Lite".to_string()),
+                    version: Some(env!("CARGO_PKG_VERSION").to_string()),
+                    copyright: Some("© 2026 SlideStage".to_string()),
+                    website: Some("https://slidestage.dev".to_string()),
+                    website_label: Some("slidestage.dev".to_string()),
+                    ..Default::default()
+                };
+                let about = PredefinedMenuItem::about(
+                    handle,
+                    Some("About SlideStage Lite"),
+                    Some(about_metadata),
+                )?;
+                let help = Submenu::with_id_and_items(
+                    handle,
+                    "help",
+                    "Help",
+                    true,
+                    &[&check_updates, &sep, &about],
+                )?;
+                let menu = Menu::with_items(handle, &[&help])?;
+                app.set_menu(menu)?;
+            }
+
+            // Windows / Linux: register the `stage://` deep-link scheme
+            // at runtime as a defensive fallback. Tauri's NSIS template
+            // also writes the protocol registry keys at install time
+            // (see `bundle.deepLinkSchemes`), but there is a historic
+            // Tauri issue (#10095) where the NSIS path silently no-ops
+            // depending on installer settings; calling `register_all`
+            // here makes the scheme available the first time the app
+            // launches regardless of how it was installed. The call
+            // requires no admin rights — it writes under HKCU.
+            // No-op on macOS where `RunEvent::Opened` is the canonical
+            // path and the scheme is declared in `Info.plist`.
+            #[cfg(any(target_os = "windows", target_os = "linux"))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                if let Err(err) = app.deep_link().register_all() {
+                    eprintln!("deep_link register_all failed: {err}");
+                }
+            }
+
             Ok(())
+        })
+        .on_menu_event(|app, event| {
+            // Single global handler so future menu items (Help >
+            // Documentation, etc.) plug in without re-touching the
+            // builder. We forward to the front-end rather than acting
+            // on the updater directly because the JS layer owns the
+            // policy (locale-aware dialog text, dismiss flow, etc.).
+            if event.id().as_ref() == "check_updates" {
+                if let Err(err) = app.emit("menu:check-update", ()) {
+                    eprintln!("failed to emit menu:check-update: {err}");
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             read_deck_bytes,
@@ -290,6 +491,7 @@ pub fn run() {
             thumbnail_cache_put,
             thumbnail_cache_list,
             thumbnail_cache_clear,
+            set_check_update_menu_state,
         ])
         .build(tauri::generate_context!())
         .expect("error while building SlideStage Lite Desktop");
