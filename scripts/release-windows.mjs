@@ -16,9 +16,14 @@
  *        target/<triple>/release/bundle/nsis/<productName>_<version>_x64-setup.nsis.zip.sig
  *   4. Rename + copy artifacts to dist-desktop/ using the same hyphenated
  *      scheme we use on macOS (no spaces — some HTTP clients mangle them).
- *   5. Invoke scripts/build-update-manifest.mjs with --merge-existing so
+ *   5. Prefetch the already-published `latest.json` from the matching
+ *      GitHub release (if any) into dist-desktop/. On GHA this seeds the
+ *      `darwin-*` blocks the mac runner uploaded earlier; without this
+ *      step --merge-existing has nothing to merge and the Windows upload
+ *      would clobber the mac entries on the release.
+ *   6. Invoke scripts/build-update-manifest.mjs with --merge-existing so
  *      a previously-generated macOS manifest keeps its `darwin-*` blocks.
- *   6. Optional: `--upload` attaches every dist-desktop artifact to the
+ *   7. Optional: `--upload` attaches every dist-desktop artifact to the
  *      matching GitHub Release via `gh release upload`. Same flag as the
  *      mac release script.
  *
@@ -217,6 +222,9 @@ if (DRY_RUN) {
   info(`Would invoke: pnpm tauri build --target ${TARGET}`);
   info(`Would write artifacts to: ${DIST_DESKTOP}`);
   info(
+    `Manifest prefetch: ${SKIP_UPDATER ? 'SKIPPED (--skip-updater)' : 'would gh release download v<ver> --pattern latest.json'}`,
+  );
+  info(
     `Updater step: ${SKIP_UPDATER ? 'SKIPPED (--skip-updater)' : 'would run scripts/build-update-manifest.mjs --merge-existing'}`,
   );
   info(`Upload step: ${UPLOAD ? 'would run gh release upload' : 'skipped (pass --upload to enable)'}`);
@@ -288,6 +296,31 @@ const FINAL_EXE_PATH = resolve(DIST_DESKTOP, FINAL_EXE_NAME);
 copyFileSync(SETUP_EXE_PATH, FINAL_EXE_PATH);
 info(`copied: ${FINAL_EXE_NAME}`);
 
+// ---- Fetch existing latest.json from GitHub release (for cross-platform merge) ----
+//
+// The macOS pipeline runs on a local mac and uploads dist-desktop/latest.json
+// (containing `darwin-aarch64` and `darwin-x86_64` blocks) to the GitHub
+// Release before this Windows GHA workflow runs. Without this step the
+// GHA runner starts with an EMPTY dist-desktop/ — so `--merge-existing`
+// has nothing to merge with, build-update-manifest writes a manifest that
+// only contains `windows-x86_64`, and `gh release upload --clobber` would
+// then OVERWRITE the mac-block-bearing manifest on the release. mac users'
+// in-app updater would silently break.
+//
+// Fix: download the already-uploaded latest.json (if any) into dist-desktop/
+// BEFORE the manifest step, so `--merge-existing` sees the darwin-* blocks
+// and preserves them.
+//
+// We are deliberately permissive on failure: a missing release / missing
+// asset is OK for local test builds and for the first-ever publish of a
+// version (no mac block exists yet to preserve). Only network/auth errors
+// die loudly.
+
+if (!SKIP_UPDATER) {
+  step('Fetching existing latest.json from GitHub release (cross-platform merge prep)');
+  fetchExistingLatestJson(versionFromConf);
+}
+
 // ---- Build updater manifest (latest.json) ------------------------------
 
 if (!SKIP_UPDATER) {
@@ -341,6 +374,68 @@ warn(
 );
 
 // ---- Helpers -----------------------------------------------------------
+
+function fetchExistingLatestJson(version) {
+  const tag = `v${version}`;
+  const target = resolve(DIST_DESKTOP, 'latest.json');
+
+  if (!existsSync(DIST_DESKTOP)) mkdirSync(DIST_DESKTOP, { recursive: true });
+
+  // Sanity-check gh is installed; without it, fall through and let
+  // build-update-manifest run unprimed (windows-only manifest).
+  const ghCheck = spawnSync('gh', ['--version'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: true,
+  });
+  if (ghCheck.status !== 0) {
+    warn('gh CLI not available; skipping latest.json prefetch. Manifest will only carry windows-x86_64.');
+    return;
+  }
+
+  // Does the release exist at all?
+  const view = spawnSync(
+    'gh',
+    ['release', 'view', tag, '--json', 'tagName'],
+    { stdio: ['ignore', 'pipe', 'pipe'], shell: true },
+  );
+  if (view.status !== 0) {
+    info(`no GitHub release ${tag} yet — manifest will be created from scratch (windows-x86_64 only).`);
+    return;
+  }
+
+  // Try to download the asset. gh exits non-zero if the asset doesn't exist,
+  // which is also a normal first-publish case (mac runner hasn't uploaded yet).
+  const download = spawnSync(
+    'gh',
+    [
+      'release',
+      'download',
+      tag,
+      '--pattern',
+      'latest.json',
+      '--output',
+      target,
+      '--clobber',
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'], shell: true, encoding: 'utf8' },
+  );
+  if (download.status === 0 && existsSync(target)) {
+    const size = readFileSync(target, 'utf8').length;
+    info(`prefetched ${target} (${size} bytes) — darwin-* blocks will be preserved.`);
+    return;
+  }
+  const stderr = (download.stderr ?? '').toString();
+  // gh prints "no assets match" / similar when the manifest isn't on the
+  // release yet. Treat that as benign.
+  if (/no assets|no asset matches|release not found/i.test(stderr)) {
+    info(`release ${tag} has no latest.json asset yet — manifest will be created from scratch (windows-x86_64 only).`);
+    return;
+  }
+  // Anything else (auth, network, permissions) is louder.
+  warn(
+    `failed to prefetch latest.json from ${tag}; will proceed with a fresh manifest. gh stderr:\n${stderr.trim() || '(empty)'}`,
+  );
+}
 
 function uploadToGithubRelease(version) {
   const tag = `v${version}`;

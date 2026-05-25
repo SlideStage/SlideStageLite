@@ -477,6 +477,14 @@ if (!SKIP_UPDATER) {
       resolve(ROOT, 'scripts/build-update-manifest.mjs'),
       '--target',
       TARGET,
+      // Merge with any platform block already in dist-desktop/latest.json.
+      // Without this, a follow-up `pnpm release:macos` for the *other*
+      // mac arch (Intel after AppleSilicon, or vice versa) would silently
+      // overwrite the first block — manifest would only carry the most
+      // recent arch and the other half of mac users would stall on the
+      // previous release. The flag is a no-op when latest.json doesn't
+      // yet exist (first build of the version), so it's safe to leave on.
+      '--merge-existing',
     ],
     {
       stdio: 'inherit',
