@@ -278,23 +278,19 @@ if (!setupExe) {
 const SETUP_EXE_PATH = resolve(TARGET_BUNDLE_DIR, setupExe);
 info(`installer: ${SETUP_EXE_PATH}`);
 
-let updaterZipPath = null;
-let updaterSigPath = null;
 if (!SKIP_UPDATER) {
-  const updaterZip = bundleEntries.find((f) => f.endsWith('-setup.nsis.zip'));
-  if (!updaterZip) {
+  // Tauri 2.x's NSIS bundler signs the `.exe` installer in place — the
+  // `.nsis.zip` wrapper that Tauri 1.x used is gone. The updater
+  // archive IS the same `.exe` we ship as the installer; we only need
+  // to confirm the `.sig` sibling exists here so build-update-manifest
+  // can pick it up later in the pipeline.
+  const setupExeSig = bundleEntries.find((f) => f.endsWith('-setup.exe.sig'));
+  if (!setupExeSig) {
     die(
-      `no *-setup.nsis.zip found in ${TARGET_BUNDLE_DIR}. Did you set bundle.createUpdaterArtifacts=true and TAURI_SIGNING_PRIVATE_KEY?`,
+      `no *-setup.exe.sig found in ${TARGET_BUNDLE_DIR}. Did you set bundle.createUpdaterArtifacts=true and TAURI_SIGNING_PRIVATE_KEY? Tauri 2.x emits the signature next to the .exe rather than producing a .nsis.zip wrapper.`,
     );
   }
-  updaterZipPath = resolve(TARGET_BUNDLE_DIR, updaterZip);
-  updaterSigPath = `${updaterZipPath}.sig`;
-  if (!existsSync(updaterSigPath)) {
-    die(
-      `${updaterZip} found but its .sig sibling is missing — was TAURI_SIGNING_PRIVATE_KEY_PASSWORD wrong?`,
-    );
-  }
-  info(`updater zip: ${updaterZipPath}`);
+  info(`updater sig: ${resolve(TARGET_BUNDLE_DIR, setupExeSig)}`);
 }
 
 // ---- Publish to dist-desktop -------------------------------------------

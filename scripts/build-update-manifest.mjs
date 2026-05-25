@@ -201,9 +201,19 @@ function resolveBundleDir(target) {
 // produces for that target family, and what stable extension we publish
 // it under in dist-desktop/. Order matters — we probe the array in order
 // and use the first archive we find in the bundle directory.
+//
+// Notes:
+//   - Tauri 2.x ships the Windows updater signature next to the `.exe`
+//     installer (the `.nsis.zip` wrapper from 1.x is gone). We match
+//     `-setup.exe` specifically so we don't grab `slidestage-lite-
+//     desktop.exe` or any other stray executable in the bundle dir.
+//   - For Windows, publishedExt is `-setup.exe` and the publishedName
+//     builder below treats it as a full filename suffix (hyphen-joined,
+//     not dot-joined) so the installer URL stays human-readable as
+//     `SlideStageLite-0.2.1-Windows-x64-setup.exe`.
 const ARCHIVE_SUFFIXES = [
   { match: '.app.tar.gz', publishedExt: 'app.tar.gz' },
-  { match: '.nsis.zip', publishedExt: 'nsis.zip' },
+  { match: '-setup.exe', publishedExt: '-setup.exe' },
   { match: '.AppImage.tar.gz', publishedExt: 'AppImage.tar.gz' },
 ];
 
@@ -279,10 +289,17 @@ function main() {
     // bundler's name has a space ("SlideStage Lite.app.tar.gz") which
     // can mangle on some HTTP clients, so we rename to the same
     // hyphenated scheme we already use for the DMG. The extension is
-    // chosen per platform family (app.tar.gz on macOS, nsis.zip on
+    // chosen per platform family (app.tar.gz on macOS, -setup.exe on
     // Windows, AppImage.tar.gz on Linux) so the URL in latest.json
     // points to the right Tauri-recognised archive type.
-    const publishedName = `SlideStageLite-${version}-${suffix}.${publishedExt}`;
+    //
+    // Windows is special: `-setup.exe` IS the installer (no separate
+    // .nsis.zip wrapper in Tauri 2.x), so we glue it on without a dot
+    // to keep the file looking like a normal installer download. Other
+    // extensions get the conventional `.<ext>` join.
+    const publishedName = publishedExt.startsWith('-')
+      ? `SlideStageLite-${version}-${suffix}${publishedExt}`
+      : `SlideStageLite-${version}-${suffix}.${publishedExt}`;
     const publishedPath = resolve(DIST_DESKTOP, publishedName);
     copyFileSync(archivePath, publishedPath);
     copyFileSync(sigPath, `${publishedPath}.sig`);
