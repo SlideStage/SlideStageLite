@@ -212,20 +212,25 @@ if (hasApiKeyPath && !existsSync(process.env.APPLE_API_KEY_PATH)) {
   );
 }
 
-// TAURI_SIGNING_PRIVATE_KEY accepts either a file path or the raw key
-// content. If it looks like a path (no embedded "untrusted" marker),
-// verify the file exists so we don't waste a 15-minute build only to
-// fail on the final sign step.
+// TAURI_SIGNING_PRIVATE_KEY accepts either a file path (local dev) or
+// the raw key contents (CI). The keyfile that `tauri signer generate`
+// emits is a base64-encoded blob whose plaintext starts with
+// "untrusted comment:", so the base64 form starts with the magic
+// "dW50cnVzdGVkIGNvbW1lbnQ6…". Recognize either signature as "this is
+// key contents, not a path" before falling through to the path check.
+const macUpdaterKeyValue = process.env.TAURI_SIGNING_PRIVATE_KEY ?? '';
+const macLooksLikeKeyContent =
+  macUpdaterKeyValue.includes('untrusted comment') ||
+  macUpdaterKeyValue.startsWith('dW50cnVzdGVkIGNvbW1lbnQ6');
 if (
   !SKIP_UPDATER &&
   hasUpdaterKey &&
-  !process.env.TAURI_SIGNING_PRIVATE_KEY.includes('untrusted comment')
+  !macLooksLikeKeyContent &&
+  !existsSync(macUpdaterKeyValue)
 ) {
-  if (!existsSync(process.env.TAURI_SIGNING_PRIVATE_KEY)) {
-    die(
-      `TAURI_SIGNING_PRIVATE_KEY="${process.env.TAURI_SIGNING_PRIVATE_KEY}" looks like a path but no file exists there. Run \`pnpm updater:keygen\` first.`,
-    );
-  }
+  die(
+    `TAURI_SIGNING_PRIVATE_KEY="${macUpdaterKeyValue.slice(0, 40)}…" looks like a path but no file exists there. Run \`pnpm updater:keygen\` first.`,
+  );
 }
 
 if (mode === 'full') {

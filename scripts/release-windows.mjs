@@ -185,16 +185,28 @@ step('Validating environment');
 const hasUpdaterKey = checkEnv('TAURI_SIGNING_PRIVATE_KEY');
 const hasUpdaterKeyPassword = checkEnv('TAURI_SIGNING_PRIVATE_KEY_PASSWORD');
 
-// Updater key validation: if it looks like a path (no "untrusted comment"
-// marker) but the file doesn't exist, fail fast.
+// Updater key validation: TAURI_SIGNING_PRIVATE_KEY may be either
+//   (a) a filesystem path to the minisign keyfile (local dev), or
+//   (b) the keyfile contents themselves (CI / GHA secrets).
+// The keyfile that `tauri signer generate` emits is a base64-encoded
+// blob whose plaintext starts with "untrusted comment:" — so the
+// base64 form starts with "dW50cnVzdGVkIGNvbW1lbnQ6". We treat either
+// of those signatures (literal plaintext or its base64 envelope) as
+// "this is key contents, not a path". If neither matches AND the
+// value isn't an existing file, fail fast rather than burn a
+// 20-minute build on a sign step that has no chance of succeeding.
+const updaterKeyValue = process.env.TAURI_SIGNING_PRIVATE_KEY ?? '';
+const looksLikeKeyContent =
+  updaterKeyValue.includes('untrusted comment') ||
+  updaterKeyValue.startsWith('dW50cnVzdGVkIGNvbW1lbnQ6');
 if (
   !SKIP_UPDATER &&
   hasUpdaterKey &&
-  !process.env.TAURI_SIGNING_PRIVATE_KEY.includes('untrusted comment') &&
-  !existsSync(process.env.TAURI_SIGNING_PRIVATE_KEY)
+  !looksLikeKeyContent &&
+  !existsSync(updaterKeyValue)
 ) {
   die(
-    `TAURI_SIGNING_PRIVATE_KEY="${process.env.TAURI_SIGNING_PRIVATE_KEY}" looks like a path but no file exists there. On CI, pass the raw key contents as the secret value instead.`,
+    `TAURI_SIGNING_PRIVATE_KEY="${updaterKeyValue.slice(0, 40)}…" looks like a path but no file exists there. On CI, pass the raw base64 key contents (the full file, including the "dW50cnVzdGVkIGNvbW1lbnQ6…" header) as the secret value.`,
   );
 }
 
