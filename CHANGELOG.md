@@ -147,7 +147,7 @@ entry point.
   --clobber`.
 - `scripts/build-update-manifest.mjs`: new `--merge-existing` flag,
   Windows + Linux Rust triple → platform-key mappings, hyphenated
-  artifact rename (`SlideStageLite-<v>-Windows-x64.nsis.zip`).
+  artifact rename (`SlideStageLite-<v>-Windows-x64-setup.exe`).
 - `scripts/desktop-smoke.mjs`: new Windows code path using `tasklist`
   / `taskkill`, with a 60 MB binary size cap (Tauri + WebView2 host is
   larger than the 25 MB macOS cap).
@@ -164,6 +164,35 @@ entry point.
   guidance to the "Desktop App" section.
 - `.env.example` — documented the shared `TAURI_SIGNING_PRIVATE_KEY`
   contract for Windows GHA secrets.
+
+### Release pipeline hardening (during first publish)
+
+Five latent bugs surfaced while shipping the first cross-platform
+release. They are fully written up in `.memory/desktop-tauri.md`
+under "Release Retrospective — v0.2.1"; the short version:
+
+- `936a0ff` — `latest.json` cross-platform merge: mac dual-arch was
+  overwriting its own block; the Windows GHA runner was overwriting
+  the mac block. macOS now passes `--merge-existing`; Windows seeds
+  `dist-desktop/latest.json` from the release before merging.
+- `e69ee83` — `release-windows.yml` Node `20` → `22` (pnpm 11
+  requires `node:sqlite` from Node 22.5).
+- `0bb7cee` — `release-*.mjs` key validation recognizes the base64
+  envelope (`dW50cnVzdGVkIGNvbW1lbnQ6…`) so GHA secrets containing
+  raw keyfile contents aren't mis-classified as missing paths.
+- `41986fc` — `RunEvent::Opened` cfg-gated to macOS (the variant
+  doesn't exist in Tauri's enum on Windows/Linux; the closure was
+  rejecting the entire crate at compile time).
+- `0af4e96` — adopt Tauri 2.x Windows updater format: bundler now
+  ships `-setup.exe` + `-setup.exe.sig` (the `.nsis.zip` wrapper from
+  1.x is gone). Both release-windows.mjs and build-update-manifest.mjs
+  updated to match.
+
+Known follow-up for v0.2.2: extend the upload regex in
+`release-windows.mjs` to include `*.exe.sig` (currently the signature
+is only inline-embedded in `latest.json`, not uploaded as a separate
+asset). The updater works correctly without it; manual `minisign -V`
+verification of the installer does not.
 
 ---
 
