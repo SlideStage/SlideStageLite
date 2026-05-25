@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ChangeEvent } from 'react';
 import type { ManifestSlide } from '@slidestage/core/deck/types';
 import { useUiTranslator } from '../i18n/translator';
+import { MarkdownView } from '../markdown/MarkdownView';
 
 export interface NotesPanelProps {
   slide: ManifestSlide;
@@ -90,8 +91,14 @@ export function NotesPanel({
           spellCheck={false}
           placeholder={t('viewer.notes.placeholder')}
         />
+      ) : notes.trim() !== '' ? (
+        <MarkdownView
+          source={notes}
+          className="presenter-notes-body"
+          testId="speaker-notes-body"
+        />
       ) : (
-        <pre>{notes || t('viewer.notes.empty')}</pre>
+        <p className="presenter-notes-empty muted">{t('viewer.notes.empty')}</p>
       )}
     </div>
   );

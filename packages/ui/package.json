@@ -9,6 +9,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./i18n/translator": "./src/i18n/translator.tsx",
+    "./markdown/renderMarkdown": "./src/markdown/renderMarkdown.ts",
+    "./markdown/MarkdownView": "./src/markdown/MarkdownView.tsx",
     "./viewer/AudienceView": "./src/viewer/AudienceView.tsx",
     "./viewer/DeckStage": "./src/viewer/DeckStage.tsx",
     "./viewer/DeckViewer": "./src/viewer/DeckViewer.tsx",
@@ -79,6 +81,16 @@
         "types": "./dist/i18n/translator.d.ts",
         "import": "./dist/i18n/translator.js",
         "default": "./dist/i18n/translator.js"
+      },
+      "./markdown/renderMarkdown": {
+        "types": "./dist/markdown/renderMarkdown.d.ts",
+        "import": "./dist/markdown/renderMarkdown.js",
+        "default": "./dist/markdown/renderMarkdown.js"
+      },
+      "./markdown/MarkdownView": {
+        "types": "./dist/markdown/MarkdownView.d.ts",
+        "import": "./dist/markdown/MarkdownView.js",
+        "default": "./dist/markdown/MarkdownView.js"
       },
       "./viewer/AudienceView": {
         "types": "./dist/viewer/AudienceView.d.ts",

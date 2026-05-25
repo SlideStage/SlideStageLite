@@ -1639,7 +1639,13 @@ code {
   margin-left: auto;
 }
 
-.presenter-notes pre {
+/*
+ * Legacy `<pre>{notes}</pre>` styling kept for fallback paths (and host
+ * apps that may still inline plaintext notes). MarkdownView renders
+ * code blocks inside `.markdown-body pre`, which is scoped above so it
+ * is not affected by this rule.
+ */
+.presenter-notes > pre {
   margin: 0;
   color: var(--ink);
   font-family: inherit;
@@ -1667,6 +1673,154 @@ code {
 .presenter-notes-editor:focus-visible {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+/* ─── Markdown body (speaker notes) ───────────────────────────────────── */
+
+/*
+ * Shared styling for any host that renders <MarkdownView />. We keep
+ * the rules scoped to `.markdown-body` so they never leak into deck
+ * iframes or unrelated panels. Hosts compose with their own class via
+ * the `className` prop (e.g. `markdown-body presenter-notes-body`).
+ */
+.markdown-body {
+  color: var(--ink);
+  line-height: 1.6;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.markdown-body > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body p {
+  margin: 0 0 0.6em;
+  white-space: normal;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin: 0.9em 0 0.4em;
+  color: var(--ink);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.markdown-body h1 {
+  font-size: 1.25em;
+}
+.markdown-body h2 {
+  font-size: 1.15em;
+}
+.markdown-body h3 {
+  font-size: 1.05em;
+}
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  font-size: 1em;
+}
+
+.markdown-body strong {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.markdown-body em {
+  font-style: italic;
+}
+
+.markdown-body del {
+  opacity: 0.7;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0.2em 0 0.6em;
+  padding-left: 1.4em;
+}
+
+.markdown-body li {
+  margin: 0.15em 0;
+}
+
+.markdown-body li > ul,
+.markdown-body li > ol {
+  margin: 0.15em 0 0.25em;
+}
+
+.markdown-body blockquote {
+  margin: 0.4em 0;
+  padding: 0.2em 0.9em;
+  border-left: 3px solid var(--border-strong);
+  color: var(--ink-2, var(--ink));
+  opacity: 0.85;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.markdown-body blockquote > :first-child {
+  margin-top: 0;
+}
+.markdown-body blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body code {
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.14);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+}
+
+.markdown-body pre {
+  margin: 0.4em 0 0.6em;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  white-space: pre;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.markdown-body pre code {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  font-size: inherit;
+}
+
+.markdown-body a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown-body a:hover {
+  color: var(--primary-strong);
+}
+
+.markdown-body hr {
+  margin: 0.8em 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.presenter-notes-empty {
+  margin: 0;
+  white-space: pre-wrap;
 }
 
 /* Resizers shared between deck viewer and presenter view */
@@ -1846,11 +2000,20 @@ code {
   box-shadow: var(--shadow-soft);
 }
 
-.notes-card p {
+/*
+ * Direct-child paragraph styling used by the empty-state fallback in
+ * <SpeakerNotesPanel />. MarkdownView wraps its output in
+ * `.markdown-body`, which carries its own paragraph styling.
+ */
+.notes-card > p {
   margin: 0;
   color: var(--ink);
   line-height: 1.6;
   white-space: pre-wrap;
+}
+
+.notes-card .markdown-body {
+  padding: 0;
 }
 
 /* ─── Audience view ───────────────────────────────────────────────────── */

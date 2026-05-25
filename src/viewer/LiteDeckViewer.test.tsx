@@ -177,8 +177,11 @@ describe('<DeckViewer /> lite-preset wrapper', () => {
       </I18nProvider>,
     );
 
-    // The notes panel renders inside the presenter mode body.
+    // The notes panel renders inside the presenter mode body — speaker
+    // notes are now markdown-rendered into a `.markdown-body` block.
     const notes = getByTestId('speaker-notes');
-    expect(notes.querySelector('pre')?.textContent).toBe('hand-edited');
+    const body = notes.querySelector('[data-testid="speaker-notes-body"]');
+    expect(body).not.toBeNull();
+    expect(body?.textContent).toContain('hand-edited');
   });
 });

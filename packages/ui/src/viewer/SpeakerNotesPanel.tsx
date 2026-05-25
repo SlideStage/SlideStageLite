@@ -1,5 +1,6 @@
 import type { ManifestSlide } from '@slidestage/core/deck/types';
 import { useUiTranslator } from '../i18n/translator';
+import { MarkdownView } from '../markdown/MarkdownView';
 
 interface SpeakerNotesPanelProps {
   slide: ManifestSlide;
@@ -8,6 +9,8 @@ interface SpeakerNotesPanelProps {
 
 export function SpeakerNotesPanel({ slide, onClose }: SpeakerNotesPanelProps) {
   const { t } = useUiTranslator();
+  const notes = slide.notes ?? '';
+  const hasNotes = notes.trim() !== '';
   return (
     <aside className="notes-card" aria-label={t('speakerNotes.aria')}>
       <div className="panel-heading">
@@ -16,7 +19,11 @@ export function SpeakerNotesPanel({ slide, onClose }: SpeakerNotesPanelProps) {
           {t('speakerNotes.close')}
         </button>
       </div>
-      <p>{slide.notes || t('speakerNotes.empty')}</p>
+      {hasNotes ? (
+        <MarkdownView source={notes} className="notes-card-body" />
+      ) : (
+        <p>{t('speakerNotes.empty')}</p>
+      )}
     </aside>
   );
 }

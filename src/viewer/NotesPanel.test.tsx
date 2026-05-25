@@ -26,7 +26,7 @@ function makeSlide(overrides: Partial<ManifestSlide> = {}): ManifestSlide {
 }
 
 describe('<NotesPanel />', () => {
-  it('renders the pre body when not in editing mode', () => {
+  it('renders the markdown body when not in editing mode', () => {
     render(
       <NotesPanel
         slide={makeSlide()}
@@ -39,9 +39,27 @@ describe('<NotesPanel />', () => {
       />,
     );
     expect(screen.getByTestId('speaker-notes')).toBeTruthy();
-    // Body is a <pre> tag with the notes text.
-    expect(document.querySelector('pre')?.textContent).toBe('Hello');
+    const body = screen.getByTestId('speaker-notes-body');
+    expect(body.className).toContain('markdown-body');
+    expect(body.querySelector('p')?.textContent).toBe('Hello');
     expect(screen.queryByTestId('speaker-notes-editor')).toBeNull();
+  });
+
+  it('renders markdown structure (heading + list) in read-only mode', () => {
+    render(
+      <NotesPanel
+        slide={makeSlide()}
+        notes={'# Outline\n\n- one\n- two'}
+        hasOverride={false}
+        editing={false}
+        onToggleEditing={vi.fn()}
+        onResetOverride={vi.fn()}
+        onChange={vi.fn()}
+      />,
+    );
+    const body = screen.getByTestId('speaker-notes-body');
+    expect(body.querySelector('h1')?.textContent).toBe('Outline');
+    expect(body.querySelectorAll('li').length).toBe(2);
   });
 
   it('falls back to the empty-state translation when notes is blank', () => {
@@ -56,7 +74,24 @@ describe('<NotesPanel />', () => {
         onChange={vi.fn()}
       />,
     );
-    expect(document.querySelector('pre')?.textContent).toBe('viewer.notes.empty');
+    expect(screen.queryByTestId('speaker-notes-body')).toBeNull();
+    expect(screen.getByText('viewer.notes.empty')).toBeTruthy();
+  });
+
+  it('does not inject raw script tags from notes', () => {
+    const { container } = render(
+      <NotesPanel
+        slide={makeSlide()}
+        notes="<script>alert(1)</script>"
+        hasOverride={false}
+        editing={false}
+        onToggleEditing={vi.fn()}
+        onResetOverride={vi.fn()}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(container.querySelector('script')).toBeNull();
+    expect(container.textContent).toContain('alert(1)');
   });
 
   it('shows the reset button only when an override exists', () => {

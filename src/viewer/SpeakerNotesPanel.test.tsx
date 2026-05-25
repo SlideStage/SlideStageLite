@@ -2,10 +2,11 @@
  * Render contract for the package-owned `<SpeakerNotesPanel />`.
  *
  * Moved to `@slidestage/ui/viewer/SpeakerNotesPanel` in Phase 3.5. The
- * component is intentionally trivial: it shows the active slide's
- * `notes`, falls back to a localised "no notes" string when notes are
- * empty, and exposes a close button. These tests pin those three cases
- * plus the i18n provider override path.
+ * component shows the active slide's `notes` rendered through
+ * `<MarkdownView />`, falls back to a localised "no notes" string when
+ * notes are empty, and exposes a close button. These tests pin those
+ * three cases plus the i18n provider override path, and additionally
+ * lock in the markdown-rendering + sanitization contract.
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -33,23 +34,49 @@ function makeSlide(overrides: Partial<ManifestSlide>): ManifestSlide {
 }
 
 describe('<SpeakerNotesPanel />', () => {
-  it('renders the slide notes when present (identity fallback chrome)', () => {
+  it('renders the slide notes when present (plain paragraph stays a paragraph)', () => {
     const slide = makeSlide({ notes: 'Open with the laser pointer demo.' });
-    render(<SpeakerNotesPanel slide={slide} onClose={vi.fn()} />);
+    const { container } = render(<SpeakerNotesPanel slide={slide} onClose={vi.fn()} />);
     expect(screen.getByText('Open with the laser pointer demo.')).toBeTruthy();
+    const body = container.querySelector('.markdown-body');
+    expect(body).not.toBeNull();
+    expect(body?.querySelector('p')?.textContent).toBe('Open with the laser pointer demo.');
     expect(screen.getByRole('heading', { level: 3 }).textContent).toBe('speakerNotes.title');
+  });
+
+  it('renders markdown structure in the notes body', () => {
+    const slide = makeSlide({
+      notes: '# Intro\n\n- **Beat 1**\n- *Beat 2*\n- `code`',
+    });
+    const { container } = render(<SpeakerNotesPanel slide={slide} onClose={vi.fn()} />);
+    const body = container.querySelector('.markdown-body');
+    expect(body).not.toBeNull();
+    expect(body?.querySelector('h1')?.textContent).toBe('Intro');
+    expect(body?.querySelectorAll('li').length).toBe(3);
+    expect(body?.querySelector('strong')?.textContent).toBe('Beat 1');
+    expect(body?.querySelector('em')?.textContent).toBe('Beat 2');
+    expect(body?.querySelector('code')?.textContent).toBe('code');
+  });
+
+  it('does not inject raw script tags found in the notes', () => {
+    const slide = makeSlide({ notes: '<script>boom()</script>' });
+    const { container } = render(<SpeakerNotesPanel slide={slide} onClose={vi.fn()} />);
+    expect(container.querySelector('script')).toBeNull();
+    expect(container.textContent).toContain('boom()');
   });
 
   it('falls back to the empty-notes key when notes are null', () => {
     const slide = makeSlide({ notes: null });
-    render(<SpeakerNotesPanel slide={slide} onClose={vi.fn()} />);
+    const { container } = render(<SpeakerNotesPanel slide={slide} onClose={vi.fn()} />);
     expect(screen.getByText('speakerNotes.empty')).toBeTruthy();
+    expect(container.querySelector('.markdown-body')).toBeNull();
   });
 
   it('falls back to the empty-notes key when notes are an empty string', () => {
     const slide = makeSlide({ notes: '' });
-    render(<SpeakerNotesPanel slide={slide} onClose={vi.fn()} />);
+    const { container } = render(<SpeakerNotesPanel slide={slide} onClose={vi.fn()} />);
     expect(screen.getByText('speakerNotes.empty')).toBeTruthy();
+    expect(container.querySelector('.markdown-body')).toBeNull();
   });
 
   it('fires onClose when the close button is clicked', () => {

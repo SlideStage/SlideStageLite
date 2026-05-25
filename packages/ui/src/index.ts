@@ -1,4 +1,6 @@
 export * from './i18n/translator';
+export * from './markdown/renderMarkdown';
+export * from './markdown/MarkdownView';
 export * from './viewer/AudienceView';
 export * from './viewer/DeckStage';
 export * from './viewer/DeckViewer';

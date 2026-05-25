@@ -4,6 +4,8 @@ export default defineConfig({
   entry: [
     'src/index.ts',
     'src/i18n/translator.tsx',
+    'src/markdown/renderMarkdown.ts',
+    'src/markdown/MarkdownView.tsx',
     'src/viewer/AudienceView.tsx',
     'src/viewer/DeckStage.tsx',
     'src/viewer/DeckViewer.tsx',
