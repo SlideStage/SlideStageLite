@@ -3,7 +3,9 @@ use std::sync::Mutex;
 
 use serde::Serialize;
 use tauri::menu::MenuItemKind;
-use tauri::{AppHandle, Emitter, Manager, RunEvent};
+use tauri::{AppHandle, Emitter, Manager};
+#[cfg(target_os = "macos")]
+use tauri::RunEvent;
 
 /// Queue of `.stage` paths captured BEFORE the front-end is ready to
 /// listen. We drain this from JS via `opened_urls` on boot, and we keep
@@ -496,12 +498,18 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building SlideStage Lite Desktop");
 
-    app.run(|app, event| {
-        if let RunEvent::Opened { urls } = event {
+    app.run(|_app, _event| {
+        // RunEvent::Opened is a macOS-only variant — Tauri's enum drops
+        // the variant on Windows/Linux entirely, so a plain pattern match
+        // fails to compile. On Windows the `.stage` open-path is argv
+        // (handled in `setup()` via ingest_argv) plus the runtime
+        // deep-link fallback, so this closure has nothing to do here.
+        #[cfg(target_os = "macos")]
+        if let RunEvent::Opened { urls } = _event {
             for url in urls {
                 if let Ok(path) = url.to_file_path() {
                     if let Some(s) = path.to_str() {
-                        handle_opened_path(app, s.to_string());
+                        handle_opened_path(_app, s.to_string());
                     }
                 }
             }
