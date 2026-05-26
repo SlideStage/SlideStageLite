@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://slidestage.dev"><img alt="官网" src="https://img.shields.io/badge/%E5%AE%98%E7%BD%91-slidestage.dev-06B6D4?style=flat-square"></a>
-  <!-- <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-111827?style=flat-square"></a> -->
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Proprietary-DC2626?style=flat-square"></a>
   <a href="README.md"><img alt="English" src="https://img.shields.io/badge/lang-English-F59E0B?style=flat-square"></a>
 </p>
 
@@ -306,3 +306,18 @@ pnpm preview      # 启动本地服务器预览 dist/
 - **vitest 4** + **@testing-library/react 16** + **jsdom 29** 做单元测试
 - **playwright 1.60** 做 e2e
 - **pnpm 10.28+** workspace 友好的包管理器
+
+---
+
+## 许可证
+
+SlideStage Lite 是**专有软件**，完整条款见 [`LICENSE`](LICENSE)。简要说明：
+
+- 允许：在自有项目中私有引用已发布的 `@slidestage/*` npm 包、运行二
+  进制制品做个人/内部使用。
+- 不允许（未经书面授权）：复制、修改、再分发、转包、白标商用，或
+  使用源码训练机器学习模型；不得使用 `public/brand/` 下的商标、Logo
+  与品牌资产。
+
+如需商业授权 / OEM / 白标合作，请邮件至
+[licensing@slidestage.dev](mailto:licensing@slidestage.dev)。

@@ -1,0 +1,160 @@
+name: CI
+
+# Default CI gate for SlideStage Lite (monorepo: root app + packages/{core,ui,lite-preset}).
+#
+# Triggers:
+#   - Every PR targeting main (so reviewers see green/red before merging).
+#   - Every push to main (so a broken merge is loud, not silent).
+#   - workflow_dispatch (manual replay button on the Actions tab).
+#
+# Two jobs run in parallel:
+#   - check  → boundary checker, typecheck, vitest, packages + root build.
+#              Has to pass before a PR can be merged.
+#   - e2e    → Playwright (Chromium) against the real Vite dev server,
+#              covering presenter tools, converter round-trip, i18n, footer.
+#              Slower (~5–10 min) so it runs concurrently with `check`.
+#
+# Convention pinned by `release-windows.yml`:
+#   - pnpm 11.1.3 (matches `package.json > packageManager`)
+#   - Node 22 (pnpm 11.x requires Node >= 22.13, see release-windows.yml note)
+#   - `actions/setup-node@v4` with `cache: pnpm` for the install layer
+#   - `pnpm install --frozen-lockfile` so the lockfile is authoritative
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  # Cancel in-flight runs from the same ref so a force-push doesn't pile up
+  # queued runs against the same PR / branch. main pushes can also coalesce.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Boundaries + typecheck + unit + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate deterministic .stage fixtures
+        # The pre{dev,build,test} hooks call this too, but running it
+        # explicitly here lets us cache the next steps cleanly and surface
+        # a fixture-generation failure as its own log block.
+        run: pnpm fixtures
+
+      - name: Check Lite package boundaries
+        # Enforces `.cursor/rules/project-boundaries.mdc`:
+        # core stays headless, ui doesn't reach into lite-preset, no relative
+        # imports across packages, no file:../SlideStageLite refs.
+        run: pnpm check:boundaries
+
+      - name: Typecheck (tsc -b, all references)
+        # Runs against composite project graph so packages typecheck against
+        # each other through workspace symlinks (no pre-build needed for tsc).
+        run: pnpm typecheck
+
+      - name: Build packages (tsup)
+        # Build the three workspace packages first so the root app's vite
+        # build resolves their published `exports` map (not just src/).
+        run: pnpm -r --filter "./packages/*" build
+
+      - name: Vitest (unit + jsdom)
+        # 194+ unit tests across root + packages, including the design-token
+        # twin contract and Footer beian env matrix.
+        run: pnpm test:unit
+
+      - name: Build root app (tsc -b + vite build)
+        # Final gate: produces dist/ that wrangler / cloudflare workers can
+        # serve. Fails on any tsc reference error or vite bundle error.
+        run: pnpm build
+
+      - name: Upload dist/ as artifact (main only)
+        # Keeps the latest main build retrievable for manual smoke without
+        # needing to rebuild locally. Skipped on PRs to keep storage cheap.
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lite-web-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  e2e:
+    name: Playwright e2e (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser (Chromium only)
+        # Pinned in `package.json > scripts.test:e2e:install`. Chromium-only
+        # because Lite e2e currently asserts Chromium-rendered presenter
+        # tools; cross-browser drift is tracked separately.
+        run: pnpm test:e2e:install
+
+      - name: Generate fixtures (Playwright config also runs pretest:e2e)
+        run: pnpm fixtures
+
+      - name: Build packages (tsup)
+        # vite dev server reads the published `exports` from each package's
+        # dist/, so the packages must be built before Playwright can drive
+        # the real app.
+        run: pnpm -r --filter "./packages/*" build
+
+      - name: Run Playwright (Chromium)
+        # Pinned to an empty VITE_BEIAN_* baseline so local .env's don't
+        # pollute the run; playwright config spins up the Vite dev server.
+        env:
+          VITE_BEIAN_ICP: ""
+          VITE_BEIAN_GONGAN: ""
+          VITE_BEIAN_GONGAN_URL: ""
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14

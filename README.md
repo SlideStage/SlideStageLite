@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://slidestage.dev"><img alt="Website" src="https://img.shields.io/badge/website-slidestage.dev-06B6D4?style=flat-square"></a>
-  <!--<a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-111827?style=flat-square"></a> -->
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Proprietary-DC2626?style=flat-square"></a>
   <a href="README_cn.md"><img alt="简体中文" src="https://img.shields.io/badge/lang-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-F59E0B?style=flat-square"></a>
 </p>
 
@@ -416,3 +416,21 @@ For Chinese mainland deploys, follow
 [`docs/FOOTER_BEIAN.md`](docs/FOOTER_BEIAN.md) when configuring beian
 filing numbers — incorrect quoting will silently truncate your audit
 URL.
+
+---
+
+## License
+
+SlideStage Lite is **proprietary** software — see [`LICENSE`](LICENSE) for
+the full text. In short:
+
+- Running the published binaries and consuming the published
+  `@slidestage/*` npm packages in your own private project is permitted.
+- Copying, modifying, sublicensing, redistributing, or training ML
+  models on the source code requires a separately negotiated written
+  agreement.
+- The SlideStage trademarks, logos, and brand assets under
+  `public/brand/` are **not** licensed for any third-party use.
+
+For commercial licensing, OEM, or white-label inquiries, contact
+[licensing@slidestage.dev](mailto:licensing@slidestage.dev).

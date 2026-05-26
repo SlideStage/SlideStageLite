@@ -1,0 +1,126 @@
+name: Release
+
+# Automated release pipeline for `@slidestage/{core,ui,lite-preset}`.
+#
+# How it works (changesets/action v1):
+#
+#   1. Author writes a changeset (`pnpm changeset` → an MD file under
+#      `.changeset/`) and merges it to `main` as part of a feature PR.
+#   2. This workflow runs on every `push` to `main`.
+#   3. If there are *unconsumed* changesets, the action opens (or
+#      force-updates) a "Version Packages" PR that runs
+#      `pnpm version-packages` (= `changeset version`) → bumps versions,
+#      regenerates each package's `CHANGELOG.md`, removes the consumed
+#      `.changeset/*.md` files.
+#   4. When that PR is merged back to `main`, this workflow runs again,
+#      finds zero unconsumed changesets but a fresh version bump in
+#      `package.json`, and runs `pnpm release` (= `pnpm -r build &&
+#      changeset publish`) which publishes the three packages to npm
+#      with `access: public` (pinned in `.changeset/config.json`).
+#
+# `fixed: [["@slidestage/core","@slidestage/ui","@slidestage/lite-preset"]]`
+# in `.changeset/config.json` keeps the three packages on the same version,
+# so they release as a set.
+#
+# Required repository secret:
+#   NPM_TOKEN
+#     A *Granular Access Token* of type "Automation" (not "Publish") issued
+#     for the `@slidestage` org on npmjs.com. Automation tokens bypass the
+#     2FA prompt that interactive `npm publish` would otherwise hit — that's
+#     the *only* reason this workflow can run unattended.
+#
+# GITHUB_TOKEN is provided automatically; permissions block below grants
+# the minimum scopes the action needs to open the Version PR.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  # Serialize releases — a second `main` push must wait for the in-flight
+  # release/publish to finish, otherwise two parallel `changeset publish`
+  # would race for the same version number and leave a half-published set.
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write # version PR commits + tags
+  pull-requests: write # open / update the Version Packages PR
+  id-token: write # for npm provenance (opt-in once supported in our pipeline)
+
+jobs:
+  release:
+    name: Version + publish (changesets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # changesets/action needs full history to compute the diff and
+          # generate accurate CHANGELOG entries.
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          # `actions/setup-node` writes ~/.npmrc with the correct
+          # registry so `pnpm publish` / `changeset publish` can auth
+          # off NODE_AUTH_TOKEN.
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run boundary checker (defense in depth)
+        # Releases must never ship a build that fails boundaries — we already
+        # ran it on the PR, but a forced merge / direct commit to main could
+        # bypass that. Cheap to run again.
+        run: pnpm check:boundaries
+
+      - name: Create Release Pull Request or Publish to npm
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          # When there ARE unconsumed changesets: bump versions + regen
+          # CHANGELOGs in a PR titled "Version Packages".
+          version: pnpm version-packages
+          # When the Version Packages PR has just been merged (= no
+          # changesets left, version already bumped): publish.
+          # `pnpm release` = `pnpm -r build && changeset publish`.
+          publish: pnpm release
+          commit: "chore(release): version packages"
+          title: "chore(release): version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Authenticates `changeset publish` against npmjs. MUST be an
+          # npm Automation token (see header for why).
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Also export under the name `actions/setup-node` set up so
+          # `npm whoami` and `pnpm publish` find it through ~/.npmrc.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Summarize outcome
+        # Surface what just happened on the GitHub Actions run page so a
+        # human glancing at the build doesn't need to read the action's
+        # internal logs.
+        run: |
+          if [ "${{ steps.changesets.outputs.published }}" = "true" ]; then
+            echo "Published packages:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            echo '${{ steps.changesets.outputs.publishedPackages }}' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          elif [ -n "${{ steps.changesets.outputs.pullRequestNumber }}" ]; then
+            echo "Opened/updated Version Packages PR #${{ steps.changesets.outputs.pullRequestNumber }}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No changesets to consume; no version PR opened, nothing published." >> "$GITHUB_STEP_SUMMARY"
+          fi

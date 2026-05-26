@@ -1,0 +1,46 @@
+SlideStage Lite — Proprietary License
+======================================
+
+Copyright (c) 2026 hchengliu. All rights reserved.
+
+This software, the contents of this repository, the published npm packages
+(`@slidestage/core`, `@slidestage/ui`, `@slidestage/lite-preset`), and any
+derivative builds (Tauri desktop binaries, web bundles, brand assets) are
+the proprietary and confidential property of the copyright holder.
+
+NO LICENSE IS GRANTED unless explicitly negotiated in writing.
+
+Without a separate signed license, you may NOT:
+
+  1. Copy, modify, merge, fork, sublicense, distribute, or publish
+     any portion of the source code or its derivatives.
+  2. Use the source code, in whole or in part, to train machine learning
+     models, datasets, or autocomplete tooling.
+  3. Reverse-engineer, decompile, or disassemble the published binaries
+     or npm artifacts beyond what local law mandates for interoperability.
+  4. Use the SlideStage trademarks, logos, brand marks, design tokens,
+     or visual identity (including the files under `public/brand/`) for
+     any commercial or promotional purpose.
+  5. Re-publish the npm packages under another name or distribute
+     repackaged forks via any registry (npm / jsr / private mirrors).
+
+PERMITTED, without further notice:
+
+  - Running the published binaries (web bundle, Tauri desktop builds)
+    locally for personal, internal, or evaluation use.
+  - Installing the published npm packages (`@slidestage/*`) into your
+    own private project and consuming their public APIs as documented.
+  - Reading the source code for security review or interoperability
+    research.
+
+For commercial licensing, OEM redistribution, white-label deployments,
+source-available agreements, or any usage outside the "Permitted" list
+above, contact: <licensing@slidestage.dev>.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+THE USE OR OTHER DEALINGS IN THE SOFTWARE.
