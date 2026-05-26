@@ -5,6 +5,8 @@ export type SniffKind =
   | 'inline-deck'
   | 'webcomponent-deck'
   | 'router-html'
+  | 'reveal'
+  | 'impress'
   | 'plain-html'
   | 'ambiguous'
   | 'empty';
@@ -57,6 +59,33 @@ function decode(bytes: Uint8Array): string {
 
 function detectWebComponent(html: string): boolean {
   return /<deck-stage\b/i.test(html);
+}
+
+function collectScriptSrcs(html: string): string[] {
+  const out: string[] = [];
+  const re = /<script\b[^>]*\bsrc\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    out.push((m[2] ?? m[3] ?? m[4] ?? '') as string);
+  }
+  return out;
+}
+
+function detectReveal(html: string, scripts: string[]): boolean {
+  // reveal.js root: <div class="reveal"><div class="slides">… both classes
+  // present at top-level signal the framework. Either marker on its own is
+  // insufficient because lots of unrelated pages also use a "reveal" class.
+  const hasRevealRoot =
+    /<div\b[^>]*\bclass\s*=\s*("[^"]*\breveal\b[^"]*"|'[^']*\breveal\b[^']*')/i.test(html) &&
+    /<div\b[^>]*\bclass\s*=\s*("[^"]*\bslides\b[^"]*"|'[^']*\bslides\b[^']*')/i.test(html);
+  const hasRevealScript = scripts.some((s) => /reveal(\.min)?\.js(?:[?#].*)?$/i.test(s));
+  return hasRevealRoot || hasRevealScript;
+}
+
+function detectImpress(html: string, scripts: string[]): boolean {
+  const hasImpressRoot = /<div\b[^>]*\bid\s*=\s*("impress"|'impress')/i.test(html);
+  const hasImpressScript = scripts.some((s) => /impress(\.min)?\.js(?:[?#].*)?$/i.test(s));
+  return hasImpressRoot || hasImpressScript;
 }
 
 function detectWebComponentSlides(html: string): { count: number; labels: string[] } {
@@ -213,6 +242,7 @@ export function sniffDeck(entries: Map<string, Uint8Array>): SniffResult {
   }
 
   const html = decode(rootBytes);
+  const scripts = collectScriptSrcs(html);
 
   if (detectWebComponent(html)) {
     const wc = detectWebComponentSlides(html);
@@ -237,6 +267,27 @@ export function sniffDeck(entries: Map<string, Uint8Array>): SniffResult {
       confidence: missing.length === 0 ? 0.95 : 0.6,
       rootHtml,
       hints: { candidateRoots: [rootHtml], routerManifest },
+    };
+  }
+
+  // reveal/impress are detected before inline-deck because their <section>
+  // markup can satisfy the inline-deck shape (.deck wrapper + runtime.js),
+  // but their authoring conventions deserve framework-aware splitting.
+  if (detectReveal(html, scripts)) {
+    return {
+      kind: 'reveal',
+      confidence: 0.9,
+      rootHtml,
+      hints: { candidateRoots: [rootHtml] },
+    };
+  }
+
+  if (detectImpress(html, scripts)) {
+    return {
+      kind: 'impress',
+      confidence: 0.9,
+      rootHtml,
+      hints: { candidateRoots: [rootHtml] },
     };
   }
 

@@ -1,0 +1,26 @@
+{
+  "schema": "slidestage@1.0",
+  "id": "single-file-html-deck",
+  "version": "1.0.0",
+  "title": "Single-file-html Architecture Fixture",
+  "subtitle": null,
+  "author": null,
+  "description": null,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "architecture": "single-file-html",
+  "dimensions": { "width": 1920, "height": 1080 },
+  "totalSlides": 1,
+  "slides": [
+    { "index": 1, "id": "root", "label": "Whole Deck", "file": "deck.html", "thumbnail": null, "notes": null }
+  ],
+  "compat": {
+    "requires": ["same-origin-storage"],
+    "notes": "Wrapped HTML deck preserves the source runtime; same-origin storage lets it use localStorage."
+  },
+  "provenance": {
+    "sourceKind": "reveal",
+    "conversionMode": "wrap",
+    "converter": { "name": "slidestage-pack-skill", "version": "0.2.0" }
+  }
+}

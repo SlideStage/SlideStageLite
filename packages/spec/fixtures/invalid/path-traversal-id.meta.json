@@ -1,0 +1,5 @@
+{
+  "description": "manifest.id must not contain '..' (path-traversal protection). The spec rejects this at the manifest level so persistence keys derived from id can never escape.",
+  "expectErrorIncludes": "id",
+  "rejectsAtSpec": true
+}

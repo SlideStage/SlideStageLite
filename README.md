@@ -67,8 +67,10 @@ capability list. Lite is a faithful runtime for that container that:
   before unlocking storage, BroadcastChannel, or `window.open`;
 - ships PowerPoint-grade presenter tools (speaker view, overview grid,
   laser, spotlight, persistent ink, second-screen audience window);
-- converts an `html-ppt-skill` / `huashu-design` deck or a plain HTML
-  file into a `.stage` package without leaving the tab;
+- converts a `reveal.js` / `impress.js` / `html-ppt-skill` /
+  `huashu-design` deck or a plain HTML file into a `.stage` package
+  without leaving the tab (reveal/impress default to `wrap` to preserve
+  the full original runtime; explicit `--mode split` available);
 - speaks both English and 简体中文 out of the box.
 
 ---

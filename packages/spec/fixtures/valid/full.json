@@ -1,0 +1,106 @@
+{
+  "schema": "slidestage@1.0",
+  "id": "full-deck-fixture",
+  "version": "1.2.0",
+  "title": "Full Manifest Fixture",
+  "subtitle": "Every optional field populated",
+  "author": "SlideStage Spec",
+  "description": "A reference manifest that exercises every optional field the spec accepts. Used by spec/core/pack regression tests.",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-15T12:30:00.000Z",
+  "architecture": "multi-file",
+  "dimensions": { "width": 1920, "height": 1080 },
+  "totalSlides": 2,
+  "slides": [
+    {
+      "index": 1,
+      "id": "cover",
+      "label": "Cover",
+      "file": "slides/01-cover.html",
+      "thumbnail": "thumbnails/01.png",
+      "notes": "Welcome the audience. Mention the agenda.",
+      "duration": 30,
+      "transition": "fade"
+    },
+    {
+      "index": 2,
+      "id": "agenda",
+      "label": "Agenda",
+      "file": "slides/02-agenda.html",
+      "thumbnail": "thumbnails/02.png",
+      "notes": "Walk through the four sections of today's talk.",
+      "duration": 45
+    }
+  ],
+  "fonts": [
+    { "family": "Inter", "files": ["fonts/Inter-Regular.woff2", "fonts/Inter-Bold.woff2"] }
+  ],
+  "tokens": {
+    "color.primary": "#0f172a",
+    "color.accent": "#2563eb",
+    "spacing.unit": 8
+  },
+  "assets": {
+    "totalSize": 524288,
+    "count": 3,
+    "files": [
+      { "path": "shared/tokens.css", "size": 1234, "type": "style" },
+      { "path": "assets/hero.png", "size": 256000, "type": "image" },
+      { "path": "fonts/Inter-Regular.woff2", "size": 267054, "type": "font" }
+    ]
+  },
+  "runtime": {
+    "presenterTools": "platform",
+    "fallbackEntry": "index.html",
+    "capabilities": ["keyboard-nav", "speaker-notes", "annotation-overlay"]
+  },
+  "platform": {
+    "minSchemaVersion": "1.0",
+    "compatibleArchitectures": ["multi-file"]
+  },
+  "provenance": {
+    "sourceKind": "reveal",
+    "conversionMode": "split",
+    "sourceEntry": "deck/index.html",
+    "converter": { "name": "slidestage-pack-skill", "version": "0.2.0" }
+  },
+  "compat": {
+    "requires": ["broadcast-channel", "same-origin-storage"],
+    "notes": "Slides share state across audience tabs via BroadcastChannel and persist user choices in localStorage."
+  },
+  "offline": {
+    "ready": true,
+    "mirroredAt": "2026-01-15T12:30:00.000Z",
+    "mirrorTool": { "name": "slidestage-mirror", "version": "0.1.0" },
+    "policy": {
+      "includeScripts": false,
+      "includeIframes": false,
+      "maxAssetBytes": 52428800,
+      "maxTotalBytes": 524288000,
+      "allowedHosts": null,
+      "blockedHosts": ["doubleclick.net", "googletagmanager.com"]
+    },
+    "mirroredAssets": [
+      {
+        "originalUrl": "https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMa1ZL7.woff2",
+        "path": "assets/_mirror/font/abc123def456.woff2",
+        "contentHash": "sha256-abc123def4567890abc123def4567890abc123def4567890abc123def456",
+        "contentType": "font/woff2",
+        "bytes": 18204,
+        "fetchedAt": "2026-01-15T12:29:50.000Z",
+        "referencedBy": [1, 2]
+      }
+    ],
+    "skippedUrls": [
+      {
+        "url": "https://analytics.example.com/track.js",
+        "reason": "blocked-by-policy",
+        "detail": "policy.includeScripts is false"
+      }
+    ]
+  },
+  "stats": {
+    "packedAt": "2026-01-15T12:30:00.000Z",
+    "packerVersion": "slidestage-pack-skill@0.2.0"
+  }
+}

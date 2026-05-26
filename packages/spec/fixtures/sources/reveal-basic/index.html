@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en" data-deck="reveal-basic">
+<head>
+  <meta charset="utf-8" />
+  <title>Reveal Basic</title>
+  <link rel="stylesheet" href="reveal.css" />
+</head>
+<body class="reveal-host">
+  <div class="reveal">
+    <div class="slides">
+      <section>
+        <div class="slide-inner">
+          <div class="card">
+            <h2>Hello</h2>
+            <p>First reveal slide with deeply nested <span>spans</span> and <div>divs</div>.</p>
+          </div>
+        </div>
+        <aside class="notes">Welcome the audience. Mention the three takeaways.</aside>
+      </section>
+      <section data-title="Second">
+        <div class="layout"><div class="col"><h3>Second</h3></div><div class="col"><p>Two cols</p></div></div>
+        <aside class="speaker-notes">Walk through the diagram left to right.</aside>
+      </section>
+      <section>
+        <section><h2>Vertical 1</h2><div class="card"><p>Stacked</p></div></section>
+        <section><h2>Vertical 2</h2><div class="card"><p>Below</p></div></section>
+      </section>
+    </div>
+  </div>
+  <script src="dist/reveal.js"></script>
+  <script>Reveal.initialize({});</script>
+</body>
+</html>

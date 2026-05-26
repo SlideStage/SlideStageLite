@@ -21,7 +21,9 @@ export default defineConfig({
     'src/converter/sniffer.ts',
     'src/converter/sources.ts',
     'src/converter/speakerNotes.ts',
+    'src/converter/splitImpress.ts',
     'src/converter/splitInlineDeck.ts',
+    'src/converter/splitReveal.ts',
     'src/converter/splitRouter.ts',
     'src/converter/splitWebComponent.ts',
     'src/converter/wrapSource.ts',
@@ -33,6 +35,6 @@ export default defineConfig({
   splitting: true,
   treeshake: true,
   target: 'es2022',
-  external: ['fflate', 'zod'],
+  external: ['fflate', 'zod', '@slidestage/spec'],
   outDir: 'dist',
 });

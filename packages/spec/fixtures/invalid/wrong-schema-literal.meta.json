@@ -1,0 +1,5 @@
+{
+  "description": "manifest.schema must equal the literal SCHEMA_LITERAL ('slidestage@1.0'); future schema versions fail the spec's Zod validator and the runtime should surface E_BAD_MANIFEST.",
+  "expectErrorIncludes": "schema",
+  "rejectsAtSpec": true
+}

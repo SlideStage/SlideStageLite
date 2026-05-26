@@ -1,0 +1,5 @@
+{
+  "description": "manifest.dimensions is required (positive width + positive height). Omitting it fails the Zod schema with an 'invalid_type' / 'expected object' error on the dimensions path.",
+  "expectErrorIncludes": "dimensions",
+  "rejectsAtSpec": true
+}

@@ -62,8 +62,9 @@ Lite 是这套容器的忠实运行时：
   请求**按包授权**（存储、BroadcastChannel、`window.open`）；
 - 自带 PowerPoint 级演讲者工具（演讲者视图、概览栅格、激光笔、聚光灯、
   持久墨迹、第二屏观众窗口）；
-- 内置实时 HTML → `.stage` 转换器，支持 `html-ppt-skill`、
-  `huashu-design`、普通 HTML 文件；
+- 内置实时 HTML → `.stage` 转换器，原生支持 `reveal.js`、`impress.js`、
+  `html-ppt-skill`、`huashu-design`、普通 HTML 文件（reveal/impress
+  默认 `wrap` 模式，保留全部原生运行时；显式 `--mode split` 可拆为多页）；
 - 同时支持英语和简体中文，开箱即用。
 
 ---

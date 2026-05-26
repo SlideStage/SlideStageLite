@@ -1,0 +1,32 @@
+{
+  "schema": "slidestage@1.0",
+  "id": "multi-file-flat-deck",
+  "version": "1.0.0",
+  "title": "Multi-file-flat Architecture Fixture",
+  "subtitle": null,
+  "author": null,
+  "description": null,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "architecture": "multi-file-flat",
+  "dimensions": { "width": 1920, "height": 1080 },
+  "totalSlides": 2,
+  "slides": [
+    {
+      "index": 1,
+      "id": "intro",
+      "label": "Intro",
+      "file": "intro.html",
+      "thumbnail": null,
+      "notes": null
+    },
+    {
+      "index": 2,
+      "id": "summary",
+      "label": "Summary",
+      "file": "summary.html",
+      "thumbnail": null,
+      "notes": null
+    }
+  ]
+}

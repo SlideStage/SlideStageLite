@@ -25,7 +25,9 @@ import {
   type NormalizedSource,
   type SourceFile,
 } from './sources';
+import { splitImpress } from './splitImpress';
 import { splitInlineDeck } from './splitInlineDeck';
+import { splitReveal } from './splitReveal';
 import { splitRouter } from './splitRouter';
 import { splitWebComponent } from './splitWebComponent';
 import { wrapSource } from './wrapSource';
@@ -87,6 +89,11 @@ const defaultModeBySniff: Record<SniffKind, ConvertMode> = {
   'inline-deck': 'split',
   'webcomponent-deck': 'split',
   'router-html': 'split',
+  // reveal/impress default to "wrap" because their split-mode output drops
+  // fragments / 3D camera transitions; users must opt in to split with
+  // `--mode split` after acknowledging the lossiness.
+  reveal: 'wrap',
+  impress: 'wrap',
   'plain-html': 'single',
   ambiguous: 'split',
   empty: 'split',
@@ -453,6 +460,164 @@ function dispatchRouter(
   notImplemented(sniff.kind, mode);
 }
 
+function dispatchReveal(
+  input: DispatchInput,
+  baseManifest: Manifest,
+): DispatchOutput {
+  const { normalized, sniff, mode } = input;
+  if (!sniff.rootHtml) {
+    throw new Error('[converter] reveal sniff missing rootHtml.');
+  }
+  const report = reportFromSniff(normalized, sniff, mode);
+
+  if (mode === 'split') {
+    const split = splitReveal({
+      rootHtmlPath: sniff.rootHtml,
+      entries: normalized.entries,
+      sniff,
+    });
+
+    if (split.slides.length === 0) {
+      report.warnings.push({
+        kind: 'fallback-mode',
+        from: 'split',
+        to: 'wrap',
+        reason: 'no reveal.js <section> children resolved (.reveal > .slides empty)',
+      });
+      const wrap = wrapSource({
+        rootHtmlPath: sniff.rootHtml,
+        entries: normalized.entries,
+        sniffKind: sniff.kind,
+      });
+      const manifest = buildWrapManifest(
+        baseManifest,
+        wrap.slide,
+        wrap.architecture,
+        wrap.pageTitle,
+        wrap.compat,
+      );
+      report.mode = 'wrap';
+      report.warnings.push(...split.warnings, ...wrap.warnings);
+      populateReport(report, manifest, wrap.packEntries);
+      return { manifest, packEntries: wrap.packEntries, report };
+    }
+
+    let manifest = buildInlineSplitManifest(baseManifest, split.slides, split.pageTitle);
+    if (split.compat) {
+      manifest = {
+        ...manifest,
+        compat: {
+          ...(manifest.compat ?? {}),
+          requires: split.compat.requires,
+          notes: split.compat.notes,
+        },
+      };
+    }
+    report.warnings.push(...split.warnings);
+    populateReport(report, manifest, split.packEntries);
+    return { manifest, packEntries: split.packEntries, report };
+  }
+
+  if (mode === 'wrap') {
+    const wrap = wrapSource({
+      rootHtmlPath: sniff.rootHtml,
+      entries: normalized.entries,
+      sniffKind: sniff.kind,
+    });
+    const manifest = buildWrapManifest(
+      baseManifest,
+      wrap.slide,
+      wrap.architecture,
+      wrap.pageTitle,
+      wrap.compat,
+    );
+    report.warnings.push(...wrap.warnings);
+    populateReport(report, manifest, wrap.packEntries);
+    return { manifest, packEntries: wrap.packEntries, report };
+  }
+
+  notImplemented(sniff.kind, mode);
+}
+
+function dispatchImpress(
+  input: DispatchInput,
+  baseManifest: Manifest,
+): DispatchOutput {
+  const { normalized, sniff, mode } = input;
+  if (!sniff.rootHtml) {
+    throw new Error('[converter] impress sniff missing rootHtml.');
+  }
+  const report = reportFromSniff(normalized, sniff, mode);
+
+  if (mode === 'split') {
+    const split = splitImpress({
+      rootHtmlPath: sniff.rootHtml,
+      entries: normalized.entries,
+      sniff,
+    });
+
+    if (split.slides.length === 0) {
+      report.warnings.push({
+        kind: 'fallback-mode',
+        from: 'split',
+        to: 'wrap',
+        reason: 'no impress.js <div class="step"> children resolved inside #impress',
+      });
+      const wrap = wrapSource({
+        rootHtmlPath: sniff.rootHtml,
+        entries: normalized.entries,
+        sniffKind: sniff.kind,
+      });
+      const manifest = buildWrapManifest(
+        baseManifest,
+        wrap.slide,
+        wrap.architecture,
+        wrap.pageTitle,
+        wrap.compat,
+      );
+      report.mode = 'wrap';
+      report.warnings.push(...split.warnings, ...wrap.warnings);
+      populateReport(report, manifest, wrap.packEntries);
+      return { manifest, packEntries: wrap.packEntries, report };
+    }
+
+    let manifest = buildInlineSplitManifest(baseManifest, split.slides, split.pageTitle);
+    if (split.compat) {
+      manifest = {
+        ...manifest,
+        compat: {
+          ...(manifest.compat ?? {}),
+          requires: split.compat.requires,
+          notes: split.compat.notes,
+        },
+      };
+    }
+    report.warnings.push(...split.warnings);
+    populateReport(report, manifest, split.packEntries);
+    return { manifest, packEntries: split.packEntries, report };
+  }
+
+  if (mode === 'wrap') {
+    const wrap = wrapSource({
+      rootHtmlPath: sniff.rootHtml,
+      entries: normalized.entries,
+      sniffKind: sniff.kind,
+    });
+    const manifest = buildWrapManifest(
+      baseManifest,
+      wrap.slide,
+      wrap.architecture,
+      wrap.pageTitle,
+      wrap.compat,
+    );
+    report.warnings.push(...wrap.warnings);
+    populateReport(report, manifest, wrap.packEntries);
+    return { manifest, packEntries: wrap.packEntries, report };
+  }
+
+  notImplemented(sniff.kind, mode);
+}
+
 function dispatchPlainHtml(
   input: DispatchInput,
   baseManifest: Manifest,
@@ -545,6 +710,24 @@ function dispatch(input: DispatchInput): DispatchOutput {
         fileLastModified: normalized.sourceLastModified,
       });
       return dispatchRouter(input, baseManifest);
+    }
+
+    case 'reveal': {
+      const baseManifest = buildManifestFromSource(sniff, normalized.entries, {
+        fileName: normalized.sourceName,
+        fileSize: normalized.rawBytes.byteLength,
+        fileLastModified: normalized.sourceLastModified,
+      });
+      return dispatchReveal(input, baseManifest);
+    }
+
+    case 'impress': {
+      const baseManifest = buildManifestFromSource(sniff, normalized.entries, {
+        fileName: normalized.sourceName,
+        fileSize: normalized.rawBytes.byteLength,
+        fileLastModified: normalized.sourceLastModified,
+      });
+      return dispatchImpress(input, baseManifest);
     }
 
     case 'plain-html': {

@@ -1,0 +1,5 @@
+{
+  "description": "slides[] must contain at least 1 entry (z.array(...).min(1)). An empty slides array fails the Zod min-length check; totalSlides = 0 also fails the positive-int requirement.",
+  "expectErrorIncludes": "slides",
+  "rejectsAtSpec": true
+}

@@ -1,0 +1,5 @@
+{
+  "description": "manifest.architecture must be one of ARCHITECTURES (multi-file, multi-file-flat, single-file-deckstage, single-file-html). Any other value fails the Zod enum check.",
+  "expectErrorIncludes": "architecture",
+  "rejectsAtSpec": true
+}

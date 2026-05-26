@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { readdir, readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { dirname, join, relative, resolve } from 'node:path';
 import { unzipSync } from 'fflate';
 import { convertFolderSource, convertSource } from '@slidestage/core/converter';
 import { loadDeck } from '@slidestage/core/deck/loadDeck';
@@ -11,6 +12,13 @@ const plainHtmlPath = resolve('tests/fixtures/sources/plain-page.html');
 const inlineDeckPath = resolve('tests/fixtures/sources/html-ppt-inline-deck.zip');
 const webComponentPath = resolve('tests/fixtures/sources/huashu-webcomponent-deck.zip');
 const routerPath = resolve('tests/fixtures/sources/huashu-router.zip');
+
+// `@slidestage/spec/fixtures/sources/` is the SoT for framework
+// signature samples (Phase C.4). Resolve the spec package via
+// `createRequire` so this test works whether spec is linked as a
+// workspace sibling (the dev case) or installed as a npm dependency.
+const specPackageJson = createRequire(import.meta.url).resolve('@slidestage/spec/package.json');
+const specSourcesDir = join(dirname(specPackageJson), 'fixtures', 'sources');
 
 const realmEncoder = new TextEncoder();
 
@@ -360,6 +368,157 @@ describe('convertSource', () => {
     }
     expect(caughtCode).toBe('E_AMBIGUOUS_PACKAGE');
   });
+
+  it('wraps a reveal.js source by default (preserves fragments and transitions)', async () => {
+    const html = `<!doctype html><html><head><title>Reveal Deck</title></head><body>
+      <div class="reveal"><div class="slides">
+        <section><h1>One</h1></section>
+        <section><h1>Two</h1></section>
+      </div></div>
+      <script src="reveal.js"></script>
+    </body></html>`;
+    const result = await convertSource({ bytes: asLocalBytes(realmEncoder.encode(html)), name: 'reveal.html' });
+
+    expect(result.report.sourceKind).toBe('reveal');
+    expect(result.report.mode).toBe('wrap');
+    expect(result.manifest.architecture).toBe('single-file-html');
+    expect(result.manifest.provenance).toMatchObject({
+      sourceKind: 'reveal',
+      conversionMode: 'wrap',
+      sourceEntry: 'index.html',
+    });
+    expect(result.manifest.totalSlides).toBe(1);
+    expect(result.manifest.compat?.requires).toEqual(
+      expect.arrayContaining(['same-origin-storage']),
+    );
+  });
+
+  it('splits a reveal.js source into per-<section> pages when --mode split is requested', async () => {
+    const html = `<!doctype html><html><head><title>Reveal Split</title></head><body>
+      <div class="reveal"><div class="slides">
+        <section><h1>Alpha</h1></section>
+        <section><h1>Beta</h1></section>
+        <section><h1>Gamma</h1></section>
+      </div></div>
+      <script src="reveal.js"></script>
+    </body></html>`;
+    const result = await convertSource(
+      { bytes: asLocalBytes(realmEncoder.encode(html)), name: 'reveal-split.html' },
+      { mode: 'split' },
+    );
+
+    expect(result.report.sourceKind).toBe('reveal');
+    expect(result.report.mode).toBe('split');
+    expect(result.manifest.architecture).toBe('multi-file');
+    expect(result.manifest.totalSlides).toBe(3);
+    expect(result.manifest.slides.map((s) => s.label)).toEqual(['Alpha', 'Beta', 'Gamma']);
+    expect(result.manifest.slides.map((s) => s.file)).toEqual([
+      '01-alpha.html',
+      '02-beta.html',
+      '03-gamma.html',
+    ]);
+    expect(result.manifest.provenance).toMatchObject({
+      sourceKind: 'reveal',
+      conversionMode: 'split',
+      sourceEntry: 'index.html',
+    });
+
+    const unzipped = unzipSync(result.stage);
+    const keys = Object.keys(unzipped);
+    expect(keys).toContain('manifest.json');
+    expect(keys).toContain('01-alpha.html');
+    expect(keys).not.toContain('index.html');
+
+    const firstPage = new TextDecoder().decode(unzipped['01-alpha.html']);
+    expect(firstPage).toContain('<div class="reveal"><div class="slides">');
+    expect(firstPage).not.toContain('reveal.js');
+  });
+
+  it('falls back reveal split → wrap when .reveal container is missing', async () => {
+    // Detected as reveal via the script src, but no .reveal/.slides container
+    // exists so splitReveal yields zero sections.
+    const html = `<!doctype html><html><head><title>Empty Reveal</title></head><body>
+      <p>No reveal container here</p>
+      <script src="dist/reveal.js"></script>
+    </body></html>`;
+    const result = await convertSource(
+      { bytes: asLocalBytes(realmEncoder.encode(html)), name: 'empty-reveal.html' },
+      { mode: 'split' },
+    );
+
+    expect(result.report.sourceKind).toBe('reveal');
+    expect(result.report.mode).toBe('wrap');
+    expect(result.manifest.architecture).toBe('single-file-html');
+    expect(result.manifest.totalSlides).toBe(1);
+
+    const fallback = result.report.warnings.find((w) => w.kind === 'fallback-mode');
+    expect(fallback).toMatchObject({ from: 'split', to: 'wrap' });
+  });
+
+  it('wraps an impress.js source by default (preserves 3D camera)', async () => {
+    const html = `<!doctype html><html><head><title>Impress Deck</title></head><body>
+      <div id="impress">
+        <div class="step" id="one"><h1>One</h1></div>
+        <div class="step" id="two"><h1>Two</h1></div>
+      </div>
+      <script src="impress.js"></script>
+      <script>impress().init();</script>
+    </body></html>`;
+    const result = await convertSource({ bytes: asLocalBytes(realmEncoder.encode(html)), name: 'impress.html' });
+
+    expect(result.report.sourceKind).toBe('impress');
+    expect(result.report.mode).toBe('wrap');
+    expect(result.manifest.architecture).toBe('single-file-html');
+    expect(result.manifest.provenance).toMatchObject({
+      sourceKind: 'impress',
+      conversionMode: 'wrap',
+      sourceEntry: 'index.html',
+    });
+    expect(result.manifest.totalSlides).toBe(1);
+    expect(result.manifest.compat?.requires).toEqual(
+      expect.arrayContaining(['same-origin-storage']),
+    );
+  });
+
+  it('splits an impress.js source into per-<div class="step"> pages when --mode split is requested', async () => {
+    const html = `<!doctype html><html><head><title>Impress Split</title></head><body>
+      <div id="impress">
+        <div class="step" id="bored"><h1>Bored</h1></div>
+        <div class="step" id="prezi"><h1>Prezi</h1></div>
+      </div>
+      <script src="impress.js"></script>
+    </body></html>`;
+    const result = await convertSource(
+      { bytes: asLocalBytes(realmEncoder.encode(html)), name: 'impress-split.html' },
+      { mode: 'split' },
+    );
+
+    expect(result.report.sourceKind).toBe('impress');
+    expect(result.report.mode).toBe('split');
+    expect(result.manifest.architecture).toBe('multi-file');
+    expect(result.manifest.totalSlides).toBe(2);
+    expect(result.manifest.slides.map((s) => s.label)).toEqual(['Bored', 'Prezi']);
+    expect(result.manifest.slides.map((s) => s.id)).toEqual(['bored', 'prezi']);
+    expect(result.manifest.slides.map((s) => s.file)).toEqual([
+      '01-bored.html',
+      '02-prezi.html',
+    ]);
+    expect(result.manifest.provenance).toMatchObject({
+      sourceKind: 'impress',
+      conversionMode: 'split',
+      sourceEntry: 'index.html',
+    });
+
+    const unzipped = unzipSync(result.stage);
+    const keys = Object.keys(unzipped);
+    expect(keys).toContain('manifest.json');
+    expect(keys).toContain('01-bored.html');
+    expect(keys).not.toContain('index.html');
+
+    const firstPage = new TextDecoder().decode(unzipped['01-bored.html']);
+    expect(firstPage).toContain('<div id="impress">');
+    expect(firstPage).not.toContain('impress.js');
+  });
 });
 
 describe('convertFolderSource', () => {
@@ -442,5 +601,145 @@ describe('convertFolderSource', () => {
     await expect(
       convertFolderSource({ entries, name: 'all-skipped', lastModified: 0 }),
     ).rejects.toMatchObject({ code: 'E_NO_ENTRY_FOUND' });
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// Phase C.4: e2e regression against `@slidestage/spec` source fixtures.
+//
+// The spec package ships golden framework-signature samples under
+// `fixtures/sources/`. We assert the converter produces the expected
+// shape for each one. These cases cover the production-shape end-to-end
+// (not just the in-memory unit tests in splitReveal.test.ts /
+// splitImpress.test.ts which exercise edge cases): they pin "what a real
+// reveal/impress/inline-deck/webcomponent deck looks like" once, in spec,
+// and let Lite + pack + Pro all start from the same bytes.
+// ──────────────────────────────────────────────────────────────────────
+
+async function loadSpecSourceFolder(subdir: string): Promise<Map<string, Uint8Array>> {
+  const root = join(specSourcesDir, subdir);
+  const out = new Map<string, Uint8Array>();
+  const stack: string[] = [root];
+  while (stack.length) {
+    const dir = stack.pop()!;
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const abs = join(dir, entry.name);
+      if (entry.isDirectory()) stack.push(abs);
+      else if (entry.isFile()) {
+        const bytes = asLocalBytes(await readFile(abs));
+        const relPath = relative(root, abs).split('\\').join('/');
+        out.set(relPath, bytes);
+      }
+    }
+  }
+  return out;
+}
+
+describe('convertFolderSource against @slidestage/spec source fixtures', () => {
+  it('reveal-basic → wraps by default (preserves the reveal.js runtime)', async () => {
+    const entries = await loadSpecSourceFolder('reveal-basic');
+    const result = await convertFolderSource(
+      { entries, name: 'reveal-basic', lastModified: 0 },
+      { report: true },
+    );
+
+    expect(result.report.sourceKind).toBe('reveal');
+    expect(result.report.mode).toBe('wrap');
+    expect(result.manifest.architecture).toBe('single-file-html');
+    expect(result.manifest.provenance).toMatchObject({
+      sourceKind: 'reveal',
+      conversionMode: 'wrap',
+      sourceEntry: 'index.html',
+    });
+    expect(result.manifest.totalSlides).toBe(1);
+    expect(result.manifest.title).toBe('Reveal Basic');
+    expect(result.manifest.compat?.requires).toEqual(
+      expect.arrayContaining(['same-origin-storage']),
+    );
+  });
+
+  it('impress-basic → wraps by default (preserves the 3D camera)', async () => {
+    const entries = await loadSpecSourceFolder('impress-basic');
+    const result = await convertFolderSource(
+      { entries, name: 'impress-basic', lastModified: 0 },
+      { report: true },
+    );
+
+    expect(result.report.sourceKind).toBe('impress');
+    expect(result.report.mode).toBe('wrap');
+    expect(result.manifest.architecture).toBe('single-file-html');
+    expect(result.manifest.provenance).toMatchObject({
+      sourceKind: 'impress',
+      conversionMode: 'wrap',
+      sourceEntry: 'index.html',
+    });
+    expect(result.manifest.totalSlides).toBe(1);
+    expect(result.manifest.title).toBe('Impress Basic');
+    expect(result.manifest.compat?.requires).toEqual(
+      expect.arrayContaining(['same-origin-storage']),
+    );
+  });
+
+  it('lewislulu-html-ppt → splits into per-<section.slide> pages (inline-deck real-world signature)', async () => {
+    const entries = await loadSpecSourceFolder('lewislulu-html-ppt');
+    const result = await convertFolderSource(
+      { entries, name: 'lewislulu-html-ppt', lastModified: 0 },
+      { report: true },
+    );
+
+    expect(result.report.sourceKind).toBe('inline-deck');
+    expect(result.report.mode).toBe('split');
+    expect(result.manifest.architecture).toBe('multi-file');
+    expect(result.manifest.provenance).toMatchObject({
+      sourceKind: 'inline-deck',
+      conversionMode: 'split',
+      sourceEntry: 'index.html',
+    });
+    expect(result.manifest.totalSlides).toBe(3);
+    expect(result.manifest.slides.map((s) => s.label)).toEqual(['Cover', 'Aside', 'Inline Script']);
+    // Note: splitInlineDeck preserves inline `<script>` content per slide
+    // but does NOT auto-populate `compat.requires` the way splitReveal /
+    // splitImpress do — inline-deck authors are expected to set it via
+    // `manifestOverrides` if their slide really needs sandbox escapes.
+    // The pack-skill path is also intentionally permissive here.
+
+    const unzipped = unzipSync(result.stage);
+    const keys = Object.keys(unzipped);
+    expect(keys).toContain('01-cover.html');
+    expect(keys).toContain('03-inline-script.html');
+    expect(keys).not.toContain('index.html');
+
+    const thirdPage = new TextDecoder().decode(unzipped['03-inline-script.html']);
+    expect(thirdPage).toContain('<canvas id="chart-x"');
+    expect(thirdPage).toContain('getContext');
+  });
+
+  it('huashu-deckstage → splits each <deck-slide> into a standalone page', async () => {
+    const entries = await loadSpecSourceFolder('huashu-deckstage');
+    const result = await convertFolderSource(
+      { entries, name: 'huashu-deckstage', lastModified: 0 },
+      { report: true },
+    );
+
+    expect(result.report.sourceKind).toBe('webcomponent-deck');
+    expect(result.report.mode).toBe('split');
+    expect(result.manifest.architecture).toBe('multi-file');
+    expect(result.manifest.provenance).toMatchObject({
+      sourceKind: 'webcomponent-deck',
+      conversionMode: 'split',
+      sourceEntry: 'index.html',
+    });
+    expect(result.manifest.totalSlides).toBe(2);
+    expect(result.manifest.slides.map((s) => s.label)).toEqual(['Cover', 'Two']);
+
+    const unzipped = unzipSync(result.stage);
+    const keys = Object.keys(unzipped);
+    expect(keys).toContain('01-cover.html');
+    expect(keys).toContain('02-two.html');
+
+    const second = new TextDecoder().decode(unzipped['02-two.html']);
+    expect(second).toContain('<deck-slide');
+    expect(second).not.toContain('deck-stage.js');
   });
 });

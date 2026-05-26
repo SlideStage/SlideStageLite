@@ -1,0 +1,24 @@
+{
+  "schema": "slidestage@1.0",
+  "id": "../etc/passwd",
+  "version": "1.0.0",
+  "title": "Path-traversal Id",
+  "subtitle": null,
+  "author": null,
+  "description": null,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "architecture": "multi-file",
+  "dimensions": { "width": 1920, "height": 1080 },
+  "totalSlides": 1,
+  "slides": [
+    {
+      "index": 1,
+      "id": "cover",
+      "label": "Cover",
+      "file": "slides/01-cover.html",
+      "thumbnail": null,
+      "notes": null
+    }
+  ]
+}

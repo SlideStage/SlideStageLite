@@ -1,101 +1,16 @@
-import { DeckLoadError } from './types';
-
-const externalSchemePattern = /^[a-z][a-z0-9+.-]*:/i;
-
-export function normalizePackagePath(path: string): string {
-  if (!path || path.includes('\0')) {
-    throw new DeckLoadError('E_PATH_TRAVERSAL', `Invalid empty package path.`);
-  }
-
-  const normalized = path.replace(/\\/g, '/');
-  if (normalized.startsWith('/')) {
-    throw new DeckLoadError('E_PATH_TRAVERSAL', `Absolute paths are not allowed: ${path}`);
-  }
-
-  const parts: string[] = [];
-  for (const part of normalized.split('/')) {
-    if (!part || part === '.') {
-      continue;
-    }
-    if (part === '..') {
-      throw new DeckLoadError('E_PATH_TRAVERSAL', `Path traversal is not allowed: ${path}`);
-    }
-    parts.push(part);
-  }
-
-  if (parts.length === 0) {
-    throw new DeckLoadError('E_PATH_TRAVERSAL', `Invalid empty package path.`);
-  }
-
-  return parts.join('/');
-}
-
-export function isExternalReference(value: string): boolean {
-  const trimmed = value.trim();
-  return (
-    trimmed.startsWith('#') ||
-    // Any absolute path: `//foo` (scheme-relative URLs) and `/foo`
-    // (host-rooted paths). Both forms cannot be package-relative —
-    // the loader rejects `/`-leading entries in `normalizePackagePath`
-    // — so we treat them as external and leave them alone.
-    //
-    // This matters specifically for the rewriter's @import-inline
-    // pass: after `@import url("../assets/_mirror/css/foo.css")` is
-    // spliced inline, the inner CSS body's `url("../font/x.ttf")`
-    // is recursively rewritten to the package-virtual URL
-    // `/__stage/<id>/assets/_mirror/font/x.ttf`. The outer pass
-    // then walks the spliced text again — without this guard
-    // it would mistakenly treat that absolute URL as a relative
-    // path and double-prefix it to
-    // `/__stage/<id>/shared/__stage/<id>/assets/_mirror/font/x.ttf`,
-    // causing every CJK font to 404.
-    trimmed.startsWith('/') ||
-    trimmed.startsWith('data:') ||
-    trimmed.startsWith('blob:') ||
-    trimmed.startsWith('mailto:') ||
-    externalSchemePattern.test(trimmed)
-  );
-}
-
-export function splitReferenceSuffix(value: string): { path: string; suffix: string } {
-  const match = value.match(/^([^?#]*)([?#].*)?$/);
-  return {
-    path: match?.[1] ?? value,
-    suffix: match?.[2] ?? '',
-  };
-}
-
-export function resolvePackageReference(fromPath: string, reference: string): string | null {
-  if (!reference || isExternalReference(reference)) {
-    return null;
-  }
-
-  const { path } = splitReferenceSuffix(reference);
-  if (!path) {
-    return null;
-  }
-
-  const baseParts = normalizePackagePath(fromPath).split('/');
-  baseParts.pop();
-
-  const output = [...baseParts];
-  for (const part of path.replace(/\\/g, '/').split('/')) {
-    if (!part || part === '.') {
-      continue;
-    }
-    if (part === '..') {
-      if (output.length === 0) {
-        throw new DeckLoadError('E_PATH_TRAVERSAL', `Reference escapes package root: ${reference}`);
-      }
-      output.pop();
-      continue;
-    }
-    output.push(part);
-  }
-
-  if (output.length === 0) {
-    return null;
-  }
-
-  return normalizePackagePath(output.join('/'));
-}
+// Re-exported from `@slidestage/spec`, the single source of truth for the
+// `.stage` container contract. Kept as a stub here so existing imports
+// (`@slidestage/core/deck/pathSafety`) keep working — see Phase B of
+// `docs/ECOSYSTEM_IMPROVEMENT_PLAN.md`.
+//
+// Named re-exports are required (not `export *`) so esbuild can statically
+// resolve each binding through this stub; `@slidestage/spec` is declared
+// `external` in `tsup.config.ts`, and esbuild won't follow `export *`
+// across an external boundary.
+export {
+  assertSafePath,
+  isExternalReference,
+  normalizePackagePath,
+  resolvePackageReference,
+  splitReferenceSuffix,
+} from '@slidestage/spec/pathSafety';

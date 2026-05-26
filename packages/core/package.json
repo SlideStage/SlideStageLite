@@ -35,7 +35,9 @@
     "./converter/sniffer": "./src/converter/sniffer.ts",
     "./converter/sources": "./src/converter/sources.ts",
     "./converter/speakerNotes": "./src/converter/speakerNotes.ts",
+    "./converter/splitImpress": "./src/converter/splitImpress.ts",
     "./converter/splitInlineDeck": "./src/converter/splitInlineDeck.ts",
+    "./converter/splitReveal": "./src/converter/splitReveal.ts",
     "./converter/splitRouter": "./src/converter/splitRouter.ts",
     "./converter/splitWebComponent": "./src/converter/splitWebComponent.ts",
     "./converter/wrapSource": "./src/converter/wrapSource.ts",
@@ -54,6 +56,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@slidestage/spec": "workspace:*",
     "fflate": "^0.8.2",
     "zod": "^4.4.3"
   },
@@ -158,10 +161,20 @@
         "import": "./dist/converter/speakerNotes.js",
         "default": "./dist/converter/speakerNotes.js"
       },
+      "./converter/splitImpress": {
+        "types": "./dist/converter/splitImpress.d.ts",
+        "import": "./dist/converter/splitImpress.js",
+        "default": "./dist/converter/splitImpress.js"
+      },
       "./converter/splitInlineDeck": {
         "types": "./dist/converter/splitInlineDeck.d.ts",
         "import": "./dist/converter/splitInlineDeck.js",
         "default": "./dist/converter/splitInlineDeck.js"
+      },
+      "./converter/splitReveal": {
+        "types": "./dist/converter/splitReveal.d.ts",
+        "import": "./dist/converter/splitReveal.js",
+        "default": "./dist/converter/splitReveal.js"
       },
       "./converter/splitRouter": {
         "types": "./dist/converter/splitRouter.d.ts",

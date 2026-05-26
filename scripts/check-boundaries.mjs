@@ -4,9 +4,13 @@
 // Enforces the dependency rules pinned in `.cursor/rules/project-boundaries.mdc`
 // and `.memory/architecture-decisions.md`:
 //
+//   - `@slidestage/spec` is the .stage (`slidestage@1.0`) format SoT. It may
+//     depend only on `zod`. No React, no DOM, no host adapters, no other
+//     workspace packages — it sits below core in the dependency graph.
 //   - `@slidestage/core` must stay headless: no react, no react-dom, no DOM-UI
-//     bundles, no host adapters (lucide, tauri), no other workspace packages,
-//     no Pro shims, no relative paths into another package's src/.
+//     bundles, no host adapters (lucide, tauri), no other workspace packages
+//     other than `@slidestage/spec`, no Pro shims, no relative paths into
+//     another package's src/.
 //   - `@slidestage/ui` may depend on `@slidestage/core` and React; it must
 //     NOT consume `@slidestage/lite-preset` (preset-agnostic) or anything Pro.
 //   - `@slidestage/lite-preset` may consume core + ui; it must NOT depend on
@@ -44,6 +48,24 @@ const importPatterns = [
 
 /** @type {Record<string, { dir: string, forbidden: { match: RegExp, why: string }[] }>} */
 const packageRules = {
+  '@slidestage/spec': {
+    dir: 'packages/spec/src',
+    forbidden: [
+      { match: /^react(\/|$)/, why: 'spec must stay platform-agnostic: no react' },
+      { match: /^react-dom(\/|$)/, why: 'spec must stay platform-agnostic: no react-dom' },
+      { match: /^lucide-react(\/|$)/, why: 'spec must stay platform-agnostic: no lucide-react' },
+      { match: /^fflate(\/|$)/, why: 'spec describes the .stage format only; zip parsing belongs in core' },
+      { match: /^@slidestage\/core(\/|$)/, why: 'spec sits below core; circular dependency' },
+      { match: /^@slidestage\/ui(\/|$)/, why: 'spec may not depend on @slidestage/ui' },
+      {
+        match: /^@slidestage\/lite-preset(\/|$)/,
+        why: 'spec may not depend on @slidestage/lite-preset',
+      },
+      { match: /^@tauri-apps\//, why: 'spec may not depend on Tauri APIs' },
+      { match: /^@slidestage\/pro/, why: 'spec may not import any Pro surface' },
+      { match: /(^|\/)SlideStagePro(\/|$)/, why: 'spec may not reach into the Pro repo' },
+    ],
+  },
   '@slidestage/core': {
     dir: 'packages/core/src',
     forbidden: [
@@ -156,6 +178,7 @@ async function checkPackage(pkgName, rule) {
 async function checkManifests() {
   const manifestPaths = [
     'package.json',
+    'packages/spec/package.json',
     'packages/core/package.json',
     'packages/ui/package.json',
     'packages/lite-preset/package.json',

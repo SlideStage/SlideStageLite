@@ -1,0 +1,23 @@
+{
+  "schema": "slidestage@1.0",
+  "id": "missing-dimensions",
+  "version": "1.0.0",
+  "title": "Missing Dimensions",
+  "subtitle": null,
+  "author": null,
+  "description": null,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "architecture": "multi-file",
+  "totalSlides": 1,
+  "slides": [
+    {
+      "index": 1,
+      "id": "cover",
+      "label": "Cover",
+      "file": "slides/01-cover.html",
+      "thumbnail": null,
+      "notes": null
+    }
+  ]
+}

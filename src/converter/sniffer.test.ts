@@ -152,4 +152,92 @@ describe('sniffDeck', () => {
     const result = sniffDeck(entries(['index.html', html]));
     expect(result.kind).toBe('plain-html');
   });
+
+  it('detects reveal via the .reveal + .slides div pair (no script reference required)', () => {
+    const html = `<!doctype html><html><body>
+      <div class="reveal"><div class="slides">
+        <section><h1>One</h1></section>
+        <section><h1>Two</h1></section>
+      </div></div>
+    </body></html>`;
+    const result = sniffDeck(entries(['index.html', html]));
+    expect(result.kind).toBe('reveal');
+    expect(result.rootHtml).toBe('index.html');
+  });
+
+  it('detects reveal via a reveal.js script src even without explicit .reveal/.slides wrappers', () => {
+    const html = `<!doctype html><html><body>
+      <section><h1>One</h1></section>
+      <script src="dist/reveal.js"></script>
+    </body></html>`;
+    const result = sniffDeck(entries(['index.html', html]));
+    expect(result.kind).toBe('reveal');
+  });
+
+  it('detects reveal via reveal.min.js (CDN minified bundle)', () => {
+    const html = `<!doctype html><html><body>
+      <section><h1>One</h1></section>
+      <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.min.js"></script>
+    </body></html>`;
+    const result = sniffDeck(entries(['index.html', html]));
+    expect(result.kind).toBe('reveal');
+  });
+
+  it('prefers reveal over inline-deck when both shapes appear (reveal has higher priority)', () => {
+    // Has .deck wrapper + .slide sections (inline-deck shape) AND .reveal/.slides
+    // (reveal shape). reveal must win because it's evaluated first.
+    const html = `<!doctype html><html><body>
+      <div class="deck">
+        <div class="reveal"><div class="slides">
+          <section class="slide"><h1>One</h1></section>
+        </div></div>
+      </div>
+      <script src="runtime.js"></script>
+    </body></html>`;
+    const result = sniffDeck(entries(['index.html', html]));
+    expect(result.kind).toBe('reveal');
+  });
+
+  it('detects impress via the <div id="impress"> wrapper', () => {
+    const html = `<!doctype html><html><body>
+      <div id="impress">
+        <div class="step"><h1>One</h1></div>
+        <div class="step"><h1>Two</h1></div>
+      </div>
+    </body></html>`;
+    const result = sniffDeck(entries(['index.html', html]));
+    expect(result.kind).toBe('impress');
+    expect(result.rootHtml).toBe('index.html');
+  });
+
+  it('detects impress via an impress.js script src even without a #impress wrapper', () => {
+    const html = `<!doctype html><html><body>
+      <div class="step">A</div>
+      <script src="js/impress.js"></script>
+    </body></html>`;
+    const result = sniffDeck(entries(['index.html', html]));
+    expect(result.kind).toBe('impress');
+  });
+
+  it('detects impress via impress.min.js (minified bundle)', () => {
+    const html = `<!doctype html><html><body>
+      <p>No wrapper</p>
+      <script src="vendor/impress.min.js"></script>
+    </body></html>`;
+    const result = sniffDeck(entries(['index.html', html]));
+    expect(result.kind).toBe('impress');
+  });
+
+  it('prefers impress over inline-deck when both shapes appear', () => {
+    const html = `<!doctype html><html><body>
+      <div class="deck">
+        <div id="impress">
+          <div class="step"><h1>One</h1></div>
+        </div>
+      </div>
+      <script src="runtime.js"></script>
+    </body></html>`;
+    const result = sniffDeck(entries(['index.html', html]));
+    expect(result.kind).toBe('impress');
+  });
 });

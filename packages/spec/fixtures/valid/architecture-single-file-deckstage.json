@@ -1,0 +1,24 @@
+{
+  "schema": "slidestage@1.0",
+  "id": "single-file-deckstage-deck",
+  "version": "1.0.0",
+  "title": "Single-file-deckstage Architecture Fixture",
+  "subtitle": null,
+  "author": null,
+  "description": null,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "architecture": "single-file-deckstage",
+  "dimensions": { "width": 1920, "height": 1080 },
+  "totalSlides": 3,
+  "slides": [
+    { "index": 1, "id": "s1", "label": "Slide 1", "file": "slides/01-s1.html", "thumbnail": null, "notes": null },
+    { "index": 2, "id": "s2", "label": "Slide 2", "file": "slides/02-s2.html", "thumbnail": null, "notes": null },
+    { "index": 3, "id": "s3", "label": "Slide 3", "file": "slides/03-s3.html", "thumbnail": null, "notes": null }
+  ],
+  "provenance": {
+    "sourceKind": "webcomponent-deck",
+    "conversionMode": "split",
+    "converter": { "name": "slidestage-pack-skill", "version": "0.2.0" }
+  }
+}

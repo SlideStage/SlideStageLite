@@ -145,6 +145,19 @@ export function buildManifestFromSource(
       }
       break;
     }
+    case 'reveal':
+      // The dispatcher rebuilds the manifest from the splitter or wrapSource
+      // output; this is just the base shape. Defaults to wrap-shape because
+      // the default mode for reveal is "wrap".
+      slides = [makeWrapperSlide(rootHtml, title, entries)];
+      architecture = 'single-file-html';
+      break;
+    case 'impress':
+      // Same rationale as 'reveal' above; default mode is "wrap" so the base
+      // manifest shape mirrors a single-file wrap.
+      slides = [makeWrapperSlide(rootHtml, title, entries)];
+      architecture = 'single-file-html';
+      break;
     case 'plain-html':
       slides = [makeWrapperSlide(rootHtml, title, entries)];
       architecture = 'single-file-html';

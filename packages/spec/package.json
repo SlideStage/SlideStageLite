@@ -1,0 +1,82 @@
+{
+  "name": "@slidestage/spec",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Single source of truth for the .stage (slidestage@1.0) container format: Zod manifest schema, path-safety, capability registry, error codes, and size limits.",
+  "license": "UNLICENSED",
+  "author": "hchengliu",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SlideStage/SlideStageLite.git",
+    "directory": "packages/spec"
+  },
+  "homepage": "https://slidestage.dev",
+  "bugs": "https://github.com/SlideStage/SlideStageLite/issues",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./constants": "./src/constants.ts",
+    "./types": "./src/types.ts",
+    "./pathSafety": "./src/pathSafety.ts",
+    "./trustCapabilities": "./src/trustCapabilities.ts",
+    "./manifestSchema": "./src/manifestSchema.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "fixtures",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "./constants": {
+        "types": "./dist/constants.d.ts",
+        "import": "./dist/constants.js",
+        "default": "./dist/constants.js"
+      },
+      "./types": {
+        "types": "./dist/types.d.ts",
+        "import": "./dist/types.js",
+        "default": "./dist/types.js"
+      },
+      "./pathSafety": {
+        "types": "./dist/pathSafety.d.ts",
+        "import": "./dist/pathSafety.js",
+        "default": "./dist/pathSafety.js"
+      },
+      "./trustCapabilities": {
+        "types": "./dist/trustCapabilities.d.ts",
+        "import": "./dist/trustCapabilities.js",
+        "default": "./dist/trustCapabilities.js"
+      },
+      "./manifestSchema": {
+        "types": "./dist/manifestSchema.d.ts",
+        "import": "./dist/manifestSchema.js",
+        "default": "./dist/manifestSchema.js"
+      },
+      "./package.json": "./package.json"
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "schema": "slidestage@1.0",
+  "id": "empty-slides",
+  "version": "1.0.0",
+  "title": "Empty Slides",
+  "subtitle": null,
+  "author": null,
+  "description": null,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "architecture": "multi-file",
+  "dimensions": { "width": 1920, "height": 1080 },
+  "totalSlides": 0,
+  "slides": []
+}

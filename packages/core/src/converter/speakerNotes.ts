@@ -16,10 +16,16 @@
  * file can't bloat the manifest.
  */
 
-const textDecoder = new TextDecoder('utf-8', { fatal: false });
+// `MAX_NOTES_CHARS` is the .stage container's speaker-notes length cap
+// (~16 KB UTF-8). It belongs in `@slidestage/spec`, the format SoT
+// introduced in Phase B of `docs/ECOSYSTEM_IMPROVEMENT_PLAN.md`. We
+// re-export it here so existing imports
+// (`MAX_NOTES_CHARS` from `@slidestage/core/converter/speakerNotes`)
+// keep working.
+import { MAX_NOTES_CHARS } from '@slidestage/spec/constants';
+export { MAX_NOTES_CHARS };
 
-/** Hard upper bound (~16 KB UTF-8) — keeps manifest.json a sane size. */
-export const MAX_NOTES_CHARS = 16_384;
+const textDecoder = new TextDecoder('utf-8', { fatal: false });
 
 function decodeUtf8(bytes: Uint8Array): string {
   return textDecoder.decode(bytes);
