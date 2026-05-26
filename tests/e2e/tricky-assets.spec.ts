@@ -72,8 +72,7 @@ test('rewrites srcdoc/img/css inline references to inline data: URLs', async ({ 
     'link[rel="stylesheet"][href*="fonts.googleapis.com"]',
   );
   await expect(fontLink).toHaveCount(1);
-  const onload = await fontLink.getAttribute('onload');
-  expect(onload).toContain("this.media='all'");
+  await expect(fontLink).toHaveAttribute('onload', /this\.media='all'/);
   // preconnect is left untouched — only the stylesheet is deferred.
   const preconnect = slideFrame.locator(
     'link[rel="preconnect"][href="https://fonts.gstatic.com"]',

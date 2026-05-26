@@ -31,11 +31,20 @@ name: Release
 #
 # GITHUB_TOKEN is provided automatically; permissions block below grants
 # the minimum scopes the action needs to open the Version PR.
+#
+# Trigger model:
+#   This workflow is currently `workflow_dispatch`-only — push-to-main no
+#   longer auto-runs it. Reason: as of 2026-05, `@slidestage/spec@0.1.0`
+#   exists in the workspace but not on npm. A push-triggered changesets/action
+#   would auto-attempt to first-publish spec on every commit and fail with
+#   `ERR_PNPM_OTP_NON_INTERACTIVE` until an Automation-type NPM_TOKEN is set.
+#   When that's done:
+#     1. Restore the `push: branches: main` trigger below.
+#     2. Write a changeset for `@slidestage/spec` (and any other bumps).
+#     3. Push to main — the workflow will open / merge the Version Packages
+#        PR and publish under the Automation token unattended.
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
