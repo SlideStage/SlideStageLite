@@ -61,18 +61,21 @@ test('rewrites srcdoc/img/css inline references to inline data: URLs', async ({ 
   //    be silently stripped (regression: stripExternalLinkReferences
   //    was previously applied unconditionally and ate CDN typography on
   //    Web srcdoc decks). The link is downgraded to media="print" so
-  //    first paint isn't blocked, then onload swaps it back to "all".
+  //    first paint isn't blocked, then onload swaps it back to "all"
+  //    and removes itself (rewriteHtml uses `removeAttribute('onload')`).
   //
-  // We assert on the immutable `onload` attribute (not `media`)
-  // because `media` is set to `"print"` initially and then swapped to
-  // `"all"` once the CDN response lands — a race condition we don't
-  // want to chase. The presence of the onload handler is the proof
-  // that the deferral rewrite ran.
+  // The fixture authors the link with NO `media` attribute (see
+  // `scripts/build-fixtures.mjs`). The rewriter always sets `media`
+  // (= proof it ran), so asserting on `media` being "print" or "all"
+  // is the robust, timing-independent contract. Asserting on `onload`
+  // was inherently racy: locally the CDN was slow and `onload` stuck
+  // around, but on a GitHub runner the stylesheet loads fast and the
+  // attribute is removed before the test can read it.
   const fontLink = slideFrame.locator(
     'link[rel="stylesheet"][href*="fonts.googleapis.com"]',
   );
   await expect(fontLink).toHaveCount(1);
-  await expect(fontLink).toHaveAttribute('onload', /this\.media='all'/);
+  await expect(fontLink).toHaveAttribute('media', /^(print|all)$/);
   // preconnect is left untouched — only the stylesheet is deferred.
   const preconnect = slideFrame.locator(
     'link[rel="preconnect"][href="https://fonts.gstatic.com"]',
