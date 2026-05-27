@@ -103,6 +103,8 @@ importers:
         specifier: ^4.1.6
         version: 4.1.6(@types/node@25.7.0)(@vitest/ui@4.1.6)(jsdom@29.1.1)(vite@8.0.12(@types/node@25.7.0)(esbuild@0.27.7)(tsx@4.21.0))
 
+  packages/brand: {}
+
   packages/core:
     dependencies:
       '@slidestage/spec':

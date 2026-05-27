@@ -1,0 +1,86 @@
+{
+  "name": "@slidestage/brand",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Single source of truth for the SlideStage visual identity: logo / wordmark / mark / favicon / social-card assets and color design tokens for Lite, Pro, and slidestage-pack.",
+  "license": "UNLICENSED",
+  "author": "hchengliu",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SlideStage/SlideStageLite.git",
+    "directory": "packages/brand"
+  },
+  "homepage": "https://slidestage.dev",
+  "bugs": "https://github.com/SlideStage/SlideStageLite/issues",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens": "./src/tokens.ts",
+    "./assets": "./src/assets/index.ts",
+    "./assets/lite": "./src/assets/lite.ts",
+    "./assets/pro": "./src/assets/pro.ts",
+    "./assets/pack": "./src/assets/pack.ts",
+    "./assets/svg/*": "./assets/svg/*",
+    "./assets/png/*": "./assets/png/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "assets",
+    "README.md",
+    "LICENSE-ASSETS.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup && node scripts/build-tokens-css.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "./tokens": {
+        "types": "./dist/tokens.d.ts",
+        "import": "./dist/tokens.js",
+        "default": "./dist/tokens.js"
+      },
+      "./tokens.css": "./dist/tokens.css",
+      "./tokens.json": "./dist/tokens.json",
+      "./assets": {
+        "types": "./dist/assets/index.d.ts",
+        "import": "./dist/assets/index.js",
+        "default": "./dist/assets/index.js"
+      },
+      "./assets/lite": {
+        "types": "./dist/assets/lite.d.ts",
+        "import": "./dist/assets/lite.js",
+        "default": "./dist/assets/lite.js"
+      },
+      "./assets/pro": {
+        "types": "./dist/assets/pro.d.ts",
+        "import": "./dist/assets/pro.js",
+        "default": "./dist/assets/pro.js"
+      },
+      "./assets/pack": {
+        "types": "./dist/assets/pack.d.ts",
+        "import": "./dist/assets/pack.js",
+        "default": "./dist/assets/pack.js"
+      },
+      "./assets/svg/*": "./assets/svg/*",
+      "./assets/png/*": "./assets/png/*",
+      "./package.json": "./package.json"
+    }
+  }
+}

@@ -1,0 +1,150 @@
+# @slidestage/brand
+
+> Single source of truth for the SlideStage visual identity — logo / wordmark
+> / mark / favicon / social-card assets and color design tokens shared by
+> SlideStage Lite, SlideStage Pro, slidestage-pack, and the marketing site.
+
+## Status
+
+`0.1.0` — initial extraction. The package currently ships:
+
+- **23 SVG** logo assets across the three product surfaces (Lite cyan, Pro
+  indigo, slidestage-pack amber).
+- **33 PNG** rasterizations (1×, 2×, 3×, 8× depending on asset) suitable for
+  README headers, GitHub social cards, favicons, and embedded usage where SVG
+  is awkward (older Word documents, some Slack unfurls).
+- **18 design tokens** as TypeScript constants (`SLIDESTAGE_DESIGN_TOKENS`),
+  with companion `dist/tokens.css` (`:root { --ss-color-bg: …; }`) and
+  `dist/tokens.json` artifacts emitted by `pnpm build`.
+
+The package is `UNLICENSED` — see `LICENSE-ASSETS.md` for the trademark and
+brand-asset usage terms.
+
+## Usage
+
+### TypeScript / bundler consumers
+
+```ts
+import {
+  LITE_BRAND_ASSETS,
+  PRO_BRAND_ASSETS,
+  PACK_BRAND_ASSETS,
+  SLIDESTAGE_BRAND_COLORS,
+  SLIDESTAGE_DESIGN_TOKENS,
+} from '@slidestage/brand';
+
+// Asset constants are absolute URLs (file:// in Node, http(s):// in a
+// bundler). They are safe to drop straight into JSX:
+<img src={LITE_BRAND_ASSETS.markSvg} alt="SlideStage" width={84} />;
+
+// Per-product brand hue:
+const litePrimary = SLIDESTAGE_BRAND_COLORS.liteCyan.hex; // '#06B6D4'
+
+// Iterate every token (useful for design-system docs):
+for (const token of Object.values(SLIDESTAGE_DESIGN_TOKENS)) {
+  console.log(token.cssVar, token.hex, token.description);
+}
+```
+
+### Plain CSS / static HTML consumers
+
+After `pnpm build`, `dist/tokens.css` is a self-contained `:root { ... }`
+block you can drop into any plain stylesheet:
+
+```html
+<link rel="stylesheet" href="node_modules/@slidestage/brand/dist/tokens.css">
+<style>
+  body {
+    background: var(--ss-color-bg);
+    color: var(--ss-color-text);
+  }
+</style>
+```
+
+`dist/tokens.json` is a flat `{ "--ss-color-bg": "#0a0a0a", ... }` map handy
+for static site generators or Tailwind config preprocessing.
+
+### Per-product subpaths
+
+Bundlers tree-shake more reliably when consumers import the narrower entry:
+
+```ts
+import { LITE_BRAND_ASSETS } from '@slidestage/brand/assets/lite';
+import { PRO_BRAND_ASSETS } from '@slidestage/brand/assets/pro';
+import { PACK_BRAND_ASSETS } from '@slidestage/brand/assets/pack';
+import { SLIDESTAGE_DESIGN_TOKENS } from '@slidestage/brand/tokens';
+```
+
+Raw asset paths are also reachable through the `./assets/svg/*` and
+`./assets/png/*` exports map when you need to copy them out of
+`node_modules` at build time (e.g. for static site `public/` mirrors):
+
+```ts
+import markUrl from '@slidestage/brand/assets/svg/slidestage-mark.svg?url';
+```
+
+## File layout
+
+```
+packages/brand/
+├── src/                                Authoring surface (TS)
+│   ├── index.ts                        Aggregate re-export
+│   ├── tokens.ts                       Design tokens (SoT)
+│   └── assets/
+│       ├── index.ts                    Per-surface aggregate
+│       ├── lite.ts                     Lite asset URL constants
+│       ├── pro.ts                      Pro asset URL constants
+│       └── pack.ts                     Pack asset URL constants
+├── assets/                             Static asset SoT
+│   ├── svg/                            23 brand SVGs
+│   └── png/                            33 brand PNGs
+└── scripts/
+    └── build-tokens-css.mjs            Emits dist/tokens.css + dist/tokens.json
+```
+
+## Provenance
+
+This package is the **post-Phase-E5.a** consolidation of brand assets that
+previously lived in four separate repositories:
+
+- `SlideStageLite/public/brand/` — Lite SoT (29 files)
+- `SlideStagePro/brand/` and `SlideStagePro/apps/web/public/brand/` — Pro
+  SoT (24 files, deduplicated)
+- `slidestage-pack/brand/` — Pack SoT (12 files)
+- `rootwebsite/public/brand/` — marketing site (12 files, were a subset of
+  the above three; no original assets)
+
+`E5.b` (next task) will switch each consumer to import from this package and
+remove the duplicated copies.
+
+## Design tokens
+
+| Token                  | CSS variable             | Hex      | Role                                  |
+| ---------------------- | ------------------------ | -------- | ------------------------------------- |
+| `liteCyan`             | `--ss-brand-lite`        | `#06B6D4` | Lite primary brand hue                |
+| `proIndigo`            | `--ss-brand-pro`         | `#4F46E5` | Pro primary brand hue                 |
+| `packAmber`            | `--ss-brand-pack`        | `#F59E0B` | Pack primary brand hue                |
+| `bg`                   | `--ss-color-bg`          | `#0a0a0a` | Base page background                  |
+| `surface`              | `--ss-color-surface`     | `#111111` | Card / panel background               |
+| `surfaceHi`            | `--ss-color-surface-hi`  | `#1a1a1a` | Elevated / hovered surface            |
+| `border`               | `--ss-color-border`      | `#27272a` | Default border                        |
+| `borderHi`             | `--ss-color-border-hi`   | `#3f3f46` | Hover / active border                 |
+| `text`                 | `--ss-color-text`        | `#fafafa` | Primary text on dark surface          |
+| `textMuted`            | `--ss-color-text-muted`  | `#a1a1aa` | Secondary text                        |
+| `textDim`              | `--ss-color-text-dim`    | `#71717a` | Tertiary / hint text                  |
+| `cta`                  | `--ss-color-cta`         | `#22c55e` | Primary CTA fill (green-500)          |
+| `ctaHover`             | `--ss-color-cta-hover`   | `#16a34a` | CTA hover (green-600)                 |
+| `accent`               | `--ss-color-accent`      | `#3b82f6` | Interactive accent (blue-500)         |
+| `accentHi`             | `--ss-color-accent-hi`   | `#60a5fa` | Accent hover (blue-400)               |
+| `warn`                 | `--ss-color-warn`        | `#f59e0b` | Warning state (amber-500)             |
+
+## Boundary rules
+
+`@slidestage/brand` is the lowest-level workspace package — it must remain
+platform-agnostic:
+
+- No React, no DOM bindings, no `lucide-react`, no `fflate`, no Tauri.
+- No dependency on other `@slidestage/*` workspace packages.
+- Only `node:url` from the standard library (to compute asset URLs).
+
+The `scripts/check-boundaries.mjs` walker in the repo root enforces this.

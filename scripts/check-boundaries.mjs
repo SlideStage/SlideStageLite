@@ -4,6 +4,11 @@
 // Enforces the dependency rules pinned in `.cursor/rules/project-boundaries.mdc`
 // and `.memory/architecture-decisions.md`:
 //
+//   - `@slidestage/brand` ships the SlideStage visual identity (logos, marks,
+//     favicons, social cards, design tokens). It must remain the lowest-level
+//     workspace package — no React, no DOM, no `lucide-react`, no `fflate`,
+//     no other `@slidestage/*` packages — only `node:url` from the standard
+//     library to compute asset URLs.
 //   - `@slidestage/spec` is the .stage (`slidestage@1.0`) format SoT. It may
 //     depend only on `zod`. No React, no DOM, no host adapters, no other
 //     workspace packages — it sits below core in the dependency graph.
@@ -48,6 +53,26 @@ const importPatterns = [
 
 /** @type {Record<string, { dir: string, forbidden: { match: RegExp, why: string }[] }>} */
 const packageRules = {
+  '@slidestage/brand': {
+    dir: 'packages/brand/src',
+    forbidden: [
+      { match: /^react(\/|$)/, why: 'brand must stay platform-agnostic: no react' },
+      { match: /^react-dom(\/|$)/, why: 'brand must stay platform-agnostic: no react-dom' },
+      { match: /^lucide-react(\/|$)/, why: 'brand must stay platform-agnostic: no lucide-react' },
+      { match: /^fflate(\/|$)/, why: 'brand has no .stage parsing duties' },
+      { match: /^zod(\/|$)/, why: 'brand has no schema duties; tokens are typed via TS const + satisfies' },
+      { match: /^@slidestage\/spec(\/|$)/, why: 'brand sits below spec; no workspace deps' },
+      { match: /^@slidestage\/core(\/|$)/, why: 'brand sits below core; no workspace deps' },
+      { match: /^@slidestage\/ui(\/|$)/, why: 'brand may not depend on @slidestage/ui' },
+      {
+        match: /^@slidestage\/lite-preset(\/|$)/,
+        why: 'brand may not depend on @slidestage/lite-preset',
+      },
+      { match: /^@tauri-apps\//, why: 'brand may not depend on Tauri APIs' },
+      { match: /^@slidestage\/pro/, why: 'brand may not import any Pro surface' },
+      { match: /(^|\/)SlideStagePro(\/|$)/, why: 'brand may not reach into the Pro repo' },
+    ],
+  },
   '@slidestage/spec': {
     dir: 'packages/spec/src',
     forbidden: [
@@ -178,6 +203,7 @@ async function checkPackage(pkgName, rule) {
 async function checkManifests() {
   const manifestPaths = [
     'package.json',
+    'packages/brand/package.json',
     'packages/spec/package.json',
     'packages/core/package.json',
     'packages/ui/package.json',
