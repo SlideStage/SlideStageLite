@@ -1,6 +1,6 @@
 {
   "name": "@slidestage/spec",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Single source of truth for the .stage (slidestage@1.0) container format: Zod manifest schema, path-safety, capability registry, error codes, and size limits.",
   "license": "UNLICENSED",
