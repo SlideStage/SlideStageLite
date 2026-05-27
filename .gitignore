@@ -9,6 +9,18 @@
 node_modules/
 .pnpm-store/
 dist/
+# Negation: `dist/` above is intentionally a wildcard so it catches the
+# root vite build output, every `packages/*/dist/` tsup output, and any
+# future `apps/*/dist/`. But `@slidestage/spec` ships *fixture sample
+# decks* under `packages/spec/fixtures/sources/*/` and reveal-basic
+# happens to use the official reveal.js layout `dist/reveal.js`. Without
+# this re-include the wildcard above would drop `reveal.js` from the
+# committed tree (and therefore from `npm pack` — `files:["dist","fixtures",...]`
+# in `packages/spec/package.json` honours .gitignore). Other frameworks
+# (impress-basic, html-ppt, etc.) ship their JS flat next to index.html,
+# so this carve-out is reveal-shaped and intentionally narrow.
+!packages/spec/fixtures/sources/*/dist/
+!packages/spec/fixtures/sources/*/dist/**
 
 # Cloudflare wrangler local state (preview cache, miniflare scratch).
 # Real Workers deploys never read from here; safe to recreate from scratch.
