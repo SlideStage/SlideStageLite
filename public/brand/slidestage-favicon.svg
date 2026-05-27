@@ -1,8 +1,0 @@
-<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title">
-  <title id="title">SlideStageLite favicon</title>
-  <rect x="4" y="4" width="56" height="56" rx="14" fill="#111827"/>
-  <rect x="15" y="14" width="35" height="27" rx="5" fill="#F8FAFC"/>
-  <path d="M32 15L21 41H43L32 15Z" fill="#F59E0B" opacity="0.28"/>
-  <path d="M21 23C25 19 35 18 39 22C42 25 40 30 33 30.5L28 31C24 31.5 23 34 25 36C28 39 35 38 39 34" stroke="#06B6D4" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M20 45H44" stroke="#F59E0B" stroke-width="4.5" stroke-linecap="round"/>
-</svg>
