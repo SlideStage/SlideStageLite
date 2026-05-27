@@ -1,5 +1,12 @@
 # @slidestage/lite-preset — Changelog
 
+## 0.1.3
+
+### Patch Changes
+
+- @slidestage/core@0.1.3
+- @slidestage/ui@0.1.3
+
 ## 0.1.2
 
 ### Patch Changes

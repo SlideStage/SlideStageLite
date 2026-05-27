@@ -1,5 +1,12 @@
 # @slidestage/core — Changelog
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [4811496]
+  - @slidestage/spec@0.1.1
+
 ## 0.1.2
 
 See the root [`CHANGELOG.md`](../../CHANGELOG.md) of the SlideStage Lite
