@@ -1,5 +1,13 @@
 # @slidestage/lite-preset — Changelog
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [5468558]
+  - @slidestage/ui@0.1.2
+  - @slidestage/core@0.1.2
+
 See the root [`CHANGELOG.md`](../../CHANGELOG.md) of the SlideStage Lite
 repository for the human-readable narrative of each release.
 

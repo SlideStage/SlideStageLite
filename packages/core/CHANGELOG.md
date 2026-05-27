@@ -1,5 +1,7 @@
 # @slidestage/core — Changelog
 
+## 0.1.2
+
 See the root [`CHANGELOG.md`](../../CHANGELOG.md) of the SlideStage Lite
 repository for the human-readable narrative of each release. This file
 exists so the npm tarball ships a per-package changelog stub.
