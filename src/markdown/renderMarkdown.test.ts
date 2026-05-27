@@ -235,6 +235,103 @@ describe('renderMarkdownToSafeHtml — security (XSS hardening)', () => {
   });
 });
 
+describe('renderMarkdownToSafeHtml — GFM tables', () => {
+  it('renders a minimal 2-column table', () => {
+    const src = '| h1 | h2 |\n| --- | --- |\n| a | b |';
+    const html = renderMarkdownToSafeHtml(src);
+    expect(html).toBe(
+      '<table><thead><tr><th>h1</th><th>h2</th></tr></thead>' +
+        '<tbody><tr><td>a</td><td>b</td></tr></tbody></table>',
+    );
+  });
+
+  it('renders a header-only table with no body rows', () => {
+    const src = '| h1 | h2 |\n| --- | --- |';
+    const html = renderMarkdownToSafeHtml(src);
+    expect(html).toBe(
+      '<table><thead><tr><th>h1</th><th>h2</th></tr></thead></table>',
+    );
+  });
+
+  it('accepts the outer-pipeless GFM form', () => {
+    const src = 'h1 | h2\n--- | ---\na | b';
+    const html = renderMarkdownToSafeHtml(src);
+    expect(html).toContain('<th>h1</th><th>h2</th>');
+    expect(html).toContain('<td>a</td><td>b</td>');
+  });
+
+  it('honors :---: / ---: / :--- alignment markers', () => {
+    const src =
+      '| L | C | R |\n| :--- | :---: | ---: |\n| a | b | c |';
+    const html = renderMarkdownToSafeHtml(src);
+    // Header alignment carries onto <th>.
+    expect(html).toContain('<th style="text-align:left">L</th>');
+    expect(html).toContain('<th style="text-align:center">C</th>');
+    expect(html).toContain('<th style="text-align:right">R</th>');
+    // Same alignment carries to body <td>.
+    expect(html).toContain('<td style="text-align:left">a</td>');
+    expect(html).toContain('<td style="text-align:center">b</td>');
+    expect(html).toContain('<td style="text-align:right">c</td>');
+  });
+
+  it('pads short rows and truncates long rows to header arity', () => {
+    const src = '| a | b | c |\n| --- | --- | --- |\n| 1 | 2 |\n| 4 | 5 | 6 | 7 |';
+    const html = renderMarkdownToSafeHtml(src);
+    // Short row gets an empty trailing cell.
+    expect(html).toContain('<tr><td>1</td><td>2</td><td></td></tr>');
+    // Long row gets truncated to 3 cells.
+    expect(html).toContain('<tr><td>4</td><td>5</td><td>6</td></tr>');
+    expect(html).not.toContain('<td>7</td>');
+  });
+
+  it('renders inline emphasis inside table cells', () => {
+    const src = '| h |\n| --- |\n| **bold** *em* `code` |';
+    const html = renderMarkdownToSafeHtml(src);
+    expect(html).toContain(
+      '<td><strong>bold</strong> <em>em</em> <code>code</code></td>',
+    );
+  });
+
+  it('escapes html inside cells', () => {
+    const src = '| h |\n| --- |\n| <script>alert(1)</script> |';
+    const html = renderMarkdownToSafeHtml(src);
+    expect(html).not.toContain('<script>alert(1)');
+    expect(html).toContain('&lt;script&gt;');
+  });
+
+  it('falls through to paragraph when the separator row is missing', () => {
+    // `| a | b |` alone — no `| --- |` — is just prose with pipes.
+    const src = '| a | b |';
+    expect(renderMarkdownToSafeHtml(src)).toBe('<p>| a | b |</p>');
+  });
+
+  it('terminates a preceding paragraph that runs into a table opener', () => {
+    const src = 'sentence one.\n| h |\n| --- |\n| body |';
+    const html = renderMarkdownToSafeHtml(src);
+    expect(html).toContain('<p>sentence one.</p>');
+    expect(html).toContain('<th>h</th>');
+    expect(html).toContain('<td>body</td>');
+  });
+
+  it('does not confuse a thematic break with a table separator', () => {
+    // The `---` line has no `|`; isTableSeparator() must reject it.
+    expect(__internal.isTableSeparator('---')).toBe(false);
+    expect(__internal.isTableSeparator('| --- |')).toBe(true);
+    expect(__internal.isTableSeparator('| :---: |')).toBe(true);
+    // A pipe-only line with no dashes must NOT count.
+    expect(__internal.isTableSeparator('| | |')).toBe(false);
+  });
+
+  it('survives sanitizer pass (table tags are not stripped)', () => {
+    const src = '| h1 |\n| --- |\n| x |';
+    const html = renderMarkdownToSafeHtml(src);
+    // The sanitizeHtml pass must NOT remove table-family tags.
+    expect(html).toContain('<table>');
+    expect(html).toContain('<thead>');
+    expect(html).toContain('<tbody>');
+  });
+});
+
 describe('renderMarkdownToSafeHtml — kitchen sink', () => {
   it('renders a realistic speaker-notes block end-to-end', () => {
     const notes = [

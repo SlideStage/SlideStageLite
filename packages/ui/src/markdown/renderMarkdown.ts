@@ -1,17 +1,24 @@
 /**
- * Zero-dependency Markdown renderer for speaker notes.
+ * Zero-dependency Markdown renderer.
+ *
+ * Originally written for speaker notes (short prose). Now also used by
+ * surfaces that render mirrored markdown docs — `rootwebsite/docs/*`,
+ * the changelog page, and other longer-form pages. GFM table support
+ * (added in `@slidestage/ui@0.1.2`) makes the renderer usable for those
+ * docs without pulling in a full markdown library; `sync-docs.mjs`
+ * mirrors GFM tables into the curated set and they need to render the
+ * same way Lite and the marketing site read them.
  *
  * Why zero deps?
  *   `@slidestage/ui` is consumed by SlideStage Lite, which positions itself
  *   as a pure-frontend, zero-dependency runtime (see
  *   `.cursor/rules/project-boundaries.mdc`). Pulling in `marked`,
  *   `markdown-it`, or `remark` would add 30-60 KB gzipped before any
- *   sanitization. Speaker notes are short prose, not full markdown
- *   documents — a focused GFM subset covers every realistic note we have
- *   seen in fixtures and real decks.
+ *   sanitization. A focused GFM subset covers every realistic note we
+ *   have seen in fixtures, real decks, and curated docs.
  *
  * Supported syntax (intentionally small but covers ~95% of speaker-note
- * use cases):
+ * AND ~100% of mirrored-doc use cases):
  *   - ATX headings           `# … ######`
  *   - Paragraphs separated by blank lines
  *   - Unordered lists        `- item` / `* item` / `+ item`, with one
@@ -20,6 +27,8 @@
  *   - Blockquotes            `> quoted` (recursively renders block content)
  *   - Fenced code blocks     ``` ```lang … ``` ```
  *   - Thematic breaks        `---`, `***`, `___` on their own line
+ *   - GFM tables             `| col | col |` + `| --- | --- |` row,
+ *                            with optional `:---:` alignment.
  *   - Inline code            `` `code` ``
  *   - Bold                   `**bold**`
  *   - Italic                 `*italic*`
@@ -29,11 +38,10 @@
  *                            everything else is rendered as literal text)
  *   - Hard line break        trailing two spaces before a newline
  *
- * Deliberately NOT supported (out of scope for notes):
- *   - Tables, task lists, footnotes, definition lists.
- *   - Reference-style links.
- *   - Images (notes panel is plain prose; embedded images would blow up
- *     the manifest and confuse the presenter UI).
+ * Deliberately NOT supported:
+ *   - Task lists, footnotes, definition lists, reference-style links.
+ *   - Images. Mirrored docs currently contain none; adding image
+ *     support would require a separate src allowlist + style budget.
  *   - Raw HTML — any `<` / `>` in the source is escaped, so callers
  *     cannot inject script tags, iframes, or event handlers.
  *
@@ -307,6 +315,118 @@ function renderListItems(items: ListItem[]): string {
   return out.join('');
 }
 
+/* -------------------------------------------------------------------------- */
+/*  GFM tables                                                                */
+/* -------------------------------------------------------------------------- */
+
+type CellAlign = 'left' | 'center' | 'right' | null;
+
+/**
+ * Split a single table row into its trimmed cells. Accepts both
+ * fully-bordered (`| a | b |`) and outer-pipeless (`a | b`) forms,
+ * which both appear in real GFM-flavored docs.
+ *
+ * Escaped pipes (`\|`) inside cell content are rare in our docs and
+ * are intentionally NOT supported — keeping the splitter a single
+ * `.split('|')` keeps the parser small and predictable. If we ever
+ * see an upstream doc that needs escaped pipes, swap in a hand-rolled
+ * scanner.
+ */
+function splitTableRow(line: string): string[] {
+  let body = line.trim();
+  if (body.startsWith('|')) body = body.slice(1);
+  if (body.endsWith('|')) body = body.slice(0, -1);
+  return body.split('|').map((c) => c.trim());
+}
+
+/**
+ * Recognize a GFM table separator row, e.g. `| --- | :---: | ---: |`.
+ * Requires at least one `-`, only pipe/colon/dash/whitespace
+ * characters, and a `|` so we never confuse it with a thematic break.
+ */
+function isTableSeparator(line: string): boolean {
+  if (!line.includes('|')) return false;
+  if (!line.includes('-')) return false;
+  return /^[\s|:-]+$/.test(line);
+}
+
+function parseTableAlignments(separator: string): CellAlign[] {
+  return splitTableRow(separator).map((cell) => {
+    const trimmed = cell.trim();
+    const left = trimmed.startsWith(':');
+    const right = trimmed.endsWith(':');
+    if (left && right) return 'center';
+    if (right) return 'right';
+    if (left) return 'left';
+    return null;
+  });
+}
+
+/**
+ * Attempt to render a GFM table starting at `lines[startIdx]`.
+ *
+ * Returns `null` if the lookahead doesn't form a valid header +
+ * separator pair; the caller then falls through to its paragraph
+ * branch. Returns `{ html, next }` on success, where `next` is the
+ * index of the first line AFTER the table.
+ */
+function tryRenderTable(
+  lines: readonly string[],
+  startIdx: number,
+): { html: string; next: number } | null {
+  const headerLine = lines[startIdx];
+  const separator = lines[startIdx + 1];
+  if (!isTableSeparator(separator)) return null;
+  const headerCells = splitTableRow(headerLine);
+  if (headerCells.length === 0) return null;
+  const align = parseTableAlignments(separator);
+  if (align.length !== headerCells.length) return null;
+
+  const bodyRows: string[][] = [];
+  let i = startIdx + 2;
+  while (i < lines.length) {
+    const row = lines[i];
+    if (row.trim() === '') break;
+    if (!row.includes('|')) break;
+    const cells = splitTableRow(row);
+    if (cells.length === 0) break;
+    // Pad short rows / truncate long rows so we always emit a square
+    // table matching the header arity. Mirrors GFM rendering in
+    // GitHub itself.
+    while (cells.length < headerCells.length) cells.push('');
+    if (cells.length > headerCells.length) cells.length = headerCells.length;
+    bodyRows.push(cells);
+    i++;
+  }
+
+  const styleAttr = (a: CellAlign) =>
+    a ? ` style="text-align:${a}"` : '';
+
+  const headerHtml = headerCells
+    .map((cell, idx) => `<th${styleAttr(align[idx])}>${renderInline(cell)}</th>`)
+    .join('');
+  const bodyHtml = bodyRows
+    .map(
+      (row) =>
+        '<tr>' +
+        row
+          .map(
+            (cell, idx) =>
+              `<td${styleAttr(align[idx])}>${renderInline(cell)}</td>`,
+          )
+          .join('') +
+        '</tr>',
+    )
+    .join('');
+
+  const html =
+    `<table><thead><tr>${headerHtml}</tr></thead>` +
+    (bodyRows.length > 0 ? `<tbody>${bodyHtml}</tbody>` : '') +
+    `</table>`;
+
+  return { html, next: i };
+}
+
 function renderBlocks(source: string): string {
   const lines = source.replace(/\r\n?/g, '\n').split('\n');
   const out: string[] = [];
@@ -377,6 +497,22 @@ function renderBlocks(source: string): string {
       continue;
     }
 
+    // GFM table.
+    //
+    // We probe `tryRenderTable` cheaply (a `|` plus a separator line
+    // follow-up) before committing to the table branch — if the
+    // header+separator pattern doesn't validate, we fall through to
+    // the paragraph branch so a plain sentence containing `|` still
+    // renders as prose.
+    if (line.includes('|') && i + 1 < lines.length) {
+      const tableHtml = tryRenderTable(lines, i);
+      if (tableHtml !== null) {
+        out.push(tableHtml.html);
+        i = tableHtml.next;
+        continue;
+      }
+    }
+
     // Paragraph: greedy through to blank line or next block-level
     // construct.
     const para: string[] = [line];
@@ -390,6 +526,17 @@ function renderBlocks(source: string): string {
         /^\s{0,3}>/.test(peek) ||
         /^\s{0,3}(`{3,}|~{3,})/.test(peek) ||
         /^\s{0,3}(?:(?:-\s*){3,}|(?:\*\s*){3,}|(?:_\s*){3,})\s*$/.test(peek)
+      ) {
+        break;
+      }
+      // GFM table opener mid-paragraph terminates the paragraph too.
+      // Without this guard, a `Param | Description` table heading
+      // immediately after a sentence gets absorbed into the paragraph
+      // and never sees the table parser.
+      if (
+        peek.includes('|') &&
+        i + 1 < lines.length &&
+        isTableSeparator(lines[i + 1])
       ) {
         break;
       }
@@ -420,6 +567,13 @@ function sanitizeHtml(html: string): string {
   // Strip script / style / iframe / object / embed / link / meta / form
   // tags and their contents — none of them can be produced by the
   // renderer above but we drop them defensively.
+  //
+  // Note: `<table> / <thead> / <tbody> / <tr> / <th> / <td>` are NOT
+  // in the blocklist. They are emitted by the GFM table parser and
+  // pass through verbatim. The only attribute we emit on them is
+  // `style="text-align:..."`, which is whitelisted-by-omission below
+  // (the `on*` handler stripper + dangerous-href stripper only
+  // target the actual XSS sinks).
   safe = safe.replace(
     /<(script|style|iframe|object|embed|form|link|meta|svg|math)\b[\s\S]*?<\/\1>/gi,
     '',
@@ -465,4 +619,6 @@ export const __internal = {
   renderInline,
   renderBlocks,
   sanitizeHtml,
+  tryRenderTable,
+  isTableSeparator,
 };
