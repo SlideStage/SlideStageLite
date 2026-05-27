@@ -4,6 +4,7 @@ export default defineConfig({
   entry: [
     'src/index.ts',
     'src/tokens.ts',
+    'src/products.ts',
     'src/assets/index.ts',
     'src/assets/lite.ts',
     'src/assets/pro.ts',

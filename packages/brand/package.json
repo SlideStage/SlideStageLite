@@ -18,17 +18,24 @@
   "exports": {
     ".": "./src/index.ts",
     "./tokens": "./src/tokens.ts",
+    "./products": "./src/products.ts",
     "./assets": "./src/assets/index.ts",
     "./assets/lite": "./src/assets/lite.ts",
     "./assets/pro": "./src/assets/pro.ts",
     "./assets/pack": "./src/assets/pack.ts",
     "./assets/svg/*": "./assets/svg/*",
     "./assets/png/*": "./assets/png/*",
+    "./tools/*": "./tools/*",
     "./package.json": "./package.json"
+  },
+  "bin": {
+    "slidestage-render-ecosystem": "./tools/render-ecosystem.mjs"
   },
   "files": [
     "dist",
     "assets",
+    "tools",
+    "src/products.data.mjs",
     "README.md",
     "LICENSE-ASSETS.md",
     "CHANGELOG.md"
@@ -58,6 +65,11 @@
       },
       "./tokens.css": "./dist/tokens.css",
       "./tokens.json": "./dist/tokens.json",
+      "./products": {
+        "types": "./dist/products.d.ts",
+        "import": "./dist/products.js",
+        "default": "./dist/products.js"
+      },
       "./assets": {
         "types": "./dist/assets/index.d.ts",
         "import": "./dist/assets/index.js",
@@ -80,6 +92,7 @@
       },
       "./assets/svg/*": "./assets/svg/*",
       "./assets/png/*": "./assets/png/*",
+      "./tools/*": "./tools/*",
       "./package.json": "./package.json"
     }
   }

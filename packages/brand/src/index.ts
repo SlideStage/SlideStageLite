@@ -8,3 +8,4 @@
 
 export * from './tokens.js';
 export * from './assets/index.js';
+export * from './products.js';
