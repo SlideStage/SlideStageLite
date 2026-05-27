@@ -31,54 +31,99 @@ proper `.stage`, and hands the result back to the same loader path.
 There is no trusted server-side component. Anything that previously happened in
 the source platform backend must either move into the browser or be removed.
 
-## Recommended App Layout
+## Actual App Layout (post package split, 2026-05-27)
+
+The repo no longer ships a single flat `src/` tree. The Lite app is an
+assembly layer over five workspace packages; the root `src/` only holds
+the Vite entry, routing shell, and a couple of root-only smoke tests.
 
 ```
 SlideStageLite/
 ├── docs/
-├── src/
-│   ├── app/
-│   │   ├── App.tsx
-│   │   └── routes.tsx
-│   ├── deck/
-│   │   ├── loadDeck.ts
-│   │   ├── manifestSchema.ts
-│   │   ├── packageReader.ts
-│   │   ├── assetRegistry.ts
-│   │   └── deckFingerprint.ts
-│   ├── viewer/
-│   │   ├── DeckViewer.tsx
-│   │   ├── DeckStage.tsx
-│   │   ├── Overview.tsx
-│   │   ├── SpeakerNotes.tsx
-│   │   ├── useDeckNavigator.ts
-│   │   └── useStageLayout.ts
-│   ├── presenter/
-│   │   ├── types.ts
-│   │   ├── usePresenter.ts
-│   │   ├── AnnotationOverlay.tsx
-│   │   ├── LaserPointer.tsx
-│   │   ├── Spotlight.tsx
-│   │   ├── Blackout.tsx
-│   │   └── Toolbar.tsx
-│   ├── persistence/
-│   │   ├── annotationStore.ts
-│   │   ├── recentDeckStore.ts
-│   │   └── settingsStore.ts
-│   ├── browser/
-│   │   ├── objectUrls.ts
-│   │   ├── fullscreen.ts
-│   │   └── broadcast.ts
-│   └── styles/
-│       └── globals.css
+├── packages/
+│   ├── spec/                  # @slidestage/spec — format only, zero runtime deps
+│   │   └── src/
+│   │       ├── constants.ts
+│   │       ├── manifestSchema.ts
+│   │       ├── pathSafety.ts
+│   │       ├── trustCapabilities.ts
+│   │       └── types.ts
+│   ├── core/                  # @slidestage/core — headless runtime + converter
+│   │   └── src/
+│   │       ├── createSlideStage.ts
+│   │       ├── deck/
+│   │       │   ├── loadDeck.ts
+│   │       │   ├── manifestSchema.ts        # re-export from @slidestage/spec
+│   │       │   ├── pathSafety.ts
+│   │       │   ├── rewriteHtml.ts
+│   │       │   ├── trustCapabilities.ts
+│   │       │   └── types.ts
+│   │       └── converter/
+│   │           ├── sniffer.ts
+│   │           ├── buildManifest.ts
+│   │           ├── pack.ts
+│   │           ├── splitReveal.ts
+│   │           ├── splitImpress.ts
+│   │           ├── splitInlineDeck.ts
+│   │           ├── splitRouter.ts
+│   │           ├── splitWebComponent.ts
+│   │           └── …
+│   ├── ui/                    # @slidestage/ui — React shell, no host coupling
+│   │   └── src/
+│   │       ├── viewer/
+│   │       │   ├── DeckViewer.tsx           # generic shell
+│   │       │   ├── DeckStage.tsx
+│   │       │   ├── Overview.tsx
+│   │       │   ├── SpeakerNotesPanel.tsx
+│   │       │   ├── NotesPanel.tsx
+│   │       │   ├── AudienceView.tsx
+│   │       │   ├── useStageLayout.ts
+│   │       │   └── viewMath.ts
+│   │       ├── presenter/
+│   │       │   ├── usePresenter.ts
+│   │       │   ├── AnnotationOverlay.tsx
+│   │       │   ├── LaserPointer.tsx
+│   │       │   ├── Spotlight.tsx
+│   │       │   ├── Blackout.tsx
+│   │       │   ├── Toolbar.tsx
+│   │       │   ├── types.ts
+│   │       │   └── transport/
+│   │       ├── markdown/
+│   │       └── i18n/
+│   ├── lite-preset/           # @slidestage/lite-preset — Lite host wiring
+│   │   └── src/
+│   │       ├── litePreset.tsx
+│   │       ├── app/
+│   │       ├── viewer/                      # Lite-specific viewer wrappers
+│   │       │   ├── DeckViewer.tsx
+│   │       │   └── AudienceView.tsx
+│   │       ├── browser/
+│   │       │   └── stageServiceWorker.ts    # SW client (transport)
+│   │       ├── persistence/
+│   │       │   ├── annotationStore.ts
+│   │       │   ├── notesStore.ts
+│   │       │   ├── trustStore.ts
+│   │       │   └── legacyMigration.ts
+│   │       ├── desktop/                     # Tauri-only adapters
+│   │       └── i18n/
+│   └── brand/                 # @slidestage/brand — marks/wordmarks/social-cards
+│       └── src/
+├── src/                       # root app shell only
+│   ├── App.tsx
+│   ├── main.tsx
+│   └── routes.tsx
+├── public/
+│   └── stage-sw.js
 ├── tests/
 │   └── e2e/
 └── package.json
 ```
 
-The names are guidance, not a migration requirement. The important boundary is
-that deck parsing, stage rendering, presenter state, and persistence stay
-separate.
+The names are guidance, not a migration requirement. The important
+boundary is that deck parsing, stage rendering, presenter state, and
+persistence stay separate, AND that nothing in `packages/{core,ui}/`
+reaches into Lite-only host concerns like the SW or the IndexedDB
+schema.
 
 ## Core Modules
 
@@ -96,8 +141,8 @@ Responsibilities:
   URLs.
 - Return a `LoadedDeck` object for the viewer.
 
-Actual shape used by the loader (see `src/deck/types.ts` for the source of
-truth):
+Actual shape used by the loader (see `packages/core/src/deck/types.ts`
+for the source of truth):
 
 ```ts
 interface LoadedDeck {
@@ -185,7 +230,8 @@ lets the viewer pick per-iframe:
 
 The viewer's decision lives in
 `sandboxAllowsSameOrigin(iframeSandbox)` (see
-`src/deck/trustCapabilities.ts`):
+`packages/core/src/deck/trustCapabilities.ts`, which re-exports from
+`packages/spec/src/trustCapabilities.ts`):
 
 ```ts
 const useSrcdoc =
@@ -224,7 +270,7 @@ a real same-origin URL whose response carries
 `Access-Control-Allow-Origin: *`.
 
 The asset registry type kept by the loader is now (source of truth in
-`src/deck/types.ts`):
+`packages/core/src/deck/types.ts`):
 
 ```ts
 interface StageAsset {
@@ -240,8 +286,8 @@ interface DeckAssetTransport {
 }
 ```
 
-The SW client (`src/browser/stageServiceWorker.ts`) implements this
-interface; the loader is otherwise transport-agnostic.
+The SW client (`packages/lite-preset/src/browser/stageServiceWorker.ts`)
+implements this interface; the loader is otherwise transport-agnostic.
 
 ### Viewer Shell
 
@@ -336,10 +382,12 @@ stay consistent.
 
 ### Converter (sibling pipeline)
 
-`src/converter/` is a **separate** pipeline that produces `.stage`
-packages from outside formats. It shares no runtime state with the loader
-beyond the manifest/slide type definitions in `src/deck/types.ts` and
-`src/deck/manifestSchema.ts`.
+`packages/core/src/converter/` is a **separate** pipeline that produces
+`.stage` packages from outside formats. It shares no runtime state with
+the loader beyond the manifest/slide type definitions in
+`packages/core/src/deck/types.ts` and
+`packages/core/src/deck/manifestSchema.ts` (which re-export from
+`packages/spec/src/*`).
 
 Two entry points share the same core:
 
