@@ -1,6 +1,11 @@
 name: Release
 
-# Automated release pipeline for `@slidestage/{core,ui,lite-preset}`.
+# Automated release pipeline for all publishable `@slidestage/*` packages.
+#
+# Packages this workflow can ship (any non-`private: true` workspace pkg):
+#   - `@slidestage/core` / `ui` / `lite-preset`    — already on npm (0.1.1)
+#   - `@slidestage/spec`                            — built, not on npm yet
+#   - `@slidestage/brand`                           — built, not on npm yet
 #
 # How it works (changesets/action v1):
 #
@@ -15,12 +20,23 @@ name: Release
 #   4. When that PR is merged back to `main`, this workflow runs again,
 #      finds zero unconsumed changesets but a fresh version bump in
 #      `package.json`, and runs `pnpm release` (= `pnpm -r build &&
-#      changeset publish`) which publishes the three packages to npm
+#      changeset publish`) which publishes the changed packages to npm
 #      with `access: public` (pinned in `.changeset/config.json`).
 #
+# First-publish behaviour (relevant for `spec` + `brand` today):
+#   `changeset publish` checks each public package's current version against
+#   the npm registry. If the registry returns 404 (i.e. the package has
+#   never been published), the workflow publishes the current `package.json`
+#   version verbatim — no changeset .md required. This is how `spec@0.1.0`
+#   and `brand@0.1.0` will land on npm the first time this workflow
+#   dispatches after NPM_TOKEN is added.
+#
 # `fixed: [["@slidestage/core","@slidestage/ui","@slidestage/lite-preset"]]`
-# in `.changeset/config.json` keeps the three packages on the same version,
-# so they release as a set.
+# in `.changeset/config.json` keeps those three packages on the same version
+# so they release as a set. `spec` and `brand` are NOT in any `fixed` group
+# — they bump independently (matches their lower-level role: spec is the
+# `.stage` SoT, brand is the visual identity SoT; both should be able to
+# version on their own cadence).
 #
 # Required repository secret:
 #   NPM_TOKEN
@@ -35,14 +51,16 @@ name: Release
 # Trigger model:
 #   This workflow is currently `workflow_dispatch`-only — push-to-main no
 #   longer auto-runs it. Reason: as of 2026-05, `@slidestage/spec@0.1.0`
-#   exists in the workspace but not on npm. A push-triggered changesets/action
-#   would auto-attempt to first-publish spec on every commit and fail with
-#   `ERR_PNPM_OTP_NON_INTERACTIVE` until an Automation-type NPM_TOKEN is set.
-#   When that's done:
-#     1. Restore the `push: branches: main` trigger below.
-#     2. Write a changeset for `@slidestage/spec` (and any other bumps).
-#     3. Push to main — the workflow will open / merge the Version Packages
-#        PR and publish under the Automation token unattended.
+#   and `@slidestage/brand@0.1.0` exist in the workspace but not on npm.
+#   A push-triggered changesets/action would auto-attempt to first-publish
+#   them on every commit and fail with `ERR_PNPM_OTP_NON_INTERACTIVE` until
+#   an Automation-type NPM_TOKEN is set. When that's done:
+#     1. (Optional) Dispatch this workflow once manually — it will first-
+#        publish `spec@0.1.0` + `brand@0.1.0` since they are 404 on npm.
+#     2. Restore the `push: branches: main` trigger below.
+#     3. From then on, write changesets and push to main — the workflow
+#        opens / merges the Version Packages PR and publishes under the
+#        Automation token unattended.
 
 on:
   workflow_dispatch:
