@@ -1,6 +1,6 @@
 {
   "name": "@slidestage/brand",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Single source of truth for the SlideStage visual identity: logo / wordmark / mark / favicon / social-card assets and color design tokens for Lite, Pro, and slidestage-pack.",
   "license": "UNLICENSED",
