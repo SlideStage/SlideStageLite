@@ -248,13 +248,26 @@ function resolveBundleDir(target) {
 //     builder below treats it as a full filename suffix (hyphen-joined,
 //     not dot-joined) so the installer URL stays human-readable as
 //     `SlideStageLite-0.2.1-Windows-x64-setup.exe`.
+//   - `versionedMatcher` (optional) takes the build version and returns
+//     a stricter predicate. We use it for installer-style artifacts
+//     whose Tauri bundle names embed the version (so a GHA cargo-cache
+//     hit can leave an older `_<oldVersion>_x64-setup.exe` next to the
+//     fresh `_<newVersion>_x64-setup.exe`, and a plain `endsWith` match
+//     would non-deterministically pick the wrong one). For .app.tar.gz
+//     and .AppImage.tar.gz Tauri does NOT embed the version in the
+//     filename, so we keep the loose suffix match for those.
 const ARCHIVE_SUFFIXES = [
   { match: '.app.tar.gz', publishedExt: 'app.tar.gz' },
-  { match: '-setup.exe', publishedExt: '-setup.exe' },
+  {
+    match: '-setup.exe',
+    publishedExt: '-setup.exe',
+    versionedMatcher: (version) => (f) =>
+      f.endsWith(`_${version}_x64-setup.exe`),
+  },
   { match: '.AppImage.tar.gz', publishedExt: 'AppImage.tar.gz' },
 ];
 
-function locateUpdaterArtifacts(target) {
+function locateUpdaterArtifacts(target, version) {
   const bundleDir = resolveBundleDir(target);
   if (!bundleDir) {
     warn(`no bundle directory for target ${target} — skipping.`);
@@ -263,8 +276,18 @@ function locateUpdaterArtifacts(target) {
   const entries = readdirSync(bundleDir);
   let archive = null;
   let publishedExt = null;
-  for (const { match, publishedExt: ext } of ARCHIVE_SUFFIXES) {
-    const hit = entries.find((f) => f.endsWith(match));
+  for (const { match, publishedExt: ext, versionedMatcher } of ARCHIVE_SUFFIXES) {
+    let hit = null;
+    if (versionedMatcher) {
+      // Prefer the version-pinned match first. Fall through to the loose
+      // suffix match only when the pinned form is absent, so dev / local
+      // builds that don't follow Tauri's `_<version>_x64-setup.exe`
+      // naming still work.
+      hit = entries.find(versionedMatcher(version));
+    }
+    if (!hit) {
+      hit = entries.find((f) => f.endsWith(match));
+    }
     if (hit) {
       archive = hit;
       publishedExt = ext;
@@ -318,7 +341,7 @@ function main() {
       );
       continue;
     }
-    const located = locateUpdaterArtifacts(target);
+    const located = locateUpdaterArtifacts(target, version);
     if (!located) continue;
     const { archivePath, sigPath, publishedExt } = located;
     const suffix = PLATFORM_TO_TARGET_NAME_SUFFIX[platformKey] ?? platformKey;
