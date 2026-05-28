@@ -110,6 +110,17 @@ const ASSET_BASE_URL =
 const NOTES_OVERRIDE = argMap.notes && argMap.notes !== 'true' ? argMap.notes : null;
 const NOTES_FILE = argMap['notes-file'] || null;
 const MERGE_EXISTING = argMap['merge-existing'] === 'true';
+// When --merge-existing is on and the existing latest.json is from an
+// older version, treat that as a version-bump scenario and drop the
+// stale platform blocks rather than dying. Default on — the daily
+// release flow legitimately bumps the version before re-running this
+// pipeline, and a hard die there is just busy-work. Pass
+// --allow-version-bump=false (or the env var) to restore the strict
+// behavior, e.g. inside a release gate that must refuse a version
+// mismatch.
+const ALLOW_VERSION_BUMP =
+  (argMap['allow-version-bump'] ?? process.env.UPDATER_ALLOW_VERSION_BUMP ?? 'true') !==
+  'false';
 
 // ---- Logging ------------------------------------------------------------
 
@@ -124,6 +135,32 @@ function warn(msg) {
 function die(msg) {
   console.error(`\n[updater-manifest] ✖ ${msg}\n`);
   process.exit(1);
+}
+
+// ---- semver compare ----------------------------------------------------
+
+// We intentionally do NOT pull in `semver` from npm here. The release
+// pipeline must run with `node scripts/build-update-manifest.mjs` from a
+// clean checkout (no `pnpm install` step in the post-build hot path), so
+// adding a runtime dependency would create a new failure surface. Our
+// versions are plain `MAJOR.MINOR.PATCH` strings from tauri.conf.json
+// with no prerelease suffix, so a numeric tuple compare is sufficient.
+//
+// Returns -1 / 0 / 1 like `Array.prototype.sort` callbacks, or `null`
+// when either version is not parseable (caller decides whether to die).
+function compareSemver(a, b) {
+  const parse = (v) => {
+    const m = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v ?? '').trim());
+    if (!m) return null;
+    return [Number(m[1]), Number(m[2]), Number(m[3])];
+  };
+  const pa = parse(a);
+  const pb = parse(b);
+  if (!pa || !pb) return null;
+  for (let i = 0; i < 3; i += 1) {
+    if (pa[i] !== pb[i]) return pa[i] < pb[i] ? -1 : 1;
+  }
+  return 0;
 }
 
 // ---- Read version + notes ----------------------------------------------
@@ -336,13 +373,65 @@ function main() {
   let mergedNotes = notes;
   let mergedPubDate = pubDate;
   if (MERGE_EXISTING && existsSync(manifestPath)) {
+    let existing;
     try {
-      const existing = JSON.parse(readFileSync(manifestPath, 'utf8'));
-      if (existing.version && existing.version !== version) {
+      existing = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    } catch (err) {
+      die(`--merge-existing: failed to parse ${manifestPath}: ${err.message}`);
+    }
+
+    const existingVersion = existing.version ?? null;
+    const cmp =
+      existingVersion && existingVersion !== version
+        ? compareSemver(existingVersion, version)
+        : 0;
+
+    if (cmp === null) {
+      // Either side isn't a clean MAJOR.MINOR.PATCH; we don't know how
+      // to compare safely. Refuse to merge to avoid silently shipping
+      // mixed-version platform blocks.
+      die(
+        `--merge-existing: cannot compare versions "${existingVersion}" vs "${version}". ` +
+          `Expected both sides to be plain MAJOR.MINOR.PATCH.`,
+      );
+    } else if (cmp > 0) {
+      // existing > this build. Either someone is trying to publish a
+      // downgrade, or they bumped tauri.conf.json on one machine but
+      // ran a stale build on another. Both are bugs — die loudly.
+      die(
+        `--merge-existing: existing latest.json has version "${existingVersion}" ` +
+          `but this build is ${version}, which is OLDER. Refusing to publish a downgrade. ` +
+          `Bump tauri.conf.json or remove the stale manifest before re-running.`,
+      );
+    } else if (cmp < 0) {
+      // existing < this build. This is a version bump — the old
+      // platform blocks point at the previous release's archive URLs
+      // and minisign signatures, so they MUST be discarded. Replacing
+      // them wholesale is the correct semantics for the first
+      // architecture/platform of a new version. Subsequent runs at
+      // the SAME version will go down the cmp === 0 branch and merge
+      // normally.
+      if (!ALLOW_VERSION_BUMP) {
         die(
-          `--merge-existing: existing latest.json has version "${existing.version}" but this build is ${version}. Bump both sides to the same version before merging.`,
+          `--merge-existing: existing latest.json has version "${existingVersion}" ` +
+            `but this build is ${version}. --allow-version-bump=false refuses to ` +
+            `overwrite. Bump both sides to the same version before merging, or drop ` +
+            `the strict flag.`,
         );
       }
+      const droppedPlatforms = Object.keys(existing.platforms ?? {});
+      warn(
+        `--merge-existing: existing manifest is at older version "${existingVersion}", ` +
+          `this build is "${version}". Dropping stale platform blocks: ` +
+          `${droppedPlatforms.join(', ') || '(none)'}. ` +
+          `Re-run subsequent platform builds at ${version} to repopulate them.`,
+      );
+      // Intentionally do NOT carry over existing.notes or existing.pub_date
+      // — they describe the previous release.
+      mergedPlatforms = { ...platforms };
+    } else {
+      // Same version: original merge semantics — keep platform blocks
+      // we did not produce this run, replace the ones we did.
       mergedPlatforms = { ...(existing.platforms ?? {}), ...platforms };
       // Notes / pub_date: prefer the new values when explicitly
       // provided, otherwise keep whatever was there. This keeps the
@@ -361,8 +450,6 @@ function main() {
           .filter((k) => !(k in platforms))
           .join(', ') || '(none)'})`,
       );
-    } catch (err) {
-      die(`--merge-existing: failed to parse ${manifestPath}: ${err.message}`);
     }
   }
 

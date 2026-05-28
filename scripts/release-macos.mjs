@@ -585,12 +585,19 @@ function uploadToGithubRelease(version) {
   }
   // Collect everything we want to ship. Updater archives + .sig +
   // latest.json + DMGs + (eventually) Windows/Linux installers.
+  //
+  // We pin the SlideStageLite-* match to the build's exact version
+  // string so stale artifacts from a previous release (which legitimately
+  // accumulate in dist-desktop/ across `pnpm release:macos` runs) don't
+  // silently piggy-back onto the new GitHub Release. latest.json /
+  // SHA256SUMS.txt are inherently single-version anchors, so they stay
+  // un-pinned.
+  const versionPin = version.replace(/[.+]/g, '\\$&');
+  const uploadPattern = new RegExp(
+    `^(latest\\.json|SHA256SUMS\\.txt|SlideStageLite-${versionPin}-.+\\.(dmg|exe|msi|app\\.tar\\.gz|app\\.tar\\.gz\\.sig))$`,
+  );
   const all = readdirSync(DIST_DESKTOP)
-    .filter((f) =>
-      /^(latest\.json|SHA256SUMS\.txt|SlideStageLite-.+\.(dmg|exe|msi|app\.tar\.gz|app\.tar\.gz\.sig))$/.test(
-        f,
-      ),
-    )
+    .filter((f) => uploadPattern.test(f))
     .filter((f) => !f.includes(' ')) // Defensive: HTTP-mangled spaces.
     .sort();
   if (all.length === 0) {

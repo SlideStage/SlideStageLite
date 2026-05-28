@@ -270,10 +270,27 @@ if (!existsSync(TARGET_BUNDLE_DIR)) {
   die(`expected bundle dir missing: ${TARGET_BUNDLE_DIR}`);
 }
 
+// Pin the installer name to the version we just built. The GHA cargo
+// cache (keyed loosely on Cargo.lock + tauri.conf.json) can survive a
+// version bump if its `restore-keys` prefix matches a previous run, in
+// which case the bundle/nsis directory carries the OLD version's
+// `<productName>_<oldVersion>_x64-setup.exe` alongside the freshly
+// produced `<productName>_<newVersion>_x64-setup.exe`. An unanchored
+// `endsWith('-setup.exe')` then picks whichever Node's `readdirSync`
+// returned first — on the v0.3.0 Windows runner that turned out to be
+// the cached 0.2.1 installer, which we published to GH with a 0.3.0
+// filename. Anchoring on `_<version>_x64-setup.exe` is enough because
+// Tauri's NSIS template hard-codes the `_<version>_x64-setup.exe`
+// suffix and never reuses it for a different version's artifact.
 const bundleEntries = readdirSync(TARGET_BUNDLE_DIR);
-const setupExe = bundleEntries.find((f) => f.endsWith('-setup.exe'));
+const setupExeSuffix = `_${versionFromConf}_x64-setup.exe`;
+const setupExe = bundleEntries.find((f) => f.endsWith(setupExeSuffix));
 if (!setupExe) {
-  die(`no *-setup.exe found in ${TARGET_BUNDLE_DIR}`);
+  die(
+    `no *${setupExeSuffix} found in ${TARGET_BUNDLE_DIR}. ` +
+      `Entries present: ${bundleEntries.join(', ') || '(empty)'}. ` +
+      `Did tauri.conf.json get version-bumped before this run?`,
+  );
 }
 const SETUP_EXE_PATH = resolve(TARGET_BUNDLE_DIR, setupExe);
 info(`installer: ${SETUP_EXE_PATH}`);
@@ -284,10 +301,12 @@ if (!SKIP_UPDATER) {
   // archive IS the same `.exe` we ship as the installer; we only need
   // to confirm the `.sig` sibling exists here so build-update-manifest
   // can pick it up later in the pipeline.
-  const setupExeSig = bundleEntries.find((f) => f.endsWith('-setup.exe.sig'));
+  const setupExeSig = bundleEntries.find((f) =>
+    f.endsWith(`${setupExeSuffix}.sig`),
+  );
   if (!setupExeSig) {
     die(
-      `no *-setup.exe.sig found in ${TARGET_BUNDLE_DIR}. Did you set bundle.createUpdaterArtifacts=true and TAURI_SIGNING_PRIVATE_KEY? Tauri 2.x emits the signature next to the .exe rather than producing a .nsis.zip wrapper.`,
+      `no *${setupExeSuffix}.sig found in ${TARGET_BUNDLE_DIR}. Did you set bundle.createUpdaterArtifacts=true and TAURI_SIGNING_PRIVATE_KEY? Tauri 2.x emits the signature next to the .exe rather than producing a .nsis.zip wrapper.`,
     );
   }
   info(`updater sig: ${resolve(TARGET_BUNDLE_DIR, setupExeSig)}`);
@@ -470,12 +489,18 @@ function uploadToGithubRelease(version) {
   // Same regex as release-macos.mjs so the two pipelines agree on
   // exactly which files belong on the GitHub Release. Spaces are
   // refused defensively (Tauri's raw bundle names have one).
+  //
+  // The SlideStageLite-* match is pinned to the current build's version
+  // string so a stale dist-desktop/ (e.g. a previous version's setup.exe
+  // surviving the GHA cargo cache) cannot piggy-back onto this release.
+  // latest.json / SHA256SUMS.txt are inherently single-version anchors
+  // and stay un-pinned.
+  const versionPin = version.replace(/[.+]/g, '\\$&');
+  const uploadPattern = new RegExp(
+    `^(latest\\.json|SHA256SUMS\\.txt|SlideStageLite-${versionPin}-.+\\.(dmg|exe|msi|app\\.tar\\.gz|app\\.tar\\.gz\\.sig|nsis\\.zip|nsis\\.zip\\.sig))$`,
+  );
   const all = readdirSync(DIST_DESKTOP)
-    .filter((f) =>
-      /^(latest\.json|SHA256SUMS\.txt|SlideStageLite-.+\.(dmg|exe|msi|app\.tar\.gz|app\.tar\.gz\.sig|nsis\.zip|nsis\.zip\.sig))$/.test(
-        f,
-      ),
-    )
+    .filter((f) => uploadPattern.test(f))
     .filter((f) => !f.includes(' '))
     .sort();
   if (all.length === 0) {
