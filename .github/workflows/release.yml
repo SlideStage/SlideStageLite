@@ -127,6 +127,27 @@ jobs:
           publish: pnpm release
           commit: "chore(release): version packages"
           title: "chore(release): version packages"
+          # Reserve this repository's GitHub Releases page for the
+          # desktop app (tag `v*.*.*`). Without this flag, changesets/
+          # action would create one `@slidestage/<pkg>@<version>` Release
+          # per published package on every publish run, drowning the
+          # actual desktop ship in noise (10+ such entries already
+          # existed for the 0.1.x packages before we turned this off).
+          #
+          # IMPORTANT side effect that the docs DON'T mention (see
+          # changesets/action#547): `createGithubReleases: false` ALSO
+          # disables `git push --tags` for the per-package tags. That's
+          # fine for us — the only tag any downstream pipeline cares
+          # about is `v*.*.*` for desktop, which is pushed manually by
+          # the release author. Per-package tags would still be created
+          # locally on the runner but never reach origin, which matches
+          # what we want.
+          #
+          # npm publishing itself is unaffected: `pnpm release` still
+          # runs `changeset publish` which still pushes the packages to
+          # npmjs.com under the @slidestage scope. That's the contract
+          # SlideStagePack and SlideStagePro depend on.
+          createGithubReleases: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Authenticates `changeset publish` against npmjs. MUST be an
