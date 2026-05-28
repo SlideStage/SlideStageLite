@@ -10,6 +10,63 @@ This project follows [Semantic Versioning](https://semver.org/). Until
 
 ---
 
+## 0.3.0 — 2026-05-28
+
+Markdown lands in the presenter view, slide-internal Markdown gains GFM
+table support, and the reveal.js / impress.js → `.stage` converter is
+now native end-to-end. Existing 0.2.x desktop users will pick this up
+through the in-app updater on next launch — same minisign keypair, no
+reinstall.
+
+### Highlights — Presenter view
+
+- **Speaker notes render Markdown.** Code blocks, links, lists,
+  headings, emphasis, blockquotes, and GFM tables all render in the
+  presenter window's notes panel. The same `renderMarkdown` also
+  powers in-slide Markdown viewers, so deck authors can drop GFM
+  table syntax anywhere instead of falling back to handwritten HTML.
+
+### Highlights — Converter
+
+- **Native reveal.js / impress.js splitter.** `pnpm convert` and the
+  in-app Web Converter route `.html`, zip, and folder inputs through
+  a native splitter instead of string-slicing scripts. New e2e suites
+  cover round-trip, folder ingest, oversized decks, tricky assets,
+  relaxed manifests, and the trust prompt.
+- **`reveal-basic` template ships its bundled `reveal.js`.** A
+  `.gitignore` rule was silently eating
+  `packages/spec/templates/reveal-basic/dist/reveal.js`, so converted
+  decks fell through to a missing-script error. The bundle is now
+  tracked and ships with the template.
+
+### Highlights — Architecture
+
+- **`@slidestage/spec` and `@slidestage/brand` extracted as standalone
+  workspace packages on npm.** Spec owns the `.stage` schema, manifest
+  validation, path safety, trust capability, and fixtures. Brand owns
+  marks, wordmarks, the product registry, and the ecosystem README
+  generator. SlideStagePack and SlideStagePro consume both via
+  `@slidestage/<pkg>@<semver>` — no source-level coupling.
+- **GitHub Releases is reserved for the desktop app.** Per-package
+  `@slidestage/<pkg>@<version>` Releases no longer auto-create on npm
+  publish (`createGithubReleases: false` on the changesets action).
+  npm publishing itself is unchanged; the @slidestage scope on
+  npmjs.com is still the SoT for package consumers.
+
+### Downloads
+
+| Platform | File |
+| --- | --- |
+| macOS Apple Silicon | `SlideStageLite-0.3.0-macOS-AppleSilicon.dmg` |
+| macOS Intel | `SlideStageLite-0.3.0-macOS-Intel.dmg` |
+| Windows x64 | `SlideStageLite-0.3.0-Windows-x64-setup.exe` |
+
+Existing 0.2.x desktop users will see the in-app update banner on next
+launch and can install in place. Fresh installs should grab the DMG /
+NSIS installer above.
+
+---
+
 ## 0.2.1 — 2026-05-24
 
 Windows desktop bundle reaches feature parity with macOS: NSIS installer,

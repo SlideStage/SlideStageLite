@@ -1,6 +1,6 @@
 [package]
 name = "slidestage-lite-desktop"
-version = "0.2.1"
+version = "0.3.0"
 description = "SlideStage Lite — pure local .stage presentation runtime"
 authors = ["SlideStage"]
 edition = "2021"
