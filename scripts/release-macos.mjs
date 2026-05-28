@@ -472,6 +472,31 @@ const FINAL_PATH = resolve(DIST_DESKTOP, FINAL_NAME);
 copyFileSync(DMG_ORIG, FINAL_PATH);
 info(`copied: ${FINAL_NAME}`);
 
+// ---- Fetch existing latest.json from GitHub release (for cross-platform merge) ----
+//
+// Symmetric to the prefetch already implemented in release-windows.mjs.
+// When the Windows pipeline (GHA) and the macOS pipeline (local) ship the
+// same version, whichever runs LAST must merge into the other's already-
+// uploaded manifest, otherwise its `gh release upload --clobber` will
+// silently overwrite the first runner's platform block with a manifest
+// that only knows about its own platform. By pulling the live manifest
+// from the GitHub Release before running build-update-manifest, we let
+// `--merge-existing` see (and preserve) the other runner's blocks.
+//
+// Also covers the Intel-mac-after-AppleSilicon case on a single local
+// machine where dist-desktop/latest.json may have been deleted between
+// runs (e.g. after a CI clean) — the manifest gets repopulated from the
+// release before merging the new darwin-x86_64 block in.
+//
+// Permissive on failure: a missing release / missing asset is normal on
+// a first publish (no other-platform block exists yet to preserve). Only
+// network/auth errors are surfaced as warnings; nothing is fatal.
+
+if (!SKIP_UPDATER) {
+  step('Fetching existing latest.json from GitHub release (cross-platform merge prep)');
+  fetchExistingLatestJson(versionFromConf);
+}
+
 // ---- Build updater manifest (latest.json) ------------------------------
 
 if (!SKIP_UPDATER) {
@@ -618,6 +643,75 @@ function uploadToGithubRelease(version) {
     );
   }
   info(`uploaded ${all.length} asset(s) to ${tag}`);
+}
+
+/**
+ * Mirror of release-windows.mjs's `fetchExistingLatestJson`. Downloads the
+ * already-published `latest.json` (if any) into dist-desktop/ so the
+ * subsequent `build-update-manifest.mjs --merge-existing` call sees every
+ * platform block currently on the GitHub Release — not just whichever
+ * happens to be cached locally. Without this, a `pnpm release:macos
+ * --upload` on a clean checkout (or after a `dist-desktop/` purge) would
+ * silently overwrite the live manifest with a macOS-only file and break
+ * auto-update for the other platforms.
+ *
+ * Permissive: gh missing / release missing / asset missing all degrade
+ * to "proceed without prefetch" with a warn/info. We only surface an
+ * actual unexpected gh error (auth/network) as a warning.
+ */
+function fetchExistingLatestJson(version) {
+  const tag = `v${version}`;
+  const target = resolve(DIST_DESKTOP, 'latest.json');
+
+  if (!existsSync(DIST_DESKTOP)) mkdirSync(DIST_DESKTOP, { recursive: true });
+
+  const ghCheck = spawnSync('gh', ['--version'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (ghCheck.status !== 0) {
+    warn(
+      'gh CLI not available; skipping latest.json prefetch. Manifest may overwrite other-platform blocks on upload.',
+    );
+    return;
+  }
+
+  const view = spawnSync('gh', ['release', 'view', tag, '--json', 'tagName'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (view.status !== 0) {
+    info(`no GitHub release ${tag} yet — manifest will be created from scratch.`);
+    return;
+  }
+
+  const download = spawnSync(
+    'gh',
+    [
+      'release',
+      'download',
+      tag,
+      '--pattern',
+      'latest.json',
+      '--output',
+      target,
+      '--clobber',
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' },
+  );
+  if (download.status === 0 && existsSync(target)) {
+    const size = readFileSync(target, 'utf8').length;
+    info(`prefetched ${target} (${size} bytes) — other-platform blocks will be preserved.`);
+    return;
+  }
+  const stderr = (download.stderr ?? '').toString();
+  if (/no assets|no asset matches|release not found/i.test(stderr)) {
+    info(
+      `release ${tag} has no latest.json asset yet — manifest will be created from scratch.`,
+    );
+    return;
+  }
+  warn(
+    `failed to prefetch latest.json from ${tag}; will proceed with a fresh manifest. gh stderr:\n${stderr.trim() || '(empty)'}`,
+  );
 }
 
 function tryExec(cmd) {
