@@ -698,11 +698,13 @@ describe('convertFolderSource against @slidestage/spec source fixtures', () => {
     });
     expect(result.manifest.totalSlides).toBe(3);
     expect(result.manifest.slides.map((s) => s.label)).toEqual(['Cover', 'Aside', 'Inline Script']);
-    // Note: splitInlineDeck preserves inline `<script>` content per slide
-    // but does NOT auto-populate `compat.requires` the way splitReveal /
-    // splitImpress do — inline-deck authors are expected to set it via
-    // `manifestOverrides` if their slide really needs sandbox escapes.
-    // The pack-skill path is also intentionally permissive here.
+    // splitInlineDeck preserves inline `<script>` content per slide, so it must
+    // declare the trust capability that author code needs — exactly like
+    // splitReveal / splitImpress (DSS-CAND-013). The "Inline Script" slide here
+    // retains a <script>, so the produced manifest requires same-origin-storage.
+    expect(result.manifest.compat?.requires).toEqual(
+      expect.arrayContaining(['same-origin-storage']),
+    );
 
     const unzipped = unzipSync(result.stage);
     const keys = Object.keys(unzipped);

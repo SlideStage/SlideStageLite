@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::Serialize;
@@ -20,6 +21,67 @@ use tauri::RunEvent;
 /// the case where the user opens a second file while we're already up.
 #[derive(Default)]
 struct PendingFiles(Mutex<Vec<String>>);
+
+/// Canonical paths of `.stage` files the app itself surfaced (Finder
+/// open, argv, single-instance, macOS `RunEvent::Opened`). `read_deck_bytes`
+/// only reads paths in this set, so a compromised / same-origin renderer
+/// cannot turn the command into an arbitrary local-file read (DSS-CAND-002).
+#[derive(Default)]
+struct AllowedDeckPaths(Mutex<HashSet<PathBuf>>);
+
+/// True when `path` ends in a case-insensitive `.stage` extension.
+fn has_stage_extension(path: &Path) -> bool {
+    path.extension()
+        .and_then(|s| s.to_str())
+        .map(|ext| ext.eq_ignore_ascii_case("stage"))
+        .unwrap_or(false)
+}
+
+/// Validate a renderer-supplied path against the allow-list. Returns the
+/// canonical path to read, or an error describing why it was refused.
+///
+/// Enforced invariants:
+/// - extension must be `.stage` (case-insensitive),
+/// - the path must canonicalize (exists; symlinks resolved to their target),
+/// - the canonical path must be one the app previously surfaced.
+fn resolve_allowed_read(
+    path: &str,
+    allowed: &HashSet<PathBuf>,
+) -> Result<PathBuf, String> {
+    let candidate = Path::new(path);
+    if !has_stage_extension(candidate) {
+        return Err("refused: not a .stage file".to_string());
+    }
+    let canonical = std::fs::canonicalize(candidate)
+        .map_err(|e| format!("failed to resolve {path}: {e}"))?;
+    if !allowed.contains(&canonical) {
+        return Err(format!("refused: {path} was not opened through SlideStage"));
+    }
+    Ok(canonical)
+}
+
+/// Record a path the app surfaced so a later `read_deck_bytes` can read it.
+/// Returns `false` (and registers nothing) for non-`.stage` paths or paths
+/// that do not resolve to an existing file.
+fn register_allowed_deck_path(app: &AppHandle, path: &str) -> bool {
+    let candidate = Path::new(path);
+    if !has_stage_extension(candidate) {
+        return false;
+    }
+    let Ok(canonical) = std::fs::canonicalize(candidate) else {
+        return false;
+    };
+    if !canonical.is_file() {
+        return false;
+    }
+    match app.state::<AllowedDeckPaths>().0.lock() {
+        Ok(mut set) => {
+            set.insert(canonical);
+            true
+        }
+        Err(_) => false,
+    }
+}
 
 /// Metadata about a single connected display, surfaced to the front-end
 /// so the user can pick which monitor the audience window should
@@ -44,10 +106,25 @@ struct MonitorInfo {
 ///
 /// We deliberately keep this in Rust (instead of letting the front-end
 /// fetch the path directly) so the capability ACL in
-/// `capabilities/default.json` can scope-gate it.
+/// `capabilities/default.json` gates *who* can call it, while the
+/// allow-list below gates *which paths* it can read. The path must:
+///   1. end in `.stage`,
+///   2. resolve to an existing file, and
+///   3. be a path the app itself surfaced (Finder open / argv /
+///      `RunEvent::Opened`) — see `AllowedDeckPaths`.
+/// This prevents a compromised or same-origin renderer from reading
+/// arbitrary local files such as `/etc/passwd` (DSS-CAND-002).
 #[tauri::command]
-async fn read_deck_bytes(path: String) -> Result<Vec<u8>, String> {
-    std::fs::read(&path).map_err(|e| format!("failed to read {}: {}", path, e))
+async fn read_deck_bytes(app: AppHandle, path: String) -> Result<Vec<u8>, String> {
+    let canonical = {
+        let state = app.state::<AllowedDeckPaths>();
+        let allowed = state
+            .0
+            .lock()
+            .map_err(|_| "deck allow-list lock poisoned".to_string())?;
+        resolve_allowed_read(&path, &allowed)?
+    };
+    std::fs::read(&canonical).map_err(|e| format!("failed to read {}: {}", path, e))
 }
 
 /// Drain the in-memory queue of `.stage` paths that arrived before the
@@ -156,6 +233,87 @@ fn deck_cache_dir(app: &AppHandle, fingerprint: &str) -> Result<PathBuf, String>
     Ok(thumbnails_root(app)?.join(fingerprint))
 }
 
+/// Per-entry hard cap. A single 480×270 WebP should land well under 40 KB;
+/// anything bigger means something is wrong upstream.
+const MAX_THUMBNAIL_BYTES: usize = 256 * 1024;
+
+/// Per-deck thumbnail count cap (DSS-CAND-017). A legitimate deck stores
+/// one thumbnail per slide and stays far below this; the cap bounds a
+/// malicious renderer that floods `thumbnail_cache_put` with distinct
+/// `slide_id`s to grow a single deck dir without limit.
+const MAX_THUMBNAILS_PER_DECK: usize = 4000;
+
+/// Global byte budget across every deck's thumbnails (DSS-CAND-017).
+/// Oldest-first eviction keeps total on-disk usage bounded even as many
+/// decks are opened over the app's lifetime.
+const MAX_TOTAL_CACHE_BYTES: u64 = 256 * 1024 * 1024;
+
+/// Collect `(path, modified_time, size)` for every `*.webp` file directly
+/// inside `dir`. Missing dirs / unreadable entries are skipped rather than
+/// erroring — eviction is best-effort housekeeping.
+fn collect_webp_entries(dir: &Path) -> Vec<(PathBuf, std::time::SystemTime, u64)> {
+    let mut out = Vec::new();
+    let Ok(read) = std::fs::read_dir(dir) else {
+        return out;
+    };
+    for entry in read.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("webp") {
+            continue;
+        }
+        let Ok(meta) = entry.metadata() else {
+            continue;
+        };
+        if !meta.is_file() {
+            continue;
+        }
+        let modified = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
+        out.push((path, modified, meta.len()));
+    }
+    out
+}
+
+/// Evict oldest thumbnails in a single deck dir until at most `max` remain.
+fn evict_deck_to_count(dir: &Path, max: usize) {
+    let mut entries = collect_webp_entries(dir);
+    if entries.len() <= max {
+        return;
+    }
+    entries.sort_by_key(|(_, modified, _)| *modified); // oldest first
+    let remove_n = entries.len() - max;
+    for (path, _, _) in entries.into_iter().take(remove_n) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// Evict oldest thumbnails across every deck dir under `root` until the
+/// total size is within `budget`.
+fn evict_global_to_budget(root: &Path, budget: u64) {
+    let Ok(read) = std::fs::read_dir(root) else {
+        return;
+    };
+    let mut all: Vec<(PathBuf, std::time::SystemTime, u64)> = Vec::new();
+    for deck in read.flatten() {
+        let p = deck.path();
+        if p.is_dir() {
+            all.extend(collect_webp_entries(&p));
+        }
+    }
+    let mut total: u64 = all.iter().map(|(_, _, size)| *size).sum();
+    if total <= budget {
+        return;
+    }
+    all.sort_by_key(|(_, modified, _)| *modified); // oldest first
+    for (path, _, size) in all {
+        if total <= budget {
+            break;
+        }
+        if std::fs::remove_file(&path).is_ok() {
+            total = total.saturating_sub(size);
+        }
+    }
+}
+
 #[tauri::command]
 fn thumbnail_cache_get(
     app: AppHandle,
@@ -183,10 +341,10 @@ fn thumbnail_cache_put(
     if !slide_id_ok(&slide_id) {
         return Err("invalid slide_id".to_string());
     }
-    // 256 KB hard cap — a single 480×270 WebP should land under 40 KB; a
+    // Per-entry hard cap — a single 480×270 WebP should land under 40 KB; a
     // big buffer here means something is wrong upstream and we'd rather
     // bail than fill the user's disk.
-    if bytes.len() > 256 * 1024 {
+    if bytes.len() > MAX_THUMBNAIL_BYTES {
         return Err("thumbnail too large".to_string());
     }
     let dir = deck_cache_dir(&app, &fingerprint)?;
@@ -195,6 +353,14 @@ fn thumbnail_cache_put(
     let path = dir.join(format!("{slide_id}.webp"));
     std::fs::write(&path, &bytes)
         .map_err(|e| format!("failed to write thumbnail: {e}"))?;
+    // DSS-CAND-017: bound disk usage. Per-entry size alone does not stop a
+    // malicious renderer from flooding put() with distinct slide_ids (one
+    // deck) or churning many decks (global). Enforce a per-deck count cap
+    // and a global byte budget with oldest-first eviction after each write.
+    evict_deck_to_count(&dir, MAX_THUMBNAILS_PER_DECK);
+    if let Ok(root) = thumbnails_root(&app) {
+        evict_global_to_budget(&root, MAX_TOTAL_CACHE_BYTES);
+    }
     Ok(())
 }
 
@@ -285,6 +451,13 @@ fn set_check_update_menu_state(app: AppHandle, checking: bool) -> Result<(), Str
 }
 
 fn handle_opened_path(app: &AppHandle, path: String) {
+    // Only surface real, existing `.stage` files, and remember the
+    // canonical path so `read_deck_bytes` can scope its reads to files the
+    // user actually opened (DSS-CAND-002). Anything else is ignored.
+    if !register_allowed_deck_path(app, &path) {
+        eprintln!("ignoring open path (not an existing .stage file): {path}");
+        return;
+    }
     if let Ok(mut slot) = app.state::<PendingFiles>().0.lock() {
         slot.push(path.clone());
     }
@@ -327,6 +500,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(PendingFiles::default())
+        .manage(AllowedDeckPaths::default())
         .setup(|app| {
             // Windows / Linux: file path arrives via argv. macOS uses
             // RunEvent::Opened (handled below in the .run callback).
@@ -515,4 +689,169 @@ pub fn run() {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn stage_extension_is_detected_case_insensitively() {
+        assert!(has_stage_extension(Path::new("/decks/talk.stage")));
+        assert!(has_stage_extension(Path::new("/decks/TALK.STAGE")));
+        assert!(has_stage_extension(Path::new("/decks/Talk.Stage")));
+        assert!(!has_stage_extension(Path::new("/decks/talk.zip")));
+        assert!(!has_stage_extension(Path::new("/etc/passwd")));
+        assert!(!has_stage_extension(Path::new("/decks/stage")));
+        assert!(!has_stage_extension(Path::new("/decks/talk.stage.bak")));
+    }
+
+    #[test]
+    fn resolve_allowed_read_enforces_extension_existence_and_allowlist() {
+        let dir = std::env::temp_dir().join(format!(
+            "slidestage-read-scope-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+
+        let deck = dir.join("authorized.stage");
+        fs::write(&deck, b"PK\x03\x04").unwrap();
+        let secret = dir.join("secret.stage");
+        fs::write(&secret, b"top secret").unwrap();
+        let note = dir.join("passwd.txt");
+        fs::write(&note, b"root:x:0:0").unwrap();
+
+        let mut allowed = HashSet::new();
+        allowed.insert(fs::canonicalize(&deck).unwrap());
+
+        // Authorized `.stage` resolves to its canonical path.
+        let ok = resolve_allowed_read(deck.to_str().unwrap(), &allowed);
+        assert_eq!(ok.unwrap(), fs::canonicalize(&deck).unwrap());
+
+        // A `.stage` that exists but was never surfaced is refused.
+        assert!(resolve_allowed_read(secret.to_str().unwrap(), &allowed).is_err());
+
+        // A non-`.stage` path is refused even if we lie and add it to the set.
+        allowed.insert(fs::canonicalize(&note).unwrap());
+        assert!(resolve_allowed_read(note.to_str().unwrap(), &allowed).is_err());
+
+        // A path that does not exist is refused (canonicalize fails).
+        let missing = dir.join("ghost.stage");
+        assert!(resolve_allowed_read(missing.to_str().unwrap(), &allowed).is_err());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    fn unique_tmp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "slidestage-{tag}-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Write a webp file with a deterministic modified-time so eviction
+    /// ordering is reproducible regardless of filesystem mtime resolution.
+    fn write_webp_at(dir: &Path, name: &str, size: usize, modified: std::time::SystemTime) {
+        let path = dir.join(format!("{name}.webp"));
+        fs::write(&path, vec![0u8; size]).unwrap();
+        let file = fs::OpenOptions::new().write(true).open(&path).unwrap();
+        file.set_modified(modified).unwrap();
+    }
+
+    fn at(secs: u64) -> std::time::SystemTime {
+        std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs)
+    }
+
+    #[test]
+    fn evict_deck_to_count_removes_oldest_beyond_cap() {
+        let dir = unique_tmp_dir("evict-deck");
+        // 5 entries, ages 100..104 (oldest = "s0").
+        for i in 0..5u64 {
+            write_webp_at(&dir, &format!("s{i}"), 16, at(100 + i));
+        }
+
+        evict_deck_to_count(&dir, 3);
+
+        let remaining: HashSet<String> = collect_webp_entries(&dir)
+            .into_iter()
+            .filter_map(|(p, _, _)| {
+                p.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string())
+            })
+            .collect();
+        // The two oldest (s0, s1) are gone; the three newest survive.
+        assert_eq!(remaining.len(), 3);
+        assert!(!remaining.contains("s0"));
+        assert!(!remaining.contains("s1"));
+        assert!(remaining.contains("s2"));
+        assert!(remaining.contains("s3"));
+        assert!(remaining.contains("s4"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn evict_deck_to_count_keeps_everything_within_cap() {
+        let dir = unique_tmp_dir("evict-deck-noop");
+        for i in 0..3u64 {
+            write_webp_at(&dir, &format!("s{i}"), 16, at(100 + i));
+        }
+        evict_deck_to_count(&dir, 10);
+        assert_eq!(collect_webp_entries(&dir).len(), 3);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn evict_global_to_budget_trims_oldest_across_decks() {
+        let root = unique_tmp_dir("evict-global");
+        let deck_a = root.join("aaaa");
+        let deck_b = root.join("bbbb");
+        fs::create_dir_all(&deck_a).unwrap();
+        fs::create_dir_all(&deck_b).unwrap();
+
+        // 1000 bytes total across two decks; oldest is deck_a/old.
+        write_webp_at(&deck_a, "old", 400, at(10));
+        write_webp_at(&deck_b, "mid", 300, at(20));
+        write_webp_at(&deck_b, "new", 300, at(30));
+
+        // Budget 600 → must drop the oldest (400) to reach 600.
+        evict_global_to_budget(&root, 600);
+
+        let a = collect_webp_entries(&deck_a);
+        let b = collect_webp_entries(&deck_b);
+        let total: u64 = a
+            .iter()
+            .chain(b.iter())
+            .map(|(_, _, size)| *size)
+            .sum();
+        assert!(total <= 600, "total {total} should be within budget");
+        // The oldest entry (deck_a/old) is the one evicted.
+        assert!(a.is_empty());
+        assert_eq!(b.len(), 2);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn evict_global_to_budget_is_noop_within_budget() {
+        let root = unique_tmp_dir("evict-global-noop");
+        let deck = root.join("cccc");
+        fs::create_dir_all(&deck).unwrap();
+        write_webp_at(&deck, "s0", 100, at(10));
+        write_webp_at(&deck, "s1", 100, at(20));
+
+        evict_global_to_budget(&root, 10_000);
+        assert_eq!(collect_webp_entries(&deck).len(), 2);
+        let _ = fs::remove_dir_all(&root);
+    }
 }

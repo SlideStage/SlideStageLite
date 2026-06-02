@@ -89,13 +89,6 @@ export function AudienceView({
   const [presentation, setPresentation] = useState<AudiencePresentationState>(
     INITIAL_PRESENTATION,
   );
-  // Sandbox token the presenter is using. Tracked as separate state
-  // because it can change between snapshots (e.g. user grants
-  // additional trust while the audience window is open) and must
-  // override the local trust-store derivation for auto-elevated
-  // decks where the App layer granted caps that aren't declared in
-  // `compat.requires`.
-  const [presenterSandbox, setPresenterSandbox] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(true);
 
   // Mirror the OS-level fullscreen state into React so the toggle
@@ -177,9 +170,6 @@ export function AudienceView({
       case 'snapshot':
         setDeck(deserializeAudienceDeck(msg.snapshot));
         setPresentation(msg.snapshot.presentation);
-        if (typeof msg.snapshot.iframeSandbox === 'string') {
-          setPresenterSandbox(msg.snapshot.iframeSandbox);
-        }
         setPresenterAlive(true);
         break;
       case 'presentation':
@@ -226,19 +216,29 @@ export function AudienceView({
   }, [sync]);
 
   const iframeSandbox = useMemo<string>(() => {
-    // Prefer the sandbox the presenter is actually using (shipped
-    // over the snapshot envelope). Falling back to the local trust
-    // adapter means an older presenter build (or a slow snapshot)
-    // still renders something — but it loses the auto-elevation
-    // grant for decks without a declared `compat.requires`.
-    if (presenterSandbox) return presenterSandbox;
-    if (!deck) return BASE_SANDBOX_TOKEN;
-    if (!trustAdapter) return BASE_SANDBOX_TOKEN;
+    // DSS-CAND-012: derive the sandbox ENTIRELY from local trust state.
+    // The sync channel is same-origin and unauthenticated, so a forged
+    // snapshot must never be able to widen this iframe's privileges. We
+    // replicate LiteApp's presenter-side decision using only the deck
+    // metadata (which travels in the snapshot) and the on-device trust
+    // store (shared localStorage), never a presenter-supplied token.
+    if (!deck || !trustAdapter) return BASE_SANDBOX_TOKEN;
     const requiredCaps = normalizeCapabilities(deck.manifest.compat?.requires);
-    if (requiredCaps.length === 0) return BASE_SANDBOX_TOKEN;
-    const grant = trustAdapter.loadGrant(deck.fingerprint, requiredCaps);
-    return grant ? sandboxTokensFor(grant.capabilities) : BASE_SANDBOX_TOKEN;
-  }, [deck, presenterSandbox, trustAdapter]);
+    if (requiredCaps.length > 0) {
+      const grant = trustAdapter.loadGrant(deck.fingerprint, requiredCaps);
+      return grant ? sandboxTokensFor(grant.capabilities) : BASE_SANDBOX_TOKEN;
+    }
+    // Oversized decks have no usable srcdoc, so the presenter only
+    // renders them after the user consents to `same-origin-storage`
+    // (LiteApp.openDeckFile size-elevation path). Mirror that grant here
+    // so the audience iframe can also reach the Service Worker route.
+    if (!deck.inlinedHtmlAvailable) {
+      const sizeCaps: TrustCapability[] = ['same-origin-storage'];
+      const grant = trustAdapter.loadGrant(deck.fingerprint, sizeCaps);
+      return grant ? sandboxTokensFor(grant.capabilities) : BASE_SANDBOX_TOKEN;
+    }
+    return BASE_SANDBOX_TOKEN;
+  }, [deck, trustAdapter]);
 
   if (!deck) {
     return (

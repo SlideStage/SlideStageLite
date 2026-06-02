@@ -1,7 +1,7 @@
-import { unzipSync } from 'fflate';
 import { ZodError } from 'zod';
 import { parseManifest } from './manifestSchema';
 import { normalizePackagePath } from './pathSafety';
+import { safeUnzipSync } from './safeUnzip';
 import { rewriteHtmlAssetReferences, stripExternalLinkReferences } from './rewriteHtml';
 import {
   DEFAULT_INLINE_BUDGET_BYTES,
@@ -400,8 +400,18 @@ export async function loadDeck(
 
   let rawEntries: Record<string, Uint8Array>;
   try {
-    rawEntries = unzipSync(bytes);
-  } catch {
+    // Budget-aware unzip: reject decompression bombs *before* materializing
+    // entries, rather than via the post-hoc size check in `normalizeEntries`.
+    rawEntries = safeUnzipSync(bytes, {
+      maxEntryBytes,
+      maxTotalBytes: maxDecompressedBytes,
+    });
+  } catch (error) {
+    // A tripped budget is a real, actionable error — surface it instead of
+    // masking it as a generic "not a zip" failure.
+    if (error instanceof DeckLoadError) {
+      throw error;
+    }
     throw new DeckLoadError('E_NOT_ZIP', 'The selected file is not a readable .stage ZIP.');
   }
 

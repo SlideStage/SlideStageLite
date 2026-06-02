@@ -3,6 +3,7 @@ import { extractBalancedBlocks, type ExtractedBlock } from './htmlBlocks';
 import { asPlainUint8, bytesFromString } from './pack';
 import type { ConvertWarning } from './report';
 import type { SniffResult } from './sniffer';
+import { htmlRetainsScript, splitScriptCompat } from './splitCompat';
 import { extractInlineNotes, findSlideNotes } from './speakerNotes';
 
 // Lite-side port of slidestage-pack's dispatchSplitReveal. Splits a reveal.js
@@ -42,7 +43,10 @@ export interface RevealSplitResult {
   architecture: Manifest['architecture'];
   warnings: ConvertWarning[];
   pageTitle: string;
-  /** Populated when any extracted slide contains an inline <script> block. */
+  /**
+   * Populated when any generated slide retains author scripts — inline blocks,
+   * non-runtime `<script src>`, or scripts in the preserved `<head>`.
+   */
   compat: {
     requires: TrustCapability[];
     notes: string;
@@ -264,7 +268,10 @@ export function splitReveal(input: RevealSplitInput): RevealSplitResult {
 
   const usedFiles = new Set<string>();
   const manifestSlides: ManifestSlide[] = [];
-  let anyInlineScript = false;
+  // Author scripts surviving into the generated pages need trust. The
+  // preserved <head> (after runtime-script stripping) is shared by every
+  // slide, so detect it once; per-section bodies are checked in the loop.
+  let anyScript = htmlRetainsScript(headInner);
 
   sections.forEach((section, idx) => {
     const index = idx + 1;
@@ -283,7 +290,7 @@ export function splitReveal(input: RevealSplitInput): RevealSplitResult {
     usedFiles.add(candidate);
 
     const outer = reconstructOuter('section', section);
-    if (/<script\b/i.test(outer)) anyInlineScript = true;
+    if (htmlRetainsScript(outer)) anyScript = true;
 
     const page = buildSlidePage({
       pageTitle: label,
@@ -310,13 +317,7 @@ export function splitReveal(input: RevealSplitInput): RevealSplitResult {
       '[split:reveal] reveal.js fragments and inter-slide transitions are lost in split mode; use mode "wrap" to preserve them.',
   });
 
-  const compat = anyInlineScript
-    ? {
-        requires: ['same-origin-storage' as TrustCapability],
-        notes:
-          'One or more split slides contain inline <script> blocks. Granting same-origin-storage lets that author code run inside the platform iframe.',
-      }
-    : null;
+  const compat = anyScript ? splitScriptCompat() : null;
 
   return {
     packEntries,

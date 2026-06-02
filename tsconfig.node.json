@@ -18,6 +18,7 @@
     "vitest.config.ts",
     "scripts/**/*.mjs",
     "bin/**/*.ts",
-    "src/converter/index.test.ts"
+    "src/converter/index.test.ts",
+    "src/browser/stageServiceWorker.sw.test.ts"
   ]
 }

@@ -16,6 +16,7 @@
  *   --max-total-bytes <n>    Total download budget (default 500 MiB).
  *   --include-scripts        Mirror <script src="https://..."> as well.
  *   --include-iframes        Mirror <iframe src="https://..."> as well.
+ *   --allow-private-network  Allow private/loopback/link-local targets (unsafe).
  *   --allowed-host <h>       Repeatable allow-list (host suffix match).
  *   --blocked-host <h>       Repeatable deny-list.
  *   --timeout-ms <n>         Per-asset HTTP timeout (default 30000).
@@ -28,17 +29,24 @@
 
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
-import { unzipSync } from 'fflate';
 import {
   createNetworkFetcher,
   mirrorExternalAssets,
   packStage,
+  safeUnzipSync,
   type MirrorPolicy,
   type MirrorProgress,
   type MirrorResult,
 } from '@slidestage/core/converter';
 import { parseManifest } from '@slidestage/core/deck/manifestSchema';
+import { normalizePackagePath } from '@slidestage/core/deck/pathSafety';
 import type { Manifest, ManifestOfflineSkippedUrl } from '@slidestage/core/deck/types';
+
+// Decompression budgets, kept in lockstep with the loader / converter so the
+// CLI rejects the same decompression bombs the runtime does.
+const MAX_PACKAGE_BYTES = 200 * 1024 * 1024;
+const MAX_DECOMPRESSED_BYTES = 1024 * 1024 * 1024;
+const MAX_ENTRY_BYTES = 100 * 1024 * 1024;
 
 interface CliArgs {
   source?: string;
@@ -83,6 +91,9 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case '--include-iframes':
         args.policy.includeIframes = true;
+        break;
+      case '--allow-private-network':
+        args.policy.allowPrivateNetwork = true;
         break;
       case '--allowed-host': {
         const host = argv[++i];
@@ -134,6 +145,7 @@ Options:
   --max-total-bytes <n>   Total download budget (default 500 MiB).
   --include-scripts       Mirror <script src="https://..."> as well.
   --include-iframes       Mirror <iframe src="https://..."> as well.
+  --allow-private-network Allow private/loopback/link-local targets (unsafe).
   --allowed-host <h>      Repeatable allow-list (host suffix match).
   --blocked-host <h>      Repeatable deny-list.
   --timeout-ms <n>        Per-asset HTTP timeout (default 30000).
@@ -210,18 +222,50 @@ async function main(): Promise<void> {
   }
 
   const bytes = await readFile(sourcePath);
+  if (bytes.byteLength > MAX_PACKAGE_BYTES) {
+    process.stderr.write(
+      `[mirror] source exceeds the package size limit (${bytes.byteLength} > ${MAX_PACKAGE_BYTES}).\n`,
+    );
+    process.exit(4);
+  }
   let rawEntries: Record<string, Uint8Array>;
   try {
-    rawEntries = unzipSync(new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+    // Budget-aware unzip: reject decompression bombs before materializing the
+    // archive (CWE-409 / CWE-400) so the CLI cannot be OOM'd by a tiny input.
+    rawEntries = safeUnzipSync(new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength), {
+      maxEntryBytes: MAX_ENTRY_BYTES,
+      maxTotalBytes: MAX_DECOMPRESSED_BYTES,
+    });
   } catch (error) {
-    process.stderr.write(`[mirror] not a valid .stage zip: ${(error as Error).message}\n`);
+    const code = (error as { code?: string }).code;
+    if (code === 'E_TOO_LARGE') {
+      process.stderr.write(`[mirror] ${(error as Error).message}\n`);
+    } else {
+      process.stderr.write(`[mirror] not a valid .stage zip: ${(error as Error).message}\n`);
+    }
     process.exit(4);
   }
 
   const entries = new Map<string, Uint8Array>();
-  for (const [name, bytes_] of Object.entries(rawEntries)) {
-    if (name.endsWith('/')) continue;
-    entries.set(name.replace(/\\/g, '/'), bytes_);
+  try {
+    for (const [name, bytes_] of Object.entries(rawEntries)) {
+      if (name.endsWith('/')) continue;
+      // Normalize + validate every member name (CWE-22 / Zip Slip). Without
+      // this the CLI would "launder" a malicious archive — copying raw
+      // entry names like `../../evil` straight into a freshly re-signed
+      // `.stage` that downstream extractors honor. `normalizePackagePath`
+      // rewrites `\` to `/`, collapses `.`/empty segments, and throws
+      // `E_PATH_TRAVERSAL` on absolute / `..` / NUL names.
+      entries.set(normalizePackagePath(name), bytes_);
+    }
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code === 'E_PATH_TRAVERSAL') {
+      process.stderr.write(`[mirror] refusing unsafe archive member: ${(error as Error).message}\n`);
+    } else {
+      process.stderr.write(`[mirror] failed to read archive entries: ${(error as Error).message}\n`);
+    }
+    process.exit(4);
   }
 
   if (!entries.has('manifest.json')) {
@@ -241,6 +285,8 @@ async function main(): Promise<void> {
   const fetcher = createNetworkFetcher({
     timeoutMs: args.timeoutMs,
     headers: args.userAgent ? { 'user-agent': args.userAgent } : undefined,
+    // Re-validate redirect hops with the same private-network policy.
+    policy: args.policy,
   });
 
   const result = await mirrorExternalAssets(

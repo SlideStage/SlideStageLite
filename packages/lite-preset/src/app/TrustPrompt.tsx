@@ -8,11 +8,27 @@ interface TrustPromptProps {
   capabilities: TrustCapability[];
   onGrant: () => void;
   onCancel: () => void;
+  /**
+   * `declared` (default): the deck's `compat.requires` asked for the caps.
+   * `size`: the deck is too large to sandbox; we show a size-specific lead
+   * explaining that viewing it requires same-origin access.
+   */
+  reason?: 'declared' | 'size';
+  /** Deck size in MB (rounded string), shown in the `size` lead. */
+  sizeMb?: string;
 }
 
-export function TrustPrompt({ manifest, capabilities, onGrant, onCancel }: TrustPromptProps) {
+export function TrustPrompt({
+  manifest,
+  capabilities,
+  onGrant,
+  onCancel,
+  reason = 'declared',
+  sizeMb,
+}: TrustPromptProps) {
   const grantBtnRef = useRef<HTMLButtonElement | null>(null);
-  const { t } = useI18n();
+  const { t, tFormat } = useI18n();
+  const isSize = reason === 'size';
 
   useEffect(() => {
     grantBtnRef.current?.focus();
@@ -49,13 +65,19 @@ export function TrustPrompt({ manifest, capabilities, onGrant, onCancel }: Trust
         <header className="trust-prompt-head">
           <span className="trust-prompt-eyebrow">
             <ShieldCheck size={12} aria-hidden />
-            {t('trust.eyebrow')}
+            {isSize ? t('trust.size.eyebrow') : t('trust.eyebrow')}
           </span>
           <h2 id="trust-prompt-title">{manifest.title}</h2>
           <p id="trust-prompt-desc" className="trust-prompt-lead">
-            {t('trust.lead.before')}{' '}
-            <strong>{t('trust.lead.emphasis')}</strong>
-            {t('trust.lead.after')}
+            {isSize ? (
+              tFormat('trust.size.lead', { mb: sizeMb ?? '?' })
+            ) : (
+              <>
+                {t('trust.lead.before')}{' '}
+                <strong>{t('trust.lead.emphasis')}</strong>
+                {t('trust.lead.after')}
+              </>
+            )}
           </p>
         </header>
 

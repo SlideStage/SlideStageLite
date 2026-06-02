@@ -49,6 +49,12 @@ export interface ManifestOfflinePolicy {
   maxTotalBytes: number;
   allowedHosts?: string[];
   blockedHosts?: string[];
+  /**
+   * Opt-in escape hatch for mirroring private / loopback / link-local /
+   * cloud-metadata targets. Defaults to `false` (deny) so an untrusted deck
+   * cannot drive the mirror into SSRF against the operator's internal network.
+   */
+  allowPrivateNetwork?: boolean;
 }
 
 export interface ManifestOfflineMirroredAsset {

@@ -57,6 +57,12 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'trust.lead.before': 'This deck was packaged in a mode that needs extra browser capabilities to render faithfully. SlideStage Lite will not enable them until you grant trust for',
     'trust.lead.emphasis': 'this specific deck',
     'trust.lead.after': '.',
+    'trust.size.eyebrow': 'Large deck — extra access needed',
+    'trust.size.lead':
+      'This deck is {mb} MB, which is too large to run in the fully sandboxed mode. ' +
+      'To display it, SlideStage Lite must load it with same-origin access so the in-tab ' +
+      'service worker can stream its assets. This grants the capability below for this deck ' +
+      'only — open it only if you trust the source.',
     'trust.producerNote': 'Producer note:',
     'trust.warning':
       "Granting trust lets this deck's scripts read browser storage on this site, talk to sibling tabs, or open new windows. The decision is remembered per-deck (fingerprint sha256) until you clear browser storage. Open without trust by closing this dialog.",
@@ -296,6 +302,11 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
       '此演示打包时声明需要额外的浏览器能力才能完整呈现。SlideStage Lite 在你为',
     'trust.lead.emphasis': '该具体演示',
     'trust.lead.after': '授权之前不会启用这些能力。',
+    'trust.size.eyebrow': '大体积演示 — 需额外授权',
+    'trust.size.lead':
+      '该演示约 {mb} MB，体积过大，无法在完全沙箱模式下运行。为正常显示，SlideStage Lite ' +
+      '需要以同源（same-origin）方式加载它，让标签内的 Service Worker 流式提供资源。' +
+      '这将仅为本演示授予下述能力——请仅在信任来源时打开。',
     'trust.producerNote': '作者备注：',
     'trust.warning':
       '授予信任后，本演示的脚本可在本站读取浏览器存储、与同源标签页通信，或打开新窗口。该决定会按演示（sha256 指纹）记忆，直到你清除浏览器存储。如需以无信任模式打开，请直接关闭该对话框。',

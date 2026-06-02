@@ -41,16 +41,6 @@ export type SerializedAudienceDeck = Pick<
 export interface AudienceSnapshot {
   deck: SerializedAudienceDeck;
   presentation: AudiencePresentationState;
-  /**
-   * Sandbox token string the presenter is using for its own iframe.
-   * The audience MUST mirror this — otherwise auto-elevated decks
-   * (where the App layer silently granted `same-origin-storage` to
-   * dodge the OOM path) end up with an opaque-origin audience iframe
-   * that the Service Worker can't intercept, yielding an empty
-   * window. Optional only so older clients that didn't ship this
-   * field still produce a parseable snapshot.
-   */
-  iframeSandbox?: string;
 }
 
 export type AudienceMessage =
@@ -115,6 +105,101 @@ export function deserializeAudienceDeck(snapshot: AudienceSnapshot): LoadedDeck 
   };
 }
 
+const AUDIENCE_TOOLS: ReadonlySet<Tool> = new Set<Tool>([
+  'mouse',
+  'laser',
+  'pen',
+  'highlighter',
+  'eraser',
+  'spotlight',
+  'blackout',
+  'whiteout',
+]);
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isPoint(value: unknown): value is Point {
+  return isPlainObject(value) && typeof value.x === 'number' && typeof value.y === 'number';
+}
+
+function isAudiencePresentationState(value: unknown): value is AudiencePresentationState {
+  if (!isPlainObject(value)) return false;
+  if (typeof value.currentIndex !== 'number' || !Number.isFinite(value.currentIndex)) return false;
+  if (typeof value.tool !== 'string' || !AUDIENCE_TOOLS.has(value.tool as Tool)) return false;
+  if (typeof value.spotlightRadius !== 'number' || !Number.isFinite(value.spotlightRadius)) {
+    return false;
+  }
+  if (!isPlainObject(value.strokesByIdx)) return false;
+  const pointer = value.pointer;
+  if (pointer !== null) {
+    if (!isPlainObject(pointer)) return false;
+    if (pointer.tool !== 'laser' && pointer.tool !== 'spotlight') return false;
+    if (!isPoint(pointer.point)) return false;
+  }
+  return true;
+}
+
+function isSerializedAudienceDeck(value: unknown): value is SerializedAudienceDeck {
+  if (!isPlainObject(value)) return false;
+  if (typeof value.fingerprint !== 'string') return false;
+  if (!Array.isArray(value.slideUrls)) return false;
+  if (!Array.isArray(value.slideHtml)) return false;
+  if (!Array.isArray(value.thumbnailUrls)) return false;
+  const manifest = value.manifest;
+  if (!isPlainObject(manifest)) return false;
+  if (!isPlainObject(manifest.dimensions)) return false;
+  if (
+    typeof manifest.dimensions.width !== 'number' ||
+    typeof manifest.dimensions.height !== 'number'
+  ) {
+    return false;
+  }
+  if (!Array.isArray(manifest.slides)) return false;
+  return true;
+}
+
+/**
+ * Validate an inbound sync-channel payload before any consumer acts on it.
+ *
+ * The presentation sync channel (BroadcastChannel / Tauri event) is
+ * same-origin and unauthenticated: any script that can post to it could
+ * forge messages (DSS-CAND-012). The privilege-bearing field is already
+ * gone — the audience derives its iframe sandbox locally from its own
+ * trust store rather than trusting the presenter — but we still reject
+ * structurally invalid messages here so a forged or corrupt payload can't
+ * crash the audience renderer or inject nonsense presentation state.
+ */
+export function parseAudienceMessage(data: unknown): AudienceMessage | null {
+  if (!isPlainObject(data)) return null;
+  switch (data.type) {
+    case 'hello':
+    case 'goodbye':
+      return data.role === 'presenter' || data.role === 'audience'
+        ? ({ type: data.type, role: data.role } as AudienceMessage)
+        : null;
+    case 'request-snapshot':
+      return { type: 'request-snapshot' };
+    case 'presentation':
+      return isAudiencePresentationState(data.presentation)
+        ? { type: 'presentation', presentation: data.presentation }
+        : null;
+    case 'snapshot': {
+      const snapshot = data.snapshot;
+      if (!isPlainObject(snapshot)) return null;
+      if (!isSerializedAudienceDeck(snapshot.deck)) return null;
+      if (!isAudiencePresentationState(snapshot.presentation)) return null;
+      return {
+        type: 'snapshot',
+        snapshot: { deck: snapshot.deck, presentation: snapshot.presentation },
+      };
+    }
+    default:
+      return null;
+  }
+}
+
 export interface PresentationSyncApi {
   send: (msg: AudienceMessage) => void;
   available: boolean;
@@ -146,7 +231,10 @@ export function usePresentationSync(opts: UsePresentationSyncOptions): Presentat
     transportRef.current = transport;
 
     const unsubscribe = transport.subscribe((data) => {
-      handlerRef.current?.(data);
+      // Reject forged / malformed payloads before any consumer reacts.
+      const message = parseAudienceMessage(data as unknown);
+      if (!message) return;
+      handlerRef.current?.(message);
     });
 
     transport.postMessage({ type: 'hello', role });

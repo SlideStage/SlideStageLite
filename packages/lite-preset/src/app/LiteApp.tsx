@@ -31,6 +31,14 @@ import { UpdateBanner } from './UpdateBanner';
 interface PendingTrust {
   deck: LoadedDeck;
   capabilities: TrustCapability[];
+  /**
+   * Why we are prompting:
+   * - `declared`: the deck's `compat.requires` asked for these capabilities.
+   * - `size`: the deck is too large to sandbox, so rendering it at all needs
+   *   `same-origin-storage`. We surface a size-specific explanation and only
+   *   proceed on explicit consent (never a silent grant).
+   */
+  reason: 'declared' | 'size';
 }
 
 /**
@@ -143,27 +151,26 @@ export function LiteApp() {
       }
       const requiredCaps = normalizeCapabilities(nextDeck.manifest.compat?.requires);
 
-      // Oversized-deck auto-elevation. When the loader skipped the
-      // inline pass we MUST mount the iframe with `allow-same-origin`
-      // so the transport route is used — there is no usable srcdoc to
-      // fall back to. We silently grant `same-origin-storage` to
-      // cover that, but layer a visible banner on top so the user
-      // understands the security posture changed.
+      // Oversized-deck elevation. When the loader skipped the inline
+      // pass we MUST mount the iframe with `allow-same-origin` so the
+      // transport route is used — there is no usable srcdoc to fall
+      // back to. Granting `same-origin-storage` lets the deck's scripts
+      // run on the SlideStage origin, so this is a real trust
+      // elevation. We therefore REQUIRE explicit user consent through
+      // the trust prompt instead of silently granting it (DSS-CAND-001).
       //
-      // If the deck already declares `compat.requires`, that always
-      // wins: we go through the normal trust-prompt path so the user
-      // sees and approves every requested capability. The auto-grant
-      // only kicks in when there is no explicit declaration to
-      // honour.
+      // Re-opening a deck the user already approved skips the prompt via
+      // the remembered grant. If the deck declares `compat.requires`,
+      // that path below wins and the user approves every declared cap.
       if (!nextDeck.inlinedHtmlAvailable && requiredCaps.length === 0) {
-        const autoGrant: TrustCapability[] = ['same-origin-storage'];
-        // Persist so re-opens of the same deck don't re-trigger the
-        // banner. The user's explicit cancellation of a future prompt
-        // (if compat.requires changes later) still takes precedence
-        // because that is handled through the normal trust-prompt
-        // pipeline downstream.
-        saveTrustGrant(nextDeck.fingerprint, autoGrant);
-        enterDeck(nextDeck, autoGrant, { autoElevatedFor: 'size' });
+        const sizeCaps: TrustCapability[] = ['same-origin-storage'];
+        const remembered = loadTrustGrant(nextDeck.fingerprint, sizeCaps);
+        if (remembered) {
+          enterDeck(nextDeck, remembered.capabilities, { autoElevatedFor: 'size' });
+          return;
+        }
+        pendingTrustRef.current?.deck.revoke();
+        setPendingTrust({ deck: nextDeck, capabilities: sizeCaps, reason: 'size' });
         return;
       }
 
@@ -179,7 +186,7 @@ export function LiteApp() {
       }
 
       pendingTrustRef.current?.deck.revoke();
-      setPendingTrust({ deck: nextDeck, capabilities: requiredCaps });
+      setPendingTrust({ deck: nextDeck, capabilities: requiredCaps, reason: 'declared' });
     } catch (loadError) {
       const message =
         loadError instanceof DeckLoadError
@@ -198,7 +205,11 @@ export function LiteApp() {
     const pending = pendingTrust;
     if (!pending) return;
     saveTrustGrant(pending.deck.fingerprint, pending.capabilities);
-    enterDeck(pending.deck, pending.capabilities);
+    enterDeck(
+      pending.deck,
+      pending.capabilities,
+      pending.reason === 'size' ? { autoElevatedFor: 'size' } : {},
+    );
   };
 
   const handleTrustCancel = () => {
@@ -442,6 +453,8 @@ export function LiteApp() {
           <TrustPrompt
             manifest={pendingTrust.deck.manifest}
             capabilities={pendingTrust.capabilities}
+            reason={pendingTrust.reason}
+            sizeMb={(pendingTrust.deck.totalAssetBytes / (1024 * 1024)).toFixed(0)}
             onGrant={handleTrustGrant}
             onCancel={handleTrustCancel}
           />
@@ -578,6 +591,8 @@ export function LiteApp() {
         <TrustPrompt
           manifest={pendingTrust.deck.manifest}
           capabilities={pendingTrust.capabilities}
+          reason={pendingTrust.reason}
+          sizeMb={(pendingTrust.deck.totalAssetBytes / (1024 * 1024)).toFixed(0)}
           onGrant={handleTrustGrant}
           onCancel={handleTrustCancel}
         />

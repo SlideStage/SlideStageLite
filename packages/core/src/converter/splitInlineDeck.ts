@@ -3,6 +3,7 @@ import { extractBalancedBlocks, type ExtractedBlock } from './htmlBlocks';
 import { asPlainUint8, bytesFromString } from './pack';
 import type { ConvertWarning } from './report';
 import type { SniffResult } from './sniffer';
+import { htmlRetainsScript, splitScriptCompat, type SplitScriptCompat } from './splitCompat';
 import { extractInlineNotes, findSlideNotes } from './speakerNotes';
 
 const textDecoder = new TextDecoder('utf-8', { fatal: false });
@@ -31,6 +32,8 @@ export interface SplitResult {
   architecture: Manifest['architecture'];
   warnings: ConvertWarning[];
   pageTitle: string;
+  /** Populated when any generated slide retains author scripts (head or body). */
+  compat: SplitScriptCompat | null;
 }
 
 interface ExtractedSlide {
@@ -194,6 +197,7 @@ export function splitInlineDeck(input: SplitInput): SplitResult {
       architecture: 'multi-file',
       warnings,
       pageTitle: extractTitle(rootHtml),
+      compat: null,
     };
   }
 
@@ -212,6 +216,9 @@ export function splitInlineDeck(input: SplitInput): SplitResult {
   const slidesDir = dirnameOf(rootHtmlPath);
   const usedFiles = new Set<string>();
   const manifestSlides: ManifestSlide[] = [];
+  // Author scripts surviving into the generated pages need trust. The
+  // preserved <head> (post runtime-script strip) is shared by every slide.
+  let anyScript = htmlRetainsScript(headInner);
 
   slides.forEach((slide, idx) => {
     const index = idx + 1;
@@ -225,6 +232,7 @@ export function splitInlineDeck(input: SplitInput): SplitResult {
     usedFiles.add(candidate);
 
     const html = buildSlidePageHtml(headInner, slide);
+    if (htmlRetainsScript(slide.innerHtml)) anyScript = true;
     packEntries.set(candidate, asPlainUint8(bytesFromString(html)));
 
     manifestSlides.push({
@@ -245,6 +253,7 @@ export function splitInlineDeck(input: SplitInput): SplitResult {
     architecture: 'multi-file',
     warnings,
     pageTitle: extractTitle(rootHtml),
+    compat: anyScript ? splitScriptCompat() : null,
   };
 }
 

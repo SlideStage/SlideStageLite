@@ -2,6 +2,7 @@ import type { Manifest, ManifestSlide } from '../deck/types';
 import { extractBalancedBlocks, type ExtractedBlock } from './htmlBlocks';
 import { asPlainUint8, bytesFromString } from './pack';
 import type { ConvertWarning } from './report';
+import { htmlRetainsScript, splitScriptCompat, type SplitScriptCompat } from './splitCompat';
 import { extractInlineNotes, findSlideNotes } from './speakerNotes';
 
 const textDecoder = new TextDecoder('utf-8', { fatal: false });
@@ -27,6 +28,8 @@ export interface SplitWcResult {
   architecture: Manifest['architecture'];
   warnings: ConvertWarning[];
   pageTitle: string;
+  /** Populated when any generated slide retains author scripts (head or body). */
+  compat: SplitScriptCompat | null;
 }
 
 interface ExtractedSlide {
@@ -171,6 +174,7 @@ export function splitWebComponent(input: SplitWcInput): SplitWcResult {
       architecture: 'multi-file',
       warnings,
       pageTitle: extractTitle(rootHtml),
+      compat: null,
     };
   }
 
@@ -186,6 +190,9 @@ export function splitWebComponent(input: SplitWcInput): SplitWcResult {
   const slideDir = dirnameOf(rootHtmlPath);
   const usedFiles = new Set<string>();
   const manifestSlides: ManifestSlide[] = [];
+  // Author scripts surviving into the generated pages need trust. The
+  // preserved <head> (post runtime-script strip) is shared by every slide.
+  let anyScript = htmlRetainsScript(headInner);
 
   slides.forEach((slide, idx) => {
     const index = idx + 1;
@@ -199,6 +206,7 @@ export function splitWebComponent(input: SplitWcInput): SplitWcResult {
     usedFiles.add(candidate);
 
     const html = buildSlidePageHtml(headInner, slide);
+    if (htmlRetainsScript(slide.innerHtml)) anyScript = true;
     packEntries.set(candidate, asPlainUint8(bytesFromString(html)));
 
     manifestSlides.push({
@@ -217,6 +225,7 @@ export function splitWebComponent(input: SplitWcInput): SplitWcResult {
     architecture: 'multi-file',
     warnings,
     pageTitle: extractTitle(rootHtml),
+    compat: anyScript ? splitScriptCompat() : null,
   };
 }
 

@@ -1,14 +1,17 @@
 // Regression: 146 MB CJK-font decks crashed the renderer because the
 // loader's `createDataUrls()` base64-encoded every asset upfront. The
 // fix is `inlineMode: 'auto'` (Web): once a deck exceeds the inline
-// budget, the loader skips the data: URL pass and App.tsx auto-grants
-// `same-origin-storage` so the slide can render via the SW transport
-// (which doesn't pay the base64 cost). A sticky banner tells the
-// user the deck was auto-elevated.
+// budget, the loader skips the data: URL pass so the slide can render
+// via the SW transport (which doesn't pay the base64 cost).
+//
+// Security (DSS-CAND-001): rendering an oversized deck needs
+// `allow-same-origin`, which is a real trust elevation, so the app now
+// REQUIRES explicit consent through the trust prompt (no silent grant).
+// After the user grants, a sticky banner reminds them of the posture.
 import { expect, test } from '@playwright/test';
 import { resolve } from 'node:path';
 
-test('oversized deck auto-elevates to same-origin and renders via SW (no srcdoc)', async ({
+test('oversized deck prompts for same-origin consent, then renders via SW (no srcdoc)', async ({
   page,
 }) => {
   // Track every font/blob request the iframe makes so we can prove no
@@ -37,7 +40,16 @@ test('oversized deck auto-elevates to same-origin and renders via SW (no srcdoc)
     .getByLabel(/Open \.stage/i)
     .setInputFiles(resolve('tests/fixtures/oversized.stage'));
 
-  // 1. Sticky banner appears explaining the auto-elevation.
+  // 0. Oversized web decks now REQUIRE explicit consent — the trust
+  //    prompt appears (size variant) and nothing renders until granted.
+  const prompt = page.getByTestId('trust-prompt');
+  await expect(prompt).toBeVisible();
+  await expect(prompt).toContainText(/MB/);
+  await expect(page.getByTestId('auto-elevated-notice')).toHaveCount(0);
+  await page.getByTestId('trust-prompt-grant').click();
+  await expect(prompt).toHaveCount(0);
+
+  // 1. Sticky banner appears explaining the elevation.
   const notice = page.getByTestId('auto-elevated-notice');
   await expect(notice).toBeVisible();
   await expect(notice).toContainText(/MB/);
@@ -92,16 +104,17 @@ test('oversized deck auto-elevates to same-origin and renders via SW (no srcdoc)
   await expect(notice).toHaveCount(0);
 });
 
-test('oversized deck: audience popup also mounts via SW (mirrors presenter sandbox)', async ({
+test('oversized deck: audience popup also mounts via SW (derives sandbox locally)', async ({
   page,
 }) => {
-  // Regression: the audience window used to recompute its iframe
-  // sandbox from `manifest.compat.requires`. For auto-elevated decks
-  // (no declared caps; the App layer silently granted
-  // `same-origin-storage`), that recompute landed at `allow-scripts`
-  // only — opaque origin, SW bypassed, popup blank. The fix ships
-  // the resolved sandbox token over the snapshot envelope so the
-  // audience exactly mirrors the presenter.
+  // Regression + DSS-CAND-012: for size-elevated decks (no declared caps;
+  // the user granted `same-origin-storage` for size), the audience window
+  // must still mount via the SW. The audience derives its iframe sandbox
+  // ENTIRELY from local state — the deck's `inlinedHtmlAvailable=false`
+  // flag (in the snapshot) plus the `same-origin-storage` grant the
+  // presenter persisted to the shared trust store — never a presenter-
+  // supplied sandbox token. This keeps a forged snapshot from elevating
+  // the audience iframe while still rendering the legitimate deck.
   await page.goto('/');
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
@@ -109,6 +122,10 @@ test('oversized deck: audience popup also mounts via SW (mirrors presenter sandb
   await page
     .getByLabel(/Open \.stage/i)
     .setInputFiles(resolve('tests/fixtures/oversized.stage'));
+
+  // Grant the size-consent prompt before the deck renders.
+  await expect(page.getByTestId('trust-prompt')).toBeVisible();
+  await page.getByTestId('trust-prompt-grant').click();
 
   await expect(page.getByTestId('auto-elevated-notice')).toBeVisible();
   await expect(page.frameLocator('iframe[title^="Slide 1"]').first().getByText('Oversized Deck'))
@@ -121,7 +138,7 @@ test('oversized deck: audience popup also mounts via SW (mirrors presenter sandb
   // Audience iframe must:
   //  (a) actually appear (presenter shipped the snapshot);
   //  (b) mount via `src`, not srcdoc (oversized → inlinedHtmlAvailable=false);
-  //  (c) inherit `allow-same-origin` so the SW can intercept.
+  //  (c) derive `allow-same-origin` from the local grant so the SW can intercept.
   const audienceIframe = audience.locator('iframe[title^="Audience slide 1"]').first();
   await expect(audienceIframe).toBeAttached({ timeout: 10_000 });
   // Wait for the snapshot to be applied (sandbox is set on mount).

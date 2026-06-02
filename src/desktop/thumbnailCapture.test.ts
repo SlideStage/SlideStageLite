@@ -33,9 +33,37 @@ describe('injectCaptureProbe', () => {
   });
 });
 
+describe('decodeThumbnailBytes (DSS-CAND-016)', () => {
+  it('accepts a well-formed WebP payload', () => {
+    const valid = (() => {
+      const arr = new Array<number>(20).fill(0);
+      arr[0] = 0x52;
+      arr[1] = 0x49;
+      arr[2] = 0x46;
+      arr[3] = 0x46;
+      arr[8] = 0x57;
+      arr[9] = 0x45;
+      arr[10] = 0x42;
+      arr[11] = 0x50;
+      return arr;
+    })();
+    const decoded = __test.decodeThumbnailBytes(valid);
+    expect(decoded).toBeInstanceOf(Uint8Array);
+    expect(__test.looksLikeWebp(decoded!)).toBe(true);
+  });
+
+  it('rejects non-arrays, short, oversized, and non-WebP payloads', () => {
+    expect(__test.decodeThumbnailBytes('nope')).toBeNull();
+    expect(__test.decodeThumbnailBytes([1, 2, 3])).toBeNull();
+    expect(__test.decodeThumbnailBytes(new Array(__test.MAX_THUMBNAIL_BYTES + 1).fill(0x52))).toBeNull();
+    // Right length, wrong magic.
+    expect(__test.decodeThumbnailBytes(new Array(32).fill(0))).toBeNull();
+  });
+});
+
 interface FakeIframe {
   el: HTMLIFrameElement;
-  emit: (data: unknown) => void;
+  emit: (data: unknown, source?: Window | null) => void;
 }
 
 function makeFakeIframe(): FakeIframe {
@@ -45,10 +73,32 @@ function makeFakeIframe(): FakeIframe {
   document.body.appendChild(el);
   return {
     el,
-    emit(data: unknown) {
-      window.dispatchEvent(new MessageEvent('message', { data }));
+    // Default the message source to the iframe's own contentWindow so the
+    // DSS-CAND-016 sender check accepts it. Pass an explicit source to
+    // exercise the rejection path.
+    emit(data: unknown, source: Window | null = el.contentWindow) {
+      window.dispatchEvent(new MessageEvent('message', { data, source }));
     },
   };
+}
+
+/**
+ * Build a minimal, valid-looking WebP byte array (RIFF/WEBP magic + a
+ * recognizable marker byte) so the capture's payload validation accepts
+ * it. `marker` lets a test assert which payload was delivered.
+ */
+function webpBytes(marker: number, length = __test.MIN_THUMBNAIL_BYTES): number[] {
+  const arr = new Array<number>(length).fill(0);
+  arr[0] = 0x52; // R
+  arr[1] = 0x49; // I
+  arr[2] = 0x46; // F
+  arr[3] = 0x46; // F
+  arr[8] = 0x57; // W
+  arr[9] = 0x45; // E
+  arr[10] = 0x42; // B
+  arr[11] = 0x50; // P
+  arr[12] = marker & 0xff;
+  return arr;
 }
 
 describe('runSingleCapture', () => {
@@ -72,18 +122,19 @@ describe('runSingleCapture', () => {
       { iframe: fake.el, signal: controller.signal },
     );
 
+    const payload = webpBytes(33);
     setTimeout(() => {
       fake.emit({
         __tag: __test.PROBE_MESSAGE_TAG,
         slideId: 'slide-1',
         status: 'ok',
-        bytes: [11, 22, 33],
+        bytes: payload,
       });
     }, 0);
 
     await expect(captured).resolves.toEqual({
       slideId: 'slide-1',
-      bytes: new Uint8Array([11, 22, 33]),
+      bytes: new Uint8Array(payload),
     });
   });
 
@@ -140,12 +191,13 @@ describe('runSingleCapture', () => {
       { iframe: fake.el, signal: controller.signal },
     );
 
+    const targetPayload = webpBytes(7);
     setTimeout(() => {
       fake.emit({
         __tag: __test.PROBE_MESSAGE_TAG,
         slideId: 'other-slide',
         status: 'ok',
-        bytes: [9],
+        bytes: webpBytes(9),
       });
     }, 0);
 
@@ -154,14 +206,103 @@ describe('runSingleCapture', () => {
         __tag: __test.PROBE_MESSAGE_TAG,
         slideId: 'slide-target',
         status: 'ok',
-        bytes: [1, 2, 3],
+        bytes: targetPayload,
       });
     }, 5);
 
     await expect(promise).resolves.toEqual({
       slideId: 'slide-target',
-      bytes: new Uint8Array([1, 2, 3]),
+      bytes: new Uint8Array(targetPayload),
     });
+  });
+
+  it('ignores messages whose source is not the capture iframe (DSS-CAND-016)', async () => {
+    const controller = new AbortController();
+    const promise = runSingleCapture(
+      {
+        slideId: 'slide-1',
+        slideHtml: '<html></html>',
+        width: 100,
+        height: 100,
+      },
+      { iframe: fake.el, signal: controller.signal },
+    );
+
+    // A message that looks perfect but comes from another window/frame.
+    setTimeout(() => {
+      fake.emit(
+        {
+          __tag: __test.PROBE_MESSAGE_TAG,
+          slideId: 'slide-1',
+          status: 'ok',
+          bytes: webpBytes(1),
+        },
+        window,
+      );
+    }, 0);
+    // The genuine capture (from the iframe) lands shortly after and wins.
+    const genuine = webpBytes(2);
+    setTimeout(() => {
+      fake.emit({
+        __tag: __test.PROBE_MESSAGE_TAG,
+        slideId: 'slide-1',
+        status: 'ok',
+        bytes: genuine,
+      });
+    }, 10);
+
+    await expect(promise).resolves.toEqual({
+      slideId: 'slide-1',
+      bytes: new Uint8Array(genuine),
+    });
+  });
+
+  it('rejects an ok payload that is not a valid WebP (DSS-CAND-016)', async () => {
+    const controller = new AbortController();
+    const promise = runSingleCapture(
+      {
+        slideId: 'slide-1',
+        slideHtml: '<html></html>',
+        width: 100,
+        height: 100,
+      },
+      { iframe: fake.el, signal: controller.signal },
+    );
+
+    setTimeout(() => {
+      fake.emit({
+        __tag: __test.PROBE_MESSAGE_TAG,
+        slideId: 'slide-1',
+        status: 'ok',
+        bytes: [11, 22, 33], // too short, wrong magic
+      });
+    }, 0);
+
+    await expect(promise).rejects.toThrow(/invalid or oversized/);
+  });
+
+  it('rejects an ok payload that exceeds the size cap (DSS-CAND-016)', async () => {
+    const controller = new AbortController();
+    const promise = runSingleCapture(
+      {
+        slideId: 'slide-1',
+        slideHtml: '<html></html>',
+        width: 100,
+        height: 100,
+      },
+      { iframe: fake.el, signal: controller.signal },
+    );
+
+    setTimeout(() => {
+      fake.emit({
+        __tag: __test.PROBE_MESSAGE_TAG,
+        slideId: 'slide-1',
+        status: 'ok',
+        bytes: webpBytes(1, __test.MAX_THUMBNAIL_BYTES + 1),
+      });
+    }, 0);
+
+    await expect(promise).rejects.toThrow(/invalid or oversized/);
   });
 });
 
@@ -215,19 +356,23 @@ describe('runCaptureQueue', () => {
       {
         cache,
         fingerprint: 'fp',
-        onSlideReady: (slideId, bytes) => ready.push([slideId, bytes[0] ?? -1]),
+        // Marker byte lives at index 12 for fresh WebP captures; cache
+        // hits store a raw single byte, so read index 0 there.
+        onSlideReady: (slideId, bytes) =>
+          ready.push([slideId, bytes.length > 12 ? (bytes[12] ?? -1) : (bytes[0] ?? -1)]),
         onSlideFailed: (failure) => failed.push(failure.slideId),
       },
     );
 
     // First slide is a cache hit — no probe required.
     // Second slide needs a real capture — emit a probe ok shortly after.
+    const slideBPayload = webpBytes(99);
     setTimeout(() => {
       fake.emit({
         __tag: __test.PROBE_MESSAGE_TAG,
         slideId: 'slide-b',
         status: 'ok',
-        bytes: [99],
+        bytes: slideBPayload,
       });
     }, 20);
 
@@ -237,7 +382,7 @@ describe('runCaptureQueue', () => {
       ['slide-b', 99],
     ]);
     expect(failed).toEqual([]);
-    expect(cache._store.get('slide-b')).toEqual(new Uint8Array([99]));
+    expect(cache._store.get('slide-b')).toEqual(new Uint8Array(slideBPayload));
   });
 
   it('records per-slide failures without stopping the queue', async () => {
@@ -270,7 +415,7 @@ describe('runCaptureQueue', () => {
         __tag: __test.PROBE_MESSAGE_TAG,
         slideId: 'slide-b',
         status: 'ok',
-        bytes: [7],
+        bytes: webpBytes(7),
       });
     }, 30);
 
@@ -300,7 +445,7 @@ describe('runCaptureQueue', () => {
         __tag: __test.PROBE_MESSAGE_TAG,
         slideId: 'slide-a',
         status: 'ok',
-        bytes: [1],
+        bytes: webpBytes(1),
       });
       controller.abort();
     }, 10);

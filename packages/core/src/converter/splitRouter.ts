@@ -2,6 +2,7 @@ import type { Manifest, ManifestSlide } from '../deck/types';
 import { asPlainUint8 } from './pack';
 import type { ConvertWarning } from './report';
 import type { RouterManifestEntry, SniffResult } from './sniffer';
+import { htmlRetainsScript, splitScriptCompat, type SplitScriptCompat } from './splitCompat';
 import { findSlideNotes } from './speakerNotes';
 
 const textDecoder = new TextDecoder('utf-8', { fatal: false });
@@ -21,6 +22,8 @@ export interface SplitRouterResult {
   architecture: Manifest['architecture'];
   warnings: ConvertWarning[];
   pageTitle: string;
+  /** Populated when any kept slide page retains author scripts. */
+  compat: SplitScriptCompat | null;
 }
 
 function readBytesAsString(entries: Map<string, Uint8Array>, path: string): string {
@@ -89,12 +92,17 @@ export function splitRouter(input: SplitRouterInput): SplitRouterResult {
       architecture: 'multi-file',
       warnings,
       pageTitle,
+      compat: null,
     };
   }
 
   const packEntries = copyExceptManifest(entries);
   const slides: ManifestSlide[] = [];
   let kept = 0;
+  // Router slides are kept verbatim (the per-slide pages are passed through
+  // unmodified), so any <script> in them is author code that runs inside the
+  // platform iframe and must be declared as a trust requirement.
+  let anyScript = false;
 
   routerEntries.forEach((entry, idx) => {
     const resolved = normalizeRelativePath(rootHtmlPath, entry.file);
@@ -105,6 +113,7 @@ export function splitRouter(input: SplitRouterInput): SplitRouterResult {
 
     kept += 1;
     const slideHtml = readBytesAsString(entries, resolved);
+    if (htmlRetainsScript(slideHtml)) anyScript = true;
     scanParentRefs(slideHtml, resolved, warnings);
 
     const label = (entry.label?.trim() || `Slide ${idx + 1}`).slice(0, 256);
@@ -129,6 +138,7 @@ export function splitRouter(input: SplitRouterInput): SplitRouterResult {
     architecture: 'multi-file',
     warnings,
     pageTitle,
+    compat: anyScript ? splitScriptCompat() : null,
   };
 }
 

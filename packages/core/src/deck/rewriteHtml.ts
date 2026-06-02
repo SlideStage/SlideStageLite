@@ -20,6 +20,25 @@ const inlineStyleTagPattern = /<style\s+data-slidestage-inline-css="([^"]+)">([\
 
 const IMPORT_INLINE_DEPTH = 8;
 
+// Cumulative cap on bytes spliced in by recursive `@import` inlining for a
+// single top-level HTML rewrite (one slide, including nested iframe srcdocs).
+// Depth + cycle detection alone do not bound a fan-out graph — N sibling
+// `@import`s of the same large file, repeated per level, can amplify a tiny
+// archive into gigabytes of in-memory CSS at load time (CWE-400). Once this
+// budget is exhausted we stop splicing and leave the remaining `@import`s as
+// plain references. 8 MiB is far above any realistic deck's CSS while still
+// preventing the amplification bomb.
+const MAX_INLINE_CSS_BYTES = 8 * 1024 * 1024;
+
+interface CssInlineBudget {
+  used: number;
+  readonly max: number;
+}
+
+function createCssInlineBudget(): CssInlineBudget {
+  return { used: 0, max: MAX_INLINE_CSS_BYTES };
+}
+
 type UrlLookup = (path: string) => string | null;
 type TextLookup = (path: string) => string | null;
 
@@ -68,8 +87,9 @@ function inlineCssImports(
   lookupText: TextLookup | undefined,
   visited: ReadonlySet<string>,
   depth: number,
+  budget: CssInlineBudget,
 ): string {
-  if (!lookupText || depth >= IMPORT_INLINE_DEPTH) {
+  if (!lookupText || depth >= IMPORT_INLINE_DEPTH || budget.used >= budget.max) {
     return css;
   }
 
@@ -104,6 +124,14 @@ function inlineCssImports(
         return match;
       }
 
+      // Budget guard (CWE-400): account each spliced file's raw size against
+      // the shared budget *before* recursing. Once exhausted, stop amplifying
+      // and leave the rest of the import graph as plain references.
+      if (budget.used + importedCss.length > budget.max) {
+        return `/* slidestage:@import budget exceeded for ${resolved}; left as reference */\n${match}`;
+      }
+      budget.used += importedCss.length;
+
       const nextVisited = new Set(visited);
       nextVisited.add(resolved);
       const innerProcessed = rewriteCssBody(
@@ -113,6 +141,7 @@ function inlineCssImports(
         lookupText,
         nextVisited,
         depth + 1,
+        budget,
       );
       return `/* slidestage:inlined @import ${resolved} */\n${innerProcessed}\n/* slidestage:end @import ${resolved} */\n`;
     },
@@ -126,10 +155,11 @@ function rewriteCssBody(
   lookupText?: TextLookup,
   visited: ReadonlySet<string> = new Set(),
   depth: number = 0,
+  budget: CssInlineBudget = createCssInlineBudget(),
 ): string {
   // Phase 1: splice package-local @import targets into the body so
   // their sibling-relative url() refs resolve against the right base.
-  const inlined = inlineCssImports(css, fromPath, lookup, lookupText, visited, depth);
+  const inlined = inlineCssImports(css, fromPath, lookup, lookupText, visited, depth, budget);
 
   // Phase 2: rewrite url() refs (including the data:/https: ones inside
   // inlined bodies — those are no-ops because rewriteReference falls
@@ -178,7 +208,8 @@ function inlineStylesheetLinks(
   html: string,
   fromPath: string,
   lookup: UrlLookup,
-  lookupText?: TextLookup,
+  lookupText: TextLookup | undefined,
+  budget: CssInlineBudget,
 ): string {
   if (!lookupText) {
     return html;
@@ -197,11 +228,12 @@ function inlineStylesheetLinks(
       return tag;
     }
 
-    // Pass `lookupText` and a fresh visited set so the imported CSS
-    // can in turn splice ITS own `@import` targets in (mirrored decks
-    // typically chain `shared/tokens.css` → `assets/_mirror/css/...`).
+    // Pass `lookupText`, a fresh visited set, and the shared budget so the
+    // imported CSS can in turn splice ITS own `@import` targets in (mirrored
+    // decks typically chain `shared/tokens.css` → `assets/_mirror/css/...`)
+    // while the total spliced bytes stay bounded across the whole slide.
     const visited = new Set<string>([resolved]);
-    const rewrittenCss = rewriteCssBody(css, resolved, lookup, lookupText, visited).replace(
+    const rewrittenCss = rewriteCssBody(css, resolved, lookup, lookupText, visited, 0, budget).replace(
       /<\/style/gi,
       '<\\/style',
     );
@@ -297,6 +329,7 @@ function rewriteSrcdocAttributes(
   lookup: UrlLookup,
   lookupText: TextLookup | undefined,
   depth: number,
+  budget: CssInlineBudget,
 ): string {
   if (depth >= 4) {
     return html;
@@ -308,7 +341,9 @@ function rewriteSrcdocAttributes(
       const quote: '"' | "'" = quoted.startsWith('"') ? '"' : "'";
       const raw = doubleValue ?? singleValue ?? '';
       const innerHtml = unescapeHtmlAttr(raw);
-      const rewrittenInner = applyRewrites(innerHtml, fromPath, lookup, lookupText, depth + 1);
+      // Share the budget with the nested document so an iframe srcdoc cannot
+      // be used to multiply the per-slide @import inlining cap.
+      const rewrittenInner = applyRewrites(innerHtml, fromPath, lookup, lookupText, depth + 1, budget);
       const escaped = escapeHtmlAttr(rewrittenInner, quote);
       return `<iframe${beforeAttrs} srcdoc=${quote}${escaped}${quote}${afterAttrs}>`;
     },
@@ -341,7 +376,8 @@ function rewriteRemainingCss(
   html: string,
   fromPath: string,
   lookup: UrlLookup,
-  lookupText?: TextLookup,
+  lookupText: TextLookup | undefined,
+  budget: CssInlineBudget,
 ): string {
   // Protect already-inlined <style data-slidestage-inline-css="X"> blocks. Their
   // bodies were rewritten against X (the inline source path); re-running the
@@ -357,7 +393,7 @@ function rewriteRemainingCss(
   // so those get spliced in too. The fromPath is the slide's path —
   // url() refs in inlined @import bodies still resolve correctly
   // because rewriteCssBody re-bases against each imported file.
-  const rewritten = rewriteCssBody(protectedHtml, fromPath, lookup, lookupText);
+  const rewritten = rewriteCssBody(protectedHtml, fromPath, lookup, lookupText, new Set(), 0, budget);
 
   return rewritten.replace(/\u0000SLIDESTAGE_INLINE_CSS_(\d+)\u0000/g, (_match, idx: string) => {
     return placeholders[Number(idx)] ?? '';
@@ -370,14 +406,15 @@ function applyRewrites(
   lookup: UrlLookup,
   lookupText: TextLookup | undefined,
   depth: number,
+  budget: CssInlineBudget,
 ): string {
   const withBase = rewriteBaseTag(html, fromPath, lookup);
-  const withInlineCss = inlineStylesheetLinks(withBase, fromPath, lookup, lookupText);
+  const withInlineCss = inlineStylesheetLinks(withBase, fromPath, lookup, lookupText, budget);
   const withDeferredLinks = deferExternalStylesheetLinks(withInlineCss);
-  const withSrcdoc = rewriteSrcdocAttributes(withDeferredLinks, fromPath, lookup, lookupText, depth);
+  const withSrcdoc = rewriteSrcdocAttributes(withDeferredLinks, fromPath, lookup, lookupText, depth, budget);
   const withAttributes = rewriteAttributes(withSrcdoc, fromPath, lookup);
   const withSrcset = rewriteSrcsetAttributes(withAttributes, fromPath, lookup);
-  return rewriteRemainingCss(withSrcset, fromPath, lookup, lookupText);
+  return rewriteRemainingCss(withSrcset, fromPath, lookup, lookupText, budget);
 }
 
 export function rewriteHtmlAssetReferences(
@@ -386,5 +423,8 @@ export function rewriteHtmlAssetReferences(
   lookup: UrlLookup,
   lookupText?: TextLookup,
 ): string {
-  return applyRewrites(html, fromPath, lookup, lookupText, 0);
+  // One budget per top-level slide rewrite, shared across every stylesheet
+  // link, <style> block, and nested iframe srcdoc so the cumulative @import
+  // inlining cannot exceed MAX_INLINE_CSS_BYTES.
+  return applyRewrites(html, fromPath, lookup, lookupText, 0, createCssInlineBudget());
 }

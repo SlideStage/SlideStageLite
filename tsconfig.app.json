@@ -18,5 +18,9 @@
     "jsx": "react-jsx"
   },
   "include": ["src"],
-  "exclude": ["src/converter/index.test.ts", "src/styles/tokens.test.ts"]
+  "exclude": [
+    "src/converter/index.test.ts",
+    "src/styles/tokens.test.ts",
+    "src/browser/stageServiceWorker.sw.test.ts"
+  ]
 }

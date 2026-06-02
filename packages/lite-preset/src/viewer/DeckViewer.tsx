@@ -185,22 +185,19 @@ export function DeckViewer({
       presentation: AudiencePresentationState | null,
     ) => {
       if (!presentation) return;
+      // DSS-CAND-012: the snapshot intentionally carries NO sandbox token.
+      // The audience window derives its own iframe sandbox from the local
+      // trust store (shared localStorage) so a forged snapshot on the
+      // same-origin sync channel can't elevate the audience iframe.
       syncApi.send({
         type: 'snapshot',
         snapshot: {
           deck: serializeAudienceDeck(deck),
           presentation,
-          // Ship the resolved sandbox token string so the audience
-          // window mirrors the presenter exactly. Without this the
-          // audience falls back to deriving caps from
-          // `manifest.compat.requires` + the trust-store record,
-          // which misses any caps the App layer auto-granted (e.g.
-          // the `same-origin-storage` we add to oversized decks).
-          iframeSandbox,
         },
       });
     },
-    [deck, iframeSandbox],
+    [deck],
   );
 
   const handleSyncMessage = useCallback(

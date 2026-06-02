@@ -4,6 +4,7 @@ import {
   DEFAULT_AUDIENCE_CHANNEL,
   deserializeAudienceDeck,
   makeAudiencePresentation,
+  parseAudienceMessage,
   presentationChannelName,
   serializeAudienceDeck,
   type AudienceSnapshot,
@@ -130,19 +131,88 @@ describe('serializeAudienceDeck / deserializeAudienceDeck', () => {
     expect(() => restored.revoke()).not.toThrow();
   });
 
-  it('accepts an iframeSandbox field on the snapshot envelope', () => {
-    // The presenter ships its resolved sandbox token string so the
-    // audience window doesn't have to re-derive it from
-    // `compat.requires`. Otherwise auto-elevated decks (where the
-    // App layer silently granted `same-origin-storage` to avoid
-    // OOM-via-base64-srcdoc) end up with an opaque-origin audience
-    // iframe that the SW can't intercept, leaving the popup blank.
+  it('no longer carries a sandbox token (DSS-CAND-012)', () => {
+    // The audience derives its iframe sandbox locally from the trust
+    // store; the snapshot envelope must not ship a forge-able token.
     const deck = makeDeck();
     const snapshot: AudienceSnapshot = {
       deck: serializeAudienceDeck(deck),
       presentation: makeAudiencePresentation(0, makePresenterState(), null),
-      iframeSandbox: 'allow-scripts allow-same-origin',
     };
-    expect(snapshot.iframeSandbox).toBe('allow-scripts allow-same-origin');
+    expect(snapshot).not.toHaveProperty('iframeSandbox');
+  });
+});
+
+describe('parseAudienceMessage (DSS-CAND-012 schema validation)', () => {
+  it('accepts well-formed control messages', () => {
+    expect(parseAudienceMessage({ type: 'hello', role: 'presenter' })).toEqual({
+      type: 'hello',
+      role: 'presenter',
+    });
+    expect(parseAudienceMessage({ type: 'goodbye', role: 'audience' })).toEqual({
+      type: 'goodbye',
+      role: 'audience',
+    });
+    expect(parseAudienceMessage({ type: 'request-snapshot' })).toEqual({
+      type: 'request-snapshot',
+    });
+  });
+
+  it('accepts a valid presentation message and rejects malformed ones', () => {
+    const presentation = makeAudiencePresentation(1, makePresenterState({ tool: 'pen' }), null);
+    expect(parseAudienceMessage({ type: 'presentation', presentation })).toEqual({
+      type: 'presentation',
+      presentation,
+    });
+    expect(
+      parseAudienceMessage({ type: 'presentation', presentation: { currentIndex: 'x' } }),
+    ).toBeNull();
+    expect(
+      parseAudienceMessage({
+        type: 'presentation',
+        presentation: { ...presentation, tool: 'rootkit' },
+      }),
+    ).toBeNull();
+  });
+
+  it('accepts a valid snapshot and strips unknown fields', () => {
+    const deck = makeDeck();
+    const presentation = makeAudiencePresentation(0, makePresenterState(), null);
+    const parsed = parseAudienceMessage({
+      type: 'snapshot',
+      snapshot: {
+        deck: serializeAudienceDeck(deck),
+        presentation,
+        // A forged sandbox token must be dropped, not surfaced.
+        iframeSandbox: 'allow-scripts allow-same-origin allow-top-navigation',
+      },
+    });
+    expect(parsed?.type).toBe('snapshot');
+    expect(parsed && 'snapshot' in parsed ? parsed.snapshot : null).not.toHaveProperty(
+      'iframeSandbox',
+    );
+  });
+
+  it('rejects snapshots with a malformed deck or presentation', () => {
+    const deck = makeDeck();
+    expect(
+      parseAudienceMessage({
+        type: 'snapshot',
+        snapshot: { deck: { fingerprint: 'x' }, presentation: {} },
+      }),
+    ).toBeNull();
+    expect(
+      parseAudienceMessage({
+        type: 'snapshot',
+        snapshot: { deck: serializeAudienceDeck(deck), presentation: { tool: 'mouse' } },
+      }),
+    ).toBeNull();
+  });
+
+  it('rejects non-objects, unknown types, and bad roles', () => {
+    expect(parseAudienceMessage(null)).toBeNull();
+    expect(parseAudienceMessage('snapshot')).toBeNull();
+    expect(parseAudienceMessage({ type: 'rm-rf' })).toBeNull();
+    expect(parseAudienceMessage({ type: 'hello', role: 'attacker' })).toBeNull();
   });
 });

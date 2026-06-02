@@ -96,7 +96,27 @@ describe('useThumbnailCapture', () => {
     URL.revokeObjectURL = originalRevoke;
   });
 
-  function emitProbe(slideId: string, bytes: number[]): void {
+  // Minimal valid WebP (RIFF/WEBP magic + padding) so the capture's
+  // DSS-CAND-016 payload validation accepts it.
+  function webpBytes(): number[] {
+    const arr = new Array<number>(__test.MIN_THUMBNAIL_BYTES).fill(0);
+    arr[0] = 0x52;
+    arr[1] = 0x49;
+    arr[2] = 0x46;
+    arr[3] = 0x46;
+    arr[8] = 0x57;
+    arr[9] = 0x45;
+    arr[10] = 0x42;
+    arr[11] = 0x50;
+    return arr;
+  }
+
+  function emitProbe(slideId: string, bytes: number[] = webpBytes()): void {
+    // The capture only accepts messages whose source is its own iframe
+    // (DSS-CAND-016), so mirror that here.
+    const iframe = document.querySelector<HTMLIFrameElement>(
+      'iframe[title="thumbnail-capture-worker"]',
+    );
     window.dispatchEvent(
       new MessageEvent('message', {
         data: {
@@ -105,6 +125,7 @@ describe('useThumbnailCapture', () => {
           status: 'ok',
           bytes,
         },
+        source: iframe?.contentWindow ?? null,
       }),
     );
   }
@@ -125,14 +146,14 @@ describe('useThumbnailCapture', () => {
     });
 
     await act(async () => {
-      emitProbe('slide-a', [10, 20]);
+      emitProbe('slide-a');
     });
     await waitFor(() => {
       expect(lastState.current?.capturedCount).toBe(1);
     });
 
     await act(async () => {
-      emitProbe('slide-b', [30, 40]);
+      emitProbe('slide-b');
     });
     await waitFor(() => {
       expect(lastState.current?.capturedCount).toBe(2);

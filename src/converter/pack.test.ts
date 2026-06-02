@@ -1,6 +1,6 @@
 import { unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import type { Manifest } from '@slidestage/core/deck/types';
+import { DeckLoadError, type Manifest } from '@slidestage/core/deck/types';
 import { packStage, asPlainUint8, bytesFromString } from '@slidestage/core/converter/pack';
 
 function makeManifest(overrides: Partial<Manifest> = {}): Manifest {
@@ -64,5 +64,38 @@ describe('packStage · determinism', () => {
     );
     const parsed = JSON.parse(new TextDecoder().decode(unpacked['manifest.json']));
     expect(parsed.id).toBe('pack-test');
+  });
+});
+
+describe('packStage · Zip Slip guard (DSS-CAND-008)', () => {
+  it('rejects an entry that escapes the package root via ..', () => {
+    const entries = new Map<string, Uint8Array>([
+      ['../../evil.txt', bytesFromString('pwned')],
+    ]);
+    try {
+      packStage(makeManifest(), entries);
+      throw new Error('expected packStage to throw');
+    } catch (error) {
+      expect(error).toBeInstanceOf(DeckLoadError);
+      expect((error as DeckLoadError).code).toBe('E_PATH_TRAVERSAL');
+    }
+  });
+
+  it('rejects an absolute entry path', () => {
+    const entries = new Map<string, Uint8Array>([
+      ['/etc/passwd', bytesFromString('root:x:0:0')],
+    ]);
+    expect(() => packStage(makeManifest(), entries)).toThrow(DeckLoadError);
+  });
+
+  it('normalizes backslash / dot segments instead of emitting them verbatim', () => {
+    const entries = new Map<string, Uint8Array>([
+      ['assets\\.\\style.css', bytesFromString('body{}')],
+      ['slides/01-cover.html', bytesFromString('<html></html>')],
+    ]);
+    const unpacked = unzipSync(asPlainUint8(packStage(makeManifest(), entries)));
+    expect(Object.keys(unpacked).sort()).toEqual(
+      ['assets/style.css', 'manifest.json', 'slides/01-cover.html'].sort(),
+    );
   });
 });

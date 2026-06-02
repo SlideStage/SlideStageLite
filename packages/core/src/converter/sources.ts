@@ -1,6 +1,6 @@
-import { unzipSync } from 'fflate';
 import { DeckLoadError } from '../deck/types';
 import { normalizePackagePath } from '../deck/pathSafety';
+import { safeUnzipSync } from '../deck/safeUnzip';
 import { shouldSkipFolderPath } from './folderFilter';
 
 export interface SourceFile {
@@ -80,8 +80,16 @@ export function normalizeSource(source: SourceFile): NormalizedSource {
   } else {
     let raw: Record<string, Uint8Array>;
     try {
-      raw = unzipSync(source.bytes);
-    } catch {
+      // Budget-aware unzip: reject decompression bombs before materializing
+      // the archive in memory (CWE-409 / CWE-400).
+      raw = safeUnzipSync(source.bytes, {
+        maxEntryBytes,
+        maxTotalBytes: maxDecompressedBytes,
+      });
+    } catch (error) {
+      if (error instanceof DeckLoadError) {
+        throw error;
+      }
       throw new DeckLoadError(
         'E_NOT_ZIP',
         'The selected source is not a readable .html or .zip / .stage archive.',

@@ -61,6 +61,14 @@ export interface MirrorPolicy {
   allowedHosts?: readonly string[];
   /** Host suffixes to skip outright (returns `blocked-by-policy`). */
   blockedHosts?: readonly string[];
+  /**
+   * Default `false`. When false the mirror refuses to fetch private,
+   * loopback, link-local, CGNAT, or cloud-metadata targets (and re-checks
+   * every redirect hop), closing the SSRF hole where an untrusted deck
+   * points the mirror at the operator's internal network. Set `true` only
+   * for trusted local development.
+   */
+  allowPrivateNetwork?: boolean;
 }
 
 export interface MirrorProgress {
@@ -165,6 +173,73 @@ function hostSuffixMatches(host: string, suffix: string): boolean {
   return h === s || h.endsWith(`.${s}`);
 }
 
+/**
+ * Returns `true` when an IPv4 dotted-quad literal falls inside a range we
+ * never want the mirror to reach: private (RFC1918), loopback, link-local
+ * (incl. 169.254.169.254 cloud metadata), CGNAT, and "this network".
+ */
+function isPrivateIpv4(host: string): boolean {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (!m) return false;
+  const octets = m.slice(1, 5).map((x) => Number(x));
+  if (octets.some((n) => n > 255)) return false;
+  const [a, b] = octets;
+  if (a === 0) return true; // 0.0.0.0/8 "this network"
+  if (a === 10) return true; // 10.0.0.0/8 private
+  if (a === 127) return true; // 127.0.0.0/8 loopback
+  if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local + metadata
+  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 private
+  if (a === 192 && b === 168) return true; // 192.168.0.0/16 private
+  if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
+  return false;
+}
+
+/** Loopback / unique-local (fc00::/7) / link-local (fe80::/10) / embedded v4. */
+function isPrivateIpv6(raw: string): boolean {
+  let h = raw.toLowerCase();
+  const zone = h.indexOf('%');
+  if (zone >= 0) h = h.slice(0, zone);
+  if (h === '::1' || h === '::') return true;
+  const embeddedV4 = /(?:^|:)((?:\d{1,3}\.){3}\d{1,3})$/.exec(h);
+  if (embeddedV4 && isPrivateIpv4(embeddedV4[1])) return true;
+  const firstGroup = h.split(':')[0];
+  if (firstGroup) {
+    const val = Number.parseInt(firstGroup, 16);
+    if (!Number.isNaN(val)) {
+      const highByte = (val >> 8) & 0xff;
+      if (highByte === 0xfc || highByte === 0xfd) return true; // fc00::/7 ULA
+      if (val >= 0xfe80 && val <= 0xfebf) return true; // fe80::/10 link-local
+    }
+  }
+  return false;
+}
+
+/**
+ * Decide whether a URL host is a private / internal target the mirror must
+ * not reach by default. Returns a human-readable detail when blocked, else
+ * `null`. Uses `URL.hostname` so the port is excluded and IPv6 literals keep
+ * their brackets.
+ *
+ * NOTE: this checks literal IPs and obvious internal names only. A public
+ * hostname that *resolves* to a private address (DNS rebinding) is not caught
+ * here without resolving DNS; the redirect re-validation narrows that window
+ * but does not fully close it. Operators mirroring untrusted decks should run
+ * the CLI in a network-isolated sandbox.
+ */
+function privateNetworkReason(hostname: string): string | null {
+  let h = hostname.toLowerCase().trim();
+  if (h.startsWith('[') && h.endsWith(']')) {
+    const inner = h.slice(1, -1);
+    return isPrivateIpv6(inner) ? `private/loopback IPv6 [${inner}]` : null;
+  }
+  if (h === 'localhost' || h.endsWith('.localhost')) return 'localhost';
+  if (h.endsWith('.local')) return 'mDNS .local host';
+  if (h.endsWith('.internal')) return 'internal TLD host';
+  if (isPrivateIpv4(h)) return `private/loopback IPv4 ${h}`;
+  if (h.includes(':') && isPrivateIpv6(h)) return `private/loopback IPv6 ${h}`;
+  return null;
+}
+
 function classifyHost(
   url: string,
   policy: MirrorPolicy,
@@ -177,6 +252,12 @@ function classifyHost(
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return { ok: false, reason: 'unsupported-scheme', detail: parsed.protocol };
+  }
+  if (!policy.allowPrivateNetwork) {
+    const why = privateNetworkReason(parsed.hostname);
+    if (why) {
+      return { ok: false, reason: 'blocked-by-policy', detail: `private network blocked (${why})` };
+    }
   }
   if (policy.blockedHosts?.some((s) => hostSuffixMatches(parsed.host, s))) {
     return { ok: false, reason: 'blocked-by-policy', detail: `host ${parsed.host} blocked` };
@@ -551,6 +632,7 @@ function resolvePolicy(policy?: MirrorPolicy): ManifestOfflinePolicy {
     maxTotalBytes: policy?.maxTotalBytes ?? DEFAULT_MIRROR_POLICY.maxTotalBytes,
     ...(policy?.allowedHosts ? { allowedHosts: Array.from(policy.allowedHosts) } : {}),
     ...(policy?.blockedHosts ? { blockedHosts: Array.from(policy.blockedHosts) } : {}),
+    ...(policy?.allowPrivateNetwork ? { allowPrivateNetwork: true } : {}),
   };
 }
 
@@ -786,10 +868,27 @@ export async function mirrorExternalAssets(
 /* ----------------------------------------------------------------------- */
 
 export interface NetworkFetcherOptions {
-  /** Per-request timeout, default 30 s. */
+  /** Per-request timeout, default 30 s (applies across all redirect hops). */
   timeoutMs?: number;
   /** Pass-through Headers (e.g. `User-Agent`). */
   headers?: Record<string, string>;
+  /**
+   * Policy used to re-validate every redirect hop. Pass the same policy you
+   * hand {@link mirrorExternalAssets} so `allowPrivateNetwork` stays in sync.
+   * Defaults to `{}` (private networks denied).
+   */
+  policy?: MirrorPolicy;
+  /** Max redirect hops to follow, default 5. */
+  maxRedirects?: number;
+  /**
+   * Hard per-asset byte cap enforced while streaming the response body, so a
+   * hostile or misconfigured server cannot make the fetcher buffer an
+   * unbounded amount before the mirror's post-fetch budget check runs.
+   * Defaults to `policy.maxAssetBytes` (falling back to the 50 MiB default).
+   */
+  maxBytes?: number;
+  /** Injectable `fetch` for tests; defaults to the global `fetch`. */
+  fetchImpl?: typeof fetch;
 }
 
 /**
@@ -797,32 +896,125 @@ export interface NetworkFetcherOptions {
  * wrapper enforces a timeout, normalizes the response into the
  * {@link MirrorFetchResult} contract, and classifies HTTP failures into the
  * spec-defined `unreachable` / `too-large` skip reasons.
+ *
+ * Redirects are followed **manually** (`redirect: 'manual'`) so each hop's
+ * target can be re-checked against {@link classifyHost} — this closes the
+ * SSRF bypass where a public URL 30x-redirects to an internal address. In a
+ * browser, `redirect: 'manual'` yields an opaque redirect (status 0); we
+ * treat that as unreachable and stop, which fails safe.
  */
 export function createNetworkFetcher(options: NetworkFetcherOptions = {}): MirrorFetcher {
   const timeoutMs = options.timeoutMs ?? 30_000;
   const headers = options.headers ?? {};
+  const policy = options.policy ?? {};
+  const maxRedirects = options.maxRedirects ?? 5;
+  const maxBytes =
+    options.maxBytes ?? policy.maxAssetBytes ?? DEFAULT_MIRROR_POLICY.maxAssetBytes;
+  const fetchImpl = options.fetchImpl ?? fetch;
   return async (url: string): Promise<MirrorFetchResult> => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(url, {
-        method: 'GET',
-        signal: controller.signal,
-        redirect: 'follow',
-        headers,
-      });
-      if (!response.ok) {
-        return { ok: false, reason: 'unreachable', detail: `HTTP ${response.status}` };
+      let currentUrl = url;
+      for (let hop = 0; hop <= maxRedirects; hop += 1) {
+        // Re-validate the initial URL and every redirect target before the
+        // request leaves the process.
+        const verdict = classifyHost(currentUrl, policy);
+        if (!verdict.ok) {
+          return { ok: false, reason: verdict.reason, detail: verdict.detail };
+        }
+
+        const response = await fetchImpl(currentUrl, {
+          method: 'GET',
+          signal: controller.signal,
+          redirect: 'manual',
+          headers,
+        });
+
+        const isRedirect = response.status >= 300 && response.status < 400;
+        const location = response.headers.get('location');
+        if (isRedirect && location) {
+          if (hop === maxRedirects) {
+            return { ok: false, reason: 'unreachable', detail: 'too many redirects' };
+          }
+          let nextUrl: string;
+          try {
+            nextUrl = new URL(location, currentUrl).toString();
+          } catch {
+            return { ok: false, reason: 'unreachable', detail: `invalid redirect target: ${location}` };
+          }
+          currentUrl = nextUrl;
+          continue;
+        }
+
+        if (!response.ok) {
+          return { ok: false, reason: 'unreachable', detail: `HTTP ${response.status}` };
+        }
+        const contentType = response.headers.get('content-type') ?? 'application/octet-stream';
+
+        // Cheap precheck: trust a declared Content-Length to reject oversize
+        // bodies without reading a single byte.
+        const declared = Number(response.headers.get('content-length'));
+        if (Number.isFinite(declared) && declared > maxBytes) {
+          controller.abort();
+          return {
+            ok: false,
+            reason: 'too-large',
+            detail: `content-length ${declared} > ${maxBytes}`,
+          };
+        }
+
+        const body = response.body;
+        if (!body) {
+          // No stream available (rare; some fetch polyfills). Fall back to a
+          // full read but still enforce the cap afterwards.
+          const buf = new Uint8Array(await response.arrayBuffer());
+          if (buf.byteLength > maxBytes) {
+            return { ok: false, reason: 'too-large', detail: `${buf.byteLength} > ${maxBytes}` };
+          }
+          return { ok: true, bytes: buf, contentType, finalUrl: currentUrl };
+        }
+
+        // Stream the body, aborting the moment the running total exceeds the
+        // per-asset cap so a chunked / lying-Content-Length server cannot
+        // force unbounded buffering (CWE-400 / CWE-770).
+        const reader = body.getReader();
+        const chunks: Uint8Array[] = [];
+        let received = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (!value) continue;
+          received += value.byteLength;
+          if (received > maxBytes) {
+            try {
+              await reader.cancel();
+            } catch {
+              /* best-effort: the abort below tears the socket down regardless */
+            }
+            controller.abort();
+            return {
+              ok: false,
+              reason: 'too-large',
+              detail: `response exceeded ${maxBytes} bytes while streaming`,
+            };
+          }
+          chunks.push(value);
+        }
+
+        const buf = new Uint8Array(received);
+        let offset = 0;
+        for (const chunk of chunks) {
+          buf.set(chunk, offset);
+          offset += chunk.byteLength;
+        }
+        return { ok: true, bytes: buf, contentType, finalUrl: currentUrl };
       }
-      const contentType = response.headers.get('content-type') ?? 'application/octet-stream';
-      const buf = new Uint8Array(await response.arrayBuffer());
-      return { ok: true, bytes: buf, contentType, finalUrl: response.url };
+      return { ok: false, reason: 'unreachable', detail: 'redirect loop' };
     } catch (error) {
-      const reason: ManifestOfflineSkippedReason =
-        error instanceof Error && error.name === 'AbortError' ? 'unreachable' : 'unreachable';
       return {
         ok: false,
-        reason,
+        reason: 'unreachable',
         detail: error instanceof Error ? error.message : String(error),
       };
     } finally {

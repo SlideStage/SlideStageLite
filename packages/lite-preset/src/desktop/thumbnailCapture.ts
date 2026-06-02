@@ -48,6 +48,44 @@ const TIMEOUT_MS = 8_000;
 
 const PROBE_MESSAGE_TAG = 'slidestage:thumbnail-capture';
 
+// DSS-CAND-016: bound the bytes we accept from the (untrusted) capture
+// iframe. The probe and any author script share that window, so a
+// malicious slide can post messages; we can't fully attribute them, but
+// we can refuse anything that isn't a small WebP. Upper bound matches the
+// Rust cache's per-entry limit (256 KiB) so a capture we accept always
+// fits the on-disk cache; lower bound covers the 12-byte RIFF/WEBP header.
+const MAX_THUMBNAIL_BYTES = 256 * 1024;
+const MIN_THUMBNAIL_BYTES = 16;
+
+/** True when `bytes` start with the RIFF/WEBP container magic. */
+function looksLikeWebp(bytes: Uint8Array): boolean {
+  return (
+    bytes.length >= MIN_THUMBNAIL_BYTES &&
+    bytes[0] === 0x52 && // 'R'
+    bytes[1] === 0x49 && // 'I'
+    bytes[2] === 0x46 && // 'F'
+    bytes[3] === 0x46 && // 'F'
+    bytes[8] === 0x57 && // 'W'
+    bytes[9] === 0x45 && // 'E'
+    bytes[10] === 0x42 && // 'B'
+    bytes[11] === 0x50 // 'P'
+  );
+}
+
+/**
+ * Validate and decode the probe's `bytes` payload. Returns null when the
+ * payload is missing, the wrong type, out of size bounds, or not a WebP —
+ * the caller then treats the capture as failed rather than caching garbage.
+ */
+function decodeThumbnailBytes(raw: unknown): Uint8Array | null {
+  if (!Array.isArray(raw)) return null;
+  if (raw.length < MIN_THUMBNAIL_BYTES || raw.length > MAX_THUMBNAIL_BYTES) return null;
+  const bytes = Uint8Array.from(raw, (value) =>
+    typeof value === 'number' && value >= 0 ? value & 0xff : 0,
+  );
+  return looksLikeWebp(bytes) ? bytes : null;
+}
+
 interface ProbeOutboundMessage {
   __tag: typeof PROBE_MESSAGE_TAG;
   slideId: string;
@@ -263,12 +301,23 @@ export function runSingleCapture(
     }
 
     function onMessage(event: MessageEvent) {
+      // DSS-CAND-016: ignore messages that did not come from the capture
+      // iframe itself. The probe and any author script share this window,
+      // so this does NOT stop a malicious slide from forging its own
+      // thumbnail (bounded below by validating the payload), but it does
+      // reject messages from any other frame/window on the page.
+      if (event.source !== ctx.iframe.contentWindow) return;
       const data = event.data as ProbeOutboundMessage | undefined;
       if (!data || data.__tag !== PROBE_MESSAGE_TAG) return;
       if (data.slideId !== request.slideId) return;
       teardown();
-      if (data.status === 'ok' && data.bytes) {
-        resolve({ slideId: request.slideId, bytes: new Uint8Array(data.bytes) });
+      if (data.status === 'ok') {
+        const bytes = decodeThumbnailBytes(data.bytes);
+        if (!bytes) {
+          reject(new Error('capture produced an invalid or oversized image'));
+          return;
+        }
+        resolve({ slideId: request.slideId, bytes });
       } else {
         reject(new Error(data.reason ?? 'capture failed'));
       }
@@ -356,4 +405,8 @@ export const __test = {
   TARGET_WIDTH,
   TARGET_HEIGHT,
   PROBE_MESSAGE_TAG,
+  MAX_THUMBNAIL_BYTES,
+  MIN_THUMBNAIL_BYTES,
+  looksLikeWebp,
+  decodeThumbnailBytes,
 };

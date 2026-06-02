@@ -256,6 +256,27 @@ function buildInlineSplitManifest(
   };
 }
 
+/**
+ * Merge the trust metadata a split converter emits when author scripts survive
+ * into the generated slides (DSS-CAND-009/010/013/014/015). Without this the
+ * deck would run in the base sandbox and the host would never prompt for the
+ * capability the author code actually needs.
+ */
+function applySplitCompat(
+  manifest: Manifest,
+  compat: { requires: TrustCapability[]; notes: string } | null,
+): Manifest {
+  if (!compat) return manifest;
+  return {
+    ...manifest,
+    compat: {
+      ...(manifest.compat ?? {}),
+      requires: compat.requires,
+      notes: compat.notes,
+    },
+  };
+}
+
 function buildWrapManifest(
   baseManifest: Manifest,
   slide: ManifestSlide,
@@ -314,7 +335,10 @@ function dispatchInlineDeck(
       return { manifest, packEntries: wrap.packEntries, report };
     }
 
-    const manifest = buildInlineSplitManifest(baseManifest, split.slides, split.pageTitle);
+    const manifest = applySplitCompat(
+      buildInlineSplitManifest(baseManifest, split.slides, split.pageTitle),
+      split.compat,
+    );
     report.warnings.push(...split.warnings);
     populateReport(report, manifest, split.packEntries);
     return { manifest, packEntries: split.packEntries, report };
@@ -370,13 +394,16 @@ function dispatchWebComponent(
       return { manifest, packEntries: wrap.packEntries, report };
     }
 
-    const manifest: Manifest = {
-      ...baseManifest,
-      title: split.pageTitle || baseManifest.title,
-      architecture: 'multi-file',
-      totalSlides: split.slides.length,
-      slides: split.slides,
-    };
+    const manifest = applySplitCompat(
+      {
+        ...baseManifest,
+        title: split.pageTitle || baseManifest.title,
+        architecture: 'multi-file',
+        totalSlides: split.slides.length,
+        slides: split.slides,
+      },
+      split.compat,
+    );
     report.warnings.push(...split.warnings);
     populateReport(report, manifest, split.packEntries);
     return { manifest, packEntries: split.packEntries, report };
@@ -433,13 +460,16 @@ function dispatchRouter(
       return { manifest, packEntries: wrap.packEntries, report };
     }
 
-    const manifest: Manifest = {
-      ...baseManifest,
-      title: split.pageTitle || baseManifest.title,
-      architecture: 'multi-file',
-      totalSlides: split.slides.length,
-      slides: split.slides,
-    };
+    const manifest = applySplitCompat(
+      {
+        ...baseManifest,
+        title: split.pageTitle || baseManifest.title,
+        architecture: 'multi-file',
+        totalSlides: split.slides.length,
+        slides: split.slides,
+      },
+      split.compat,
+    );
     report.warnings.push(...split.warnings);
     populateReport(report, manifest, split.packEntries);
     return { manifest, packEntries: split.packEntries, report };
@@ -502,17 +532,10 @@ function dispatchReveal(
       return { manifest, packEntries: wrap.packEntries, report };
     }
 
-    let manifest = buildInlineSplitManifest(baseManifest, split.slides, split.pageTitle);
-    if (split.compat) {
-      manifest = {
-        ...manifest,
-        compat: {
-          ...(manifest.compat ?? {}),
-          requires: split.compat.requires,
-          notes: split.compat.notes,
-        },
-      };
-    }
+    const manifest = applySplitCompat(
+      buildInlineSplitManifest(baseManifest, split.slides, split.pageTitle),
+      split.compat,
+    );
     report.warnings.push(...split.warnings);
     populateReport(report, manifest, split.packEntries);
     return { manifest, packEntries: split.packEntries, report };
@@ -581,17 +604,10 @@ function dispatchImpress(
       return { manifest, packEntries: wrap.packEntries, report };
     }
 
-    let manifest = buildInlineSplitManifest(baseManifest, split.slides, split.pageTitle);
-    if (split.compat) {
-      manifest = {
-        ...manifest,
-        compat: {
-          ...(manifest.compat ?? {}),
-          requires: split.compat.requires,
-          notes: split.compat.notes,
-        },
-      };
-    }
+    const manifest = applySplitCompat(
+      buildInlineSplitManifest(baseManifest, split.slides, split.pageTitle),
+      split.compat,
+    );
     report.warnings.push(...split.warnings);
     populateReport(report, manifest, split.packEntries);
     return { manifest, packEntries: split.packEntries, report };
@@ -848,6 +864,7 @@ export async function convertFolderSource(
 
 export { sniffDeck } from './sniffer';
 export { buildManifestFromSource } from './buildManifest';
+export { safeUnzipSync, type UnzipBudget } from '../deck/safeUnzip';
 export { packStage } from './pack';
 export { renderReportMarkdown } from './report';
 export { shouldSkipFolderPath, DEFAULT_FOLDER_SKIP_PATTERNS } from './folderFilter';

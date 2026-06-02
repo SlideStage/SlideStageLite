@@ -1,4 +1,5 @@
 import { zipSync, type AsyncZippable } from 'fflate';
+import { normalizePackagePath } from '../deck/pathSafety';
 import type { Manifest } from '../deck/types';
 
 const encoder = new TextEncoder();
@@ -41,7 +42,13 @@ export function packStage(
 
   for (const [path, bytes] of entries) {
     if (path === 'manifest.json') continue;
-    files[path] = [asPlainUint8(bytes), { mtime }];
+    // Defense-in-depth against Zip Slip (CWE-22): this is the sink — `zipSync`
+    // writes these keys verbatim into the archive that downstream tools
+    // extract to disk. Reject any entry that escapes the package root even if
+    // a caller forgot to normalize. `normalizePackagePath` is idempotent for
+    // already-safe keys, so reproducible output is preserved.
+    const safePath = normalizePackagePath(path);
+    files[safePath] = [asPlainUint8(bytes), { mtime }];
   }
 
   const manifestJson = `${JSON.stringify(manifest, null, 2)}\n`;

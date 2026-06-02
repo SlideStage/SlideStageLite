@@ -8,6 +8,7 @@ export default defineConfig({
     'src/deck/manifestSchema.ts',
     'src/deck/pathSafety.ts',
     'src/deck/rewriteHtml.ts',
+    'src/deck/safeUnzip.ts',
     'src/deck/trustCapabilities.ts',
     'src/deck/types.ts',
     'src/converter/buildManifest.ts',

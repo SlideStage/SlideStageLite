@@ -218,6 +218,29 @@ describe('rewriteHtmlAssetReferences', () => {
       expect(rewritten).toContain('url("data:font/woff2;base64,LEAF")');
     });
 
+    it('caps cumulative @import inlining so a fan-out graph cannot amplify (DSS-CAND-006)', () => {
+      // The per-chain cycle guard does NOT stop sibling imports of the same
+      // large file from each being spliced, so a tiny archive can fan out to
+      // gigabytes of in-memory CSS. The cumulative budget must stop that.
+      const big = `.b{content:"${'A'.repeat(600_000)}"}`; // ~600 KB each
+      const root = '@import "big.css";\n'.repeat(20); // 20 × 600 KB ≈ 12 MB attempted
+      const lookup = makeLookup({});
+      const lookupText = makeTextLookup({ 'root.css': root, 'big.css': big });
+      const html = `<link rel="stylesheet" href="root.css">`;
+
+      const rewritten = rewriteHtmlAssetReferences(html, 'index.html', lookup, lookupText);
+
+      // The budget tripped: at least one import was left as a reference.
+      expect(rewritten).toContain('budget exceeded');
+      // Output is bounded well under the naive 20× expansion (≈12 MB); the
+      // 8 MiB cap means roughly a third of the imports stay as references.
+      expect(rewritten.length).toBeLessThan(20 * big.length);
+      // Some — but not all — imports were actually inlined.
+      const inlinedCount = (rewritten.match(/slidestage:inlined @import big\.css/g) ?? []).length;
+      expect(inlinedCount).toBeGreaterThan(0);
+      expect(inlinedCount).toBeLessThan(20);
+    });
+
     it('does not double-prefix already-virtual URLs when the lookup returns absolute paths', () => {
       // Regression: with the SW transport, lookup returns
       // `/__stage/<id>/<resolved>` URLs. The inner `url("../font/x.ttf")`

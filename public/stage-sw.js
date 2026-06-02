@@ -57,6 +57,67 @@ const VIRTUAL_PREFIX = '/__stage/';
 const CACHE_PREFIX = 'slidestage-deck:';
 const CORS_ALL = 'Access-Control-Allow-Origin';
 
+// Schema limits for control messages (DSS-CAND-011). deckId is a 16-hex
+// fingerprint prefix (see loadDeck.deckIdFromFingerprint); the generous
+// charset/length below still rejects path separators and traversal.
+const DECK_ID_RE = /^[A-Za-z0-9._-]{1,128}$/;
+const MAX_ASSET_PATH_LEN = 1024;
+const MAX_ASSETS_PER_DECK = 20_000;
+
+/**
+ * DSS-CAND-011: only the SPA shell may drive deck caches.
+ *
+ * `message` events carry `event.source` — the Client that sent them. The
+ * legitimate publisher is the controlled top-level page, whose document URL
+ * lives at the SPA origin root (never under the virtual prefix). A
+ * trust-elevated deck iframe, by contrast, runs author code at our real
+ * origin from `/__stage/<deckId>/…`; without this check that author code
+ * could `navigator.serviceWorker.controller.postMessage(...)` and forge
+ * publish/unpublish/cleanup ops for *other* decks. We therefore accept
+ * control messages only from a same-origin, top-level window client whose
+ * URL is not behind the virtual prefix.
+ */
+function isTrustedControlSource(source) {
+  if (!source || typeof source !== 'object') return false;
+  // Reject SharedWorker / nested-frame senders where the platform tells us.
+  if (typeof source.type === 'string' && source.type !== 'window') return false;
+  if (source.frameType === 'nested') return false;
+  const rawUrl = source.url;
+  if (typeof rawUrl !== 'string' || !rawUrl) return false;
+  let url;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+  if (url.origin !== self.location.origin) return false;
+  // Deck asset pages (incl. trust-elevated, same-origin iframes) are untrusted.
+  if (url.pathname.startsWith(VIRTUAL_PREFIX)) return false;
+  return true;
+}
+
+function isValidDeckId(deckId) {
+  return typeof deckId === 'string' && DECK_ID_RE.test(deckId);
+}
+
+/**
+ * Asset paths are appended to `/__stage/<deckId>/` and stored as Cache
+ * keys. CacheStorage normalizes `..`, so a path like `../other/evil.html`
+ * would poison a sibling deck's namespace — reject traversal, absolute
+ * paths, backslashes, schemes, and control characters.
+ */
+function isSafeAssetPath(path) {
+  if (typeof path !== 'string') return false;
+  if (!path || path.length > MAX_ASSET_PATH_LEN) return false;
+  if (path[0] === '/' || path.includes('\\')) return false;
+  if (path.includes('://') || path.startsWith('//')) return false;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(path)) return false;
+  return path
+    .split('/')
+    .every((segment) => segment !== '..' && segment !== '.' && segment.length > 0);
+}
+
 self.addEventListener('install', (event) => {
   // Take over as soon as the SPA reloads; we never want a stale worker
   // to serve a deck after the SPA bundle has been updated.
@@ -72,6 +133,16 @@ self.addEventListener('message', (event) => {
   if (!data || typeof data !== 'object') return;
 
   const port = event.ports && event.ports[0];
+
+  // DSS-CAND-011: drop control messages from anything but the SPA shell.
+  if (!isTrustedControlSource(event.source)) {
+    respond(port, {
+      type: 'error',
+      op: typeof data.type === 'string' ? data.type : 'unknown',
+      message: 'Untrusted message source',
+    });
+    return;
+  }
 
   switch (data.type) {
     case 'ping':
@@ -190,11 +261,14 @@ function withCors(response) {
 }
 
 async function publishDeck(deckId, assets) {
-  if (typeof deckId !== 'string' || !deckId) {
-    throw new Error('publish-deck requires a string deckId');
+  if (!isValidDeckId(deckId)) {
+    throw new Error('publish-deck requires a valid deckId');
   }
   if (!Array.isArray(assets)) {
     throw new Error('publish-deck requires assets to be an array');
+  }
+  if (assets.length > MAX_ASSETS_PER_DECK) {
+    throw new Error('publish-deck asset count exceeds limit');
   }
   const cacheName = CACHE_PREFIX + deckId;
   // Drop any previous version of this deck before writing the new
@@ -204,8 +278,8 @@ async function publishDeck(deckId, assets) {
   const cache = await caches.open(cacheName);
 
   for (const asset of assets) {
-    if (!asset || typeof asset.path !== 'string' || !asset.path) {
-      throw new Error('publish-deck asset is missing path');
+    if (!asset || !isSafeAssetPath(asset.path)) {
+      throw new Error('publish-deck asset has a missing or unsafe path');
     }
     const bytes = asset.bytes;
     if (!(bytes instanceof ArrayBuffer) && !(bytes instanceof Uint8Array)) {
@@ -227,12 +301,12 @@ async function publishDeck(deckId, assets) {
 }
 
 async function unpublishDeck(deckId) {
-  if (typeof deckId !== 'string' || !deckId) return;
+  if (!isValidDeckId(deckId)) return;
   await caches.delete(CACHE_PREFIX + deckId);
 }
 
 async function cleanupOldDecks(keepDeckIds) {
-  const keep = new Set(keepDeckIds.map((id) => CACHE_PREFIX + id));
+  const keep = new Set(keepDeckIds.filter(isValidDeckId).map((id) => CACHE_PREFIX + id));
   const removed = [];
   const names = await caches.keys();
   await Promise.all(
