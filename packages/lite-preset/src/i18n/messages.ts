@@ -18,7 +18,7 @@ export type MessageDict = Readonly<Record<string, string>>;
 
 export const messages: Readonly<Record<Locale, MessageDict>> = {
   en: {
-    'app.brand.name': 'SlideStage Lite',
+    'app.brand.name': 'SlideStage',
     'app.brand.tag': 'lite',
     'app.brand.aria': 'SlideStage Lite home',
     'app.header.meta': 'Local · no server',
@@ -268,7 +268,7 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
   },
 
   'zh-CN': {
-    'app.brand.name': 'SlideStage Lite',
+    'app.brand.name': 'SlideStage',
     'app.brand.tag': 'lite',
     'app.brand.aria': 'SlideStage Lite 主页',
     'app.header.meta': '本地运行 · 无服务端',

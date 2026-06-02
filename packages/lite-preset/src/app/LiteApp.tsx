@@ -470,7 +470,7 @@ export function LiteApp() {
         <span className="app-brand" aria-label={t('app.brand.aria')}>
           <span className="app-brand-mark" aria-hidden>
             <img
-              src="/brand/slidestage-favicon.svg"
+              src="/brand/svg/slidestage-favicon.svg"
               alt=""
               width={32}
               height={32}
