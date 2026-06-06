@@ -1,0 +1,191 @@
+name: Release macOS
+
+# Notarized macOS desktop release on GitHub-hosted runners.
+#
+# Why this exists:
+#   Apple notarization uploads the signed bundle to an AWS S3 bucket. On
+#   some networks (e.g. mainland China) S3 is TLS-reset, so the notary
+#   step fails locally with `HTTPClientError.connectTimeout` even though
+#   the build + Developer ID signing succeed. GitHub's macOS runners can
+#   reach S3 fine, so we do the notarized build here instead of locally.
+#
+# What it does:
+#   - Builds BOTH macOS arches (Apple Silicon + Intel) on one ARM runner,
+#     sequentially, by reusing the same `scripts/release-macos.mjs`
+#     pipeline the local box used to run. Sequential (not a matrix) so the
+#     two arches never race on the shared `latest.json` / `SHA256SUMS.txt`
+#     assets — the second arch seeds from the just-uploaded manifest and
+#     merges its block in (`--merge-existing`, version-guarded).
+#   - Imports the Developer ID Application certificate into a throwaway
+#     keychain, writes the ASC API key to a temp file, then lets Tauri
+#     codesign + notarize + staple, and minisign-signs the updater archive.
+#   - Uploads the DMGs, `<app>.app.tar.gz`(+`.sig`), `latest.json`, and
+#     `SHA256SUMS.txt` to the matching GitHub Release via `--upload`.
+#
+# Human-in-the-loop contract (same as release-windows.yml):
+#   The GitHub Release `v<version>` MUST already exist. We never create it
+#   here. On a tag push the Release is expected to have been created first;
+#   for an already-published tag, use the workflow_dispatch `tag` input.
+#
+# Cross-platform manifest safety:
+#   `release-macos.mjs` runs `gh release download latest.json` before
+#   building, so the macOS run preserves the `windows-x86_64` block the
+#   Windows workflow uploaded. SHA256SUMS is regenerated from whatever is
+#   in dist-desktop/, so we pre-download the published Windows installer
+#   below to keep its hash in the final SHA256SUMS.txt.
+#
+# Required repository secrets:
+#   APPLE_CERTIFICATE            base64 of the Developer ID Application
+#                                certificate exported as a .p12 (cert + key)
+#   APPLE_CERTIFICATE_PASSWORD   the password set when exporting the .p12
+#   APPLE_SIGNING_IDENTITY       e.g. "Developer ID Application: Name (TEAMID)"
+#   APPLE_API_KEY                App Store Connect API Key ID (10 chars)
+#   APPLE_API_ISSUER             App Store Connect API Issuer ID (UUID)
+#   APPLE_API_KEY_CONTENT        base64 of the AuthKey_<KEYID>.p8 file
+#   TAURI_SIGNING_PRIVATE_KEY            minisign key CONTENTS (shared w/ Windows)
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD   matching password
+#
+# GITHUB_TOKEN is provided automatically (used by gh for upload).
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build & attach (e.g. v0.4.0). Required for already-published tags."
+        required: false
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write # required for `gh release upload`
+
+concurrency:
+  group: release-macos-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-14 # Apple Silicon; cross-builds x86_64 too
+    timeout-minutes: 90
+    env:
+      # Tauri's bundler + scripts/release-macos.mjs read these from the
+      # environment directly. APPLE_API_KEY_PATH is written at runtime
+      # (see "Prepare Apple credentials") and exported via $GITHUB_ENV.
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout (release tag)
+        uses: actions/checkout@v4
+        with:
+          # On a tag push github.ref already points at the tag; for a
+          # manual run we check out the tag the operator typed so the
+          # built version (tauri.conf.json) matches the release.
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/tauri.conf.json') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare Apple credentials (keychain + ASC API key)
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+        run: |
+          set -euo pipefail
+
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          API_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+
+          # Decode secrets to disk.
+          printf %s "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH"
+          printf %s "$APPLE_API_KEY_CONTENT" | base64 --decode > "$API_KEY_PATH"
+
+          # Throwaway keychain with the Developer ID cert + private key.
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          # Allow codesign to use the key without an interactive prompt.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+          # Put our keychain first while keeping the default login one.
+          security list-keychains -d user -s "$KEYCHAIN_PATH" \
+            "$(security default-keychain -d user | tr -d '\" ')"
+
+          echo "Installed signing identities:"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true
+
+          # Hand the API key path to release-macos.mjs (full mode requires it).
+          echo "APPLE_API_KEY_PATH=$API_KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Seed published installers (keep Windows hash in SHA256SUMS)
+        # SHA256SUMS.txt is regenerated from dist-desktop/, so pull the
+        # already-published Windows installer in first. Best-effort: a
+        # missing asset (Windows not shipped yet) is fine.
+        run: |
+          mkdir -p dist-desktop
+          gh release download "$RELEASE_TAG" \
+            --pattern 'SlideStageLite-*-Windows-*-setup.exe' \
+            --dir dist-desktop --clobber || echo "no published Windows installer yet — skipping"
+
+      - name: Sanity check (fixtures + typecheck + vitest)
+        run: |
+          pnpm fixtures
+          pnpm typecheck
+          pnpm test:unit
+
+      - name: Build, notarize & upload (Apple Silicon, then Intel)
+        # Sequential so the two arches share dist-desktop without racing
+        # on latest.json. Each run seeds latest.json from the Release and
+        # merges its own arch block (release-macos.mjs --upload).
+        run: |
+          pnpm release:macos --upload
+          RELEASE_TARGET=x86_64-apple-darwin pnpm release:macos --upload
+
+      - name: Upload dist-desktop as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: slidestage-lite-macos
+          path: |
+            dist-desktop/SlideStageLite-*-macOS-*.dmg
+            dist-desktop/SlideStageLite-*-AppleSilicon.app.tar.gz
+            dist-desktop/SlideStageLite-*-Intel.app.tar.gz
+            dist-desktop/latest.json
+          if-no-files-found: error
+          retention-days: 14
