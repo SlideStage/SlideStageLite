@@ -10,6 +10,53 @@ This project follows [Semantic Versioning](https://semver.org/). Until
 
 ---
 
+## 0.4.0 — 2026-06-06
+
+Client-side PDF export lands in the viewer: turn any inlined `.stage`
+deck into a one-slide-per-page PDF without a server, an account, or an
+upload. Existing desktop users pick this up through the in-app updater
+on next launch — same minisign keypair, no reinstall.
+
+### Highlights — PDF export
+
+- **Export PDF from the viewer.** A new opt-in "Export PDF" action in
+  the deck viewer header rasterizes each slide from its sandboxed
+  iframe and assembles a PDF (one slide per page, deck-native aspect
+  ratio) entirely client-side. `pdf-lib` is pulled in via dynamic
+  import so it stays out of the initial bundle — visitors who never
+  export never download it.
+- **Per-slide progress.** The action reports capture progress slide by
+  slide and re-enables once the file is ready.
+- **Gated to inlined decks.** Streamed / oversized decks that aren't
+  fully in memory surface an explanatory disabled state instead of a
+  broken export. EN + zh-CN strings throughout.
+- **Shared surface.** The capability is threaded through the shared
+  `@slidestage/ui` viewer header and the `@slidestage/lite-preset`
+  viewer so downstream consumers inherit it.
+
+### Highlights — Landing
+
+- **Web-only desktop nudge.** The deck-closed landing shell shows a
+  single muted line (hidden in the Tauri build via `!isTauri()`)
+  pointing web visitors to the desktop download at `slidestage.dev`.
+  One line, not a marketing block. EN + zh-CN. Unrelated to PDF export.
+
+### Download for your device
+
+| Your device | Download |
+| --- | --- |
+| macOS — Apple Silicon (M1/M2/M3/M4) | [`SlideStageLite-0.4.0-macOS-AppleSilicon.dmg`](https://github.com/SlideStage/SlideStageLite/releases/download/v0.4.0/SlideStageLite-0.4.0-macOS-AppleSilicon.dmg) |
+| macOS — Intel | [`SlideStageLite-0.4.0-macOS-Intel.dmg`](https://github.com/SlideStage/SlideStageLite/releases/download/v0.4.0/SlideStageLite-0.4.0-macOS-Intel.dmg) |
+| Windows 10/11 (64-bit) | [`SlideStageLite-0.4.0-Windows-x64-setup.exe`](https://github.com/SlideStage/SlideStageLite/releases/download/v0.4.0/SlideStageLite-0.4.0-Windows-x64-setup.exe) |
+
+Not sure which Mac? Apple menu → About This Mac — if the chip reads
+"Apple M…" choose Apple Silicon, otherwise choose Intel.
+
+Existing 0.3.x desktop users will see the in-app update banner on next
+launch and can install in place.
+
+---
+
 ## 0.3.0 — 2026-05-28
 
 Markdown lands in the presenter view, slide-internal Markdown gains GFM
