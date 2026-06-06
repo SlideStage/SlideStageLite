@@ -530,6 +530,43 @@ code {
   max-width: 560px;
 }
 
+/* Web-only nudge toward the desktop app (hidden in the Tauri build). */
+.landing-desktop-hint {
+  margin: 0;
+  max-width: 560px;
+  color: var(--ink-muted);
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.landing-desktop-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 6px;
+}
+
+.landing-desktop-link:hover,
+.landing-desktop-link:focus-visible {
+  color: var(--primary-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.landing-desktop-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.landing-desktop-link svg {
+  flex: 0 0 auto;
+  opacity: 0.8;
+}
+
 /* ─── Alerts / status ─────────────────────────────────────────────────── */
 
 .alert {

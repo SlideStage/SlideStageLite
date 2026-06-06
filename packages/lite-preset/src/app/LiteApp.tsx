@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
-import { ShieldCheck, Sparkles, UploadCloud, Wand2 } from 'lucide-react';
+import { ExternalLink, ShieldCheck, Sparkles, UploadCloud, Wand2 } from 'lucide-react';
 import { loadDeck } from '@slidestage/core/deck/loadDeck';
 import {
   BASE_SANDBOX_TOKEN,
@@ -549,6 +549,24 @@ export function LiteApp() {
                   : t('landing.cta.convert.show')}
               </button>
             </div>
+
+            {!isTauri() ? (
+              <p
+                className="landing-desktop-hint"
+                data-testid="landing-desktop-hint"
+              >
+                {t('landing.desktop.hint')}{' '}
+                <a
+                  className="landing-desktop-link"
+                  href="https://slidestage.dev/#download"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t('landing.desktop.cta')}
+                  <ExternalLink size={12} strokeWidth={2.2} aria-hidden />
+                </a>
+              </p>
+            ) : null}
 
             {status === 'loading' ? (
               <p
