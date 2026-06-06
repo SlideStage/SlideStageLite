@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  Download,
   ExternalLink,
   Grid3X3,
   Presentation,
@@ -11,6 +12,27 @@ import {
 import { useUiTranslator } from '../i18n/translator';
 
 export type DeckViewerHeaderVariant = 'presenter' | 'single';
+
+/**
+ * Client-side "Export PDF" integration. The host preset owns the capture
+ * + assembly + download machinery (it touches pdf-lib and Tauri); the
+ * header only renders the button and reflects progress/availability.
+ */
+export interface DeckViewerExport {
+  /** False when the deck can't be rasterized (e.g. streamed, not inlined). */
+  available: boolean;
+  /** True while an export run is in flight. */
+  busy: boolean;
+  /** Coarse phase used to pick the button label. */
+  phase: 'idle' | 'capturing' | 'assembling' | 'saving' | 'done' | 'error';
+  /** Slides captured so far (for the progress label). */
+  current: number;
+  /** Total slides to capture (for the progress label). */
+  total: number;
+  /** Last error message, surfaced as the button tooltip on failure. */
+  error?: string | null;
+  onExport: () => void;
+}
 
 export interface DeckViewerHeaderProps {
   variant: DeckViewerHeaderVariant;
@@ -35,6 +57,11 @@ export interface DeckViewerHeaderProps {
   onSwitchToSingle?: () => void;
   showOverview: boolean;
   onToggleOverview: () => void;
+  /**
+   * Optional "Export PDF" integration. When omitted, no export button is
+   * rendered. Shared by both header variants.
+   */
+  exportPdf?: DeckViewerExport;
   /** Only used by variant === 'single'. */
   showNotes?: boolean;
   /** Only used by variant === 'single'. */
@@ -54,8 +81,12 @@ export interface DeckViewerHeaderProps {
  * `<UiTranslatorProvider>`.
  */
 export function DeckViewerHeader(props: DeckViewerHeaderProps) {
-  const { t } = useUiTranslator();
+  const { t, tFormat } = useUiTranslator();
   const isPresenter = props.variant === 'presenter';
+
+  const exportButton = props.exportPdf ? (
+    <ExportPdfButton {...props.exportPdf} t={t} tFormat={tFormat} />
+  ) : null;
 
   return (
     <header
@@ -121,6 +152,7 @@ export function DeckViewerHeader(props: DeckViewerHeaderProps) {
         <Grid3X3 className="btn-icon" aria-hidden size={16} />
         {t('viewer.action.overview')}
       </button>
+      {exportButton}
       {isPresenter ? (
         <button
           type="button"
@@ -165,5 +197,53 @@ export function DeckViewerHeader(props: DeckViewerHeaderProps) {
         </>
       )}
     </header>
+  );
+}
+
+interface ExportPdfButtonProps extends DeckViewerExport {
+  t: (key: string) => string;
+  tFormat: (key: string, vars?: Readonly<Record<string, string | number>>) => string;
+}
+
+function ExportPdfButton({
+  available,
+  busy,
+  phase,
+  current,
+  total,
+  error,
+  onExport,
+  t,
+  tFormat,
+}: ExportPdfButtonProps) {
+  let label: string;
+  if (phase === 'capturing') {
+    label = tFormat('viewer.action.exportPdfBusy', { current, total });
+  } else if (phase === 'assembling' || phase === 'saving') {
+    label = t('viewer.action.exportPdfBuilding');
+  } else {
+    label = t('viewer.action.exportPdf');
+  }
+
+  let title: string | undefined;
+  if (!available) {
+    title = t('viewer.action.exportPdfUnavailable');
+  } else if (phase === 'error' && error) {
+    title = error;
+  }
+
+  return (
+    <button
+      type="button"
+      className="btn ghost"
+      data-testid="export-pdf"
+      onClick={onExport}
+      disabled={!available || busy}
+      title={title}
+      aria-label={t('viewer.aria.exportPdf')}
+    >
+      <Download className="btn-icon" aria-hidden size={16} />
+      {label}
+    </button>
   );
 }

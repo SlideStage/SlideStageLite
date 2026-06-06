@@ -34,6 +34,9 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'landing.cta.convert.show': 'Convert from HTML deck',
     'landing.cta.convert.hide': 'Hide converter',
     'landing.cta.sample': 'Open sample deck',
+    'landing.desktop.hint':
+      'Presenting often? The desktop app adds a multi-monitor presenter view, double-click .stage open, and full offline use.',
+    'landing.desktop.cta': 'Get the desktop app',
     'landing.status.loading': 'Loading deck…',
 
     'errors.loadDeckFallback': 'Failed to load the selected deck.',
@@ -134,10 +137,18 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'viewer.aria.presenterSide': 'presenter side panel',
     'viewer.aria.speakerPanel': 'speaker notes',
     'viewer.aria.closeSpeaker': 'close speaker view',
+    'viewer.aria.exportPdf': 'Export deck to PDF',
 
     'viewer.action.closeDeck': 'Close deck',
     'viewer.action.singleWindow': 'Single window',
     'viewer.action.overview': 'Overview (O)',
+    'viewer.action.exportPdf': 'Export PDF',
+    'viewer.action.exportPdfBusy': 'Exporting… {current}/{total}',
+    'viewer.action.exportPdfBuilding': 'Building PDF…',
+    'viewer.action.exportPdfUnavailable':
+      'PDF export needs an inlined deck. This one is streamed because it is too ' +
+      'large to inline, so export is unavailable here — open it in the SlideStage ' +
+      'desktop app or repackage it with smaller fonts/images.',
     'viewer.action.speaker': 'Speaker (S)',
     'viewer.action.presenterView': 'Presenter view',
     'viewer.action.presenterViewHint':
@@ -284,6 +295,9 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'landing.cta.convert.show': '转换 HTML 演示',
     'landing.cta.convert.hide': '收起转换器',
     'landing.cta.sample': '打开示例演示',
+    'landing.desktop.hint':
+      '经常演示？桌面版支持多显示器演讲者视图、双击打开 .stage、完全离线使用。',
+    'landing.desktop.cta': '下载桌面版',
     'landing.status.loading': '正在加载演示…',
 
     'errors.loadDeckFallback': '无法加载所选演示包。',
@@ -378,10 +392,17 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'viewer.aria.presenterSide': '演讲者侧栏',
     'viewer.aria.speakerPanel': '演讲者备注',
     'viewer.aria.closeSpeaker': '关闭演讲者视图',
+    'viewer.aria.exportPdf': '导出演示为 PDF',
 
     'viewer.action.closeDeck': '关闭演示',
     'viewer.action.singleWindow': '单窗口模式',
     'viewer.action.overview': '概览 (O)',
+    'viewer.action.exportPdf': '导出 PDF',
+    'viewer.action.exportPdfBusy': '导出中… {current}/{total}',
+    'viewer.action.exportPdfBuilding': '正在生成 PDF…',
+    'viewer.action.exportPdfUnavailable':
+      'PDF 导出需要内联资源的演示。此演示体积过大、改为流式加载，因此这里暂不可导出 —— ' +
+      '可用 SlideStage 桌面端打开，或用更小的字体／图片重新打包。',
     'viewer.action.speaker': '演讲者 (S)',
     'viewer.action.presenterView': '演讲者视图',
     'viewer.action.presenterViewHint': '打开演讲者视图，含侧栏和观众窗口',

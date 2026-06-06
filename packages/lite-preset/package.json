@@ -27,6 +27,10 @@
     "./app/readFolderInput": "./src/app/readFolderInput.ts",
     "./viewer/DeckViewer": "./src/viewer/DeckViewer.tsx",
     "./viewer/AudienceView": "./src/viewer/AudienceView.tsx",
+    "./export/useDeckPdfExport": "./src/export/useDeckPdfExport.ts",
+    "./export/slidePdfCapture": "./src/export/slidePdfCapture.ts",
+    "./export/buildSlidesPdf": "./src/export/buildSlidesPdf.ts",
+    "./export/downloadPdf": "./src/export/downloadPdf.ts",
     "./i18n/I18nProvider": "./src/i18n/I18nProvider.tsx",
     "./i18n/detect": "./src/i18n/detect.ts",
     "./i18n/locales": "./src/i18n/locales.ts",
@@ -63,11 +67,13 @@
   },
   "dependencies": {
     "@slidestage/core": "workspace:*",
-    "@slidestage/ui": "workspace:*"
+    "@slidestage/ui": "workspace:*",
+    "pdf-lib": "^1.17.1"
   },
   "peerDependencies": {
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1",
     "lucide-react": "^1.14.0",
@@ -79,6 +85,9 @@
       "optional": true
     },
     "@tauri-apps/plugin-dialog": {
+      "optional": true
+    },
+    "@tauri-apps/plugin-fs": {
       "optional": true
     },
     "@tauri-apps/plugin-process": {
@@ -148,6 +157,26 @@
         "types": "./dist/viewer/AudienceView.d.ts",
         "import": "./dist/viewer/AudienceView.js",
         "default": "./dist/viewer/AudienceView.js"
+      },
+      "./export/useDeckPdfExport": {
+        "types": "./dist/export/useDeckPdfExport.d.ts",
+        "import": "./dist/export/useDeckPdfExport.js",
+        "default": "./dist/export/useDeckPdfExport.js"
+      },
+      "./export/slidePdfCapture": {
+        "types": "./dist/export/slidePdfCapture.d.ts",
+        "import": "./dist/export/slidePdfCapture.js",
+        "default": "./dist/export/slidePdfCapture.js"
+      },
+      "./export/buildSlidesPdf": {
+        "types": "./dist/export/buildSlidesPdf.d.ts",
+        "import": "./dist/export/buildSlidesPdf.js",
+        "default": "./dist/export/buildSlidesPdf.js"
+      },
+      "./export/downloadPdf": {
+        "types": "./dist/export/downloadPdf.d.ts",
+        "import": "./dist/export/downloadPdf.js",
+        "default": "./dist/export/downloadPdf.js"
       },
       "./i18n/I18nProvider": {
         "types": "./dist/i18n/I18nProvider.d.ts",

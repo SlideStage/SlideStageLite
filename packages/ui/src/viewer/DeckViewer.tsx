@@ -12,7 +12,7 @@ import { useUiTranslator } from '../i18n/translator';
 import type { Point, Stroke } from '../presenter/types';
 import type { PresenterApi } from '../presenter/usePresenter';
 import type { AudiencePresentationState } from '../presenter/usePresentationSync';
-import { DeckViewerHeader } from './DeckViewerHeader';
+import { DeckViewerHeader, type DeckViewerExport } from './DeckViewerHeader';
 import { NotesPanel } from './NotesPanel';
 import { Overview } from './Overview';
 import { PresenterSideRail } from './PresenterSideRail';
@@ -21,6 +21,8 @@ import { SpeakerPanel } from './SpeakerPanel';
 import { useAudiencePointerTracking } from './useAudiencePointerTracking';
 import { useDeckViewerResize } from './useDeckViewerResize';
 import { chooseUseSrcdoc, strokeHitTest } from './viewMath';
+
+export type { DeckViewerExport } from './DeckViewerHeader';
 
 export type DeckViewerLayoutMode = 'presenter' | 'single';
 
@@ -103,6 +105,12 @@ export interface DeckViewerProps {
   audience?: DeckViewerAudienceProps;
 
   /**
+   * Client-side "Export PDF" integration. Pass `undefined` to hide the
+   * export button entirely.
+   */
+  exportPdf?: DeckViewerExport;
+
+  /**
    * Optional slot rendered as a sibling of the layout body. Lite-preset
    * uses this to mount the Tauri MonitorPicker only when needed without
    * leaking the desktop concept into the UI layer.
@@ -137,6 +145,7 @@ export function DeckViewer(props: DeckViewerProps) {
     thumbnailUrls,
     isTauriHost,
     audience,
+    exportPdf,
     slots,
   } = props;
 
@@ -347,6 +356,7 @@ export function DeckViewer(props: DeckViewerProps) {
           onCloseDeck={onCloseDeck}
           showOverview={showOverview}
           onToggleOverview={onToggleOverview}
+          exportPdf={exportPdf}
           showNotes={showNotes}
           onToggleNotes={onToggleNotes}
           onSwitchToPresenter={() => layout.onModeChange('presenter')}
@@ -402,6 +412,7 @@ export function DeckViewer(props: DeckViewerProps) {
         onSwitchToSingle={() => layout.onModeChange('single')}
         showOverview={showOverview}
         onToggleOverview={onToggleOverview}
+        exportPdf={exportPdf}
         audienceConnected={audience?.connected ?? false}
         onOpenAudienceWindow={audience ? () => void audience.onOpenWindow() : undefined}
       />

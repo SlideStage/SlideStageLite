@@ -118,3 +118,85 @@ describe('<DeckViewerHeader /> presenter variant', () => {
     expect(props.onOpenAudienceWindow).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('<DeckViewerHeader /> export PDF button', () => {
+  function baseExport(overrides: Record<string, unknown> = {}) {
+    return {
+      available: true,
+      busy: false,
+      phase: 'idle' as const,
+      current: 0,
+      total: 0,
+      error: null,
+      onExport: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  function renderWithExport(exportPdf: ReturnType<typeof baseExport>) {
+    render(
+      <DeckViewerHeader
+        variant="single"
+        title="Deck"
+        currentIndex={0}
+        totalSlides={3}
+        canGoPrev={false}
+        canGoNext
+        onNavigatePrev={vi.fn()}
+        onNavigateNext={vi.fn()}
+        onCloseDeck={vi.fn()}
+        onSwitchToPresenter={vi.fn()}
+        showOverview={false}
+        onToggleOverview={vi.fn()}
+        showNotes={false}
+        onToggleNotes={vi.fn()}
+        exportPdf={exportPdf}
+      />,
+    );
+  }
+
+  it('is absent when no exportPdf integration is provided', () => {
+    render(
+      <DeckViewerHeader
+        variant="single"
+        title="Deck"
+        currentIndex={0}
+        totalSlides={3}
+        canGoPrev={false}
+        canGoNext
+        onNavigatePrev={vi.fn()}
+        onNavigateNext={vi.fn()}
+        onCloseDeck={vi.fn()}
+        onSwitchToPresenter={vi.fn()}
+        showOverview={false}
+        onToggleOverview={vi.fn()}
+        showNotes={false}
+        onToggleNotes={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId('export-pdf')).toBeNull();
+  });
+
+  it('is enabled and fires onExport when available and idle', () => {
+    const exportPdf = baseExport();
+    renderWithExport(exportPdf);
+    const btn = screen.getByTestId('export-pdf') as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+    fireEvent.click(btn);
+    expect(exportPdf.onExport).toHaveBeenCalledTimes(1);
+  });
+
+  it('is disabled while busy and shows the progress label', () => {
+    renderWithExport(baseExport({ busy: true, phase: 'capturing', current: 2, total: 5 }));
+    const btn = screen.getByTestId('export-pdf') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(btn.textContent).toContain('viewer.action.exportPdfBusy');
+  });
+
+  it('is disabled and explains why when unavailable', () => {
+    renderWithExport(baseExport({ available: false }));
+    const btn = screen.getByTestId('export-pdf') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(btn.title).toBe('viewer.action.exportPdfUnavailable');
+  });
+});

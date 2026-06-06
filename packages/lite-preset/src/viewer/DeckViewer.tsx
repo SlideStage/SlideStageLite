@@ -22,6 +22,7 @@ import { isTauri } from '../desktop/env';
 import { MonitorPicker } from '../desktop/MonitorPicker';
 import { listMonitors, type MonitorInfo } from '../desktop/monitors';
 import { useThumbnailCapture } from '../desktop/useThumbnailCapture';
+import { useDeckPdfExport } from '../export/useDeckPdfExport';
 import { loadAnnotations, saveAnnotations } from '../persistence/annotationStore';
 import { loadNotes, saveNotes, type StoredNotes } from '../persistence/notesStore';
 
@@ -135,6 +136,10 @@ export function DeckViewer({
   // slide off-screen and cache the resulting WebP under the user's app
   // data dir. The hook is a no-op on the Web build.
   const thumbnails = useThumbnailCapture(deck);
+
+  // Client-side "Export PDF": rasterizes every slide and assembles a
+  // one-slide-per-page PDF. Lazy — nothing runs until the user clicks.
+  const pdfExport = useDeckPdfExport(deck);
 
   // Hydrate annotations from localStorage on deck change.
   useEffect(() => {
@@ -391,6 +396,15 @@ export function DeckViewer({
         connected: audienceConnected,
         onPresentationChange: setAudiencePresentation,
         onOpenWindow: openAudienceWindow,
+      }}
+      exportPdf={{
+        available: pdfExport.available,
+        busy: pdfExport.busy,
+        phase: pdfExport.phase,
+        current: pdfExport.current,
+        total: pdfExport.total,
+        error: pdfExport.error,
+        onExport: pdfExport.exportPdf,
       }}
       slots={{ overlay: monitorPickerOverlay }}
     />
