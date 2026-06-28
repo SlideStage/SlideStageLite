@@ -41,6 +41,7 @@
     "./presenter/AnnotationOverlay": "./src/presenter/AnnotationOverlay.tsx",
     "./presenter/Blackout": "./src/presenter/Blackout.tsx",
     "./presenter/LaserPointer": "./src/presenter/LaserPointer.tsx",
+    "./presenter/SelectionOverlay": "./src/presenter/SelectionOverlay.tsx",
     "./presenter/Spotlight": "./src/presenter/Spotlight.tsx",
     "./presenter/usePresentationSync": "./src/presenter/usePresentationSync.ts",
     "./presenter/slideRuntime": "./src/presenter/slideRuntime.ts",
@@ -207,6 +208,11 @@
         "types": "./dist/presenter/LaserPointer.d.ts",
         "import": "./dist/presenter/LaserPointer.js",
         "default": "./dist/presenter/LaserPointer.js"
+      },
+      "./presenter/SelectionOverlay": {
+        "types": "./dist/presenter/SelectionOverlay.d.ts",
+        "import": "./dist/presenter/SelectionOverlay.js",
+        "default": "./dist/presenter/SelectionOverlay.js"
       },
       "./presenter/Spotlight": {
         "types": "./dist/presenter/Spotlight.d.ts",

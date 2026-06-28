@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_SELECTION_RECTS,
   STAGE_AGENT_SOURCE,
   parseAgentMessage,
   parseForwardedInputEvent,
+  parseSelectionRects,
   parseSlideRuntimeState,
   type SlideRuntimeState,
 } from '@slidestage/ui/presenter/slideRuntime';
@@ -89,6 +91,56 @@ describe('parseForwardedInputEvent', () => {
   });
 });
 
+describe('parseSelectionRects', () => {
+  it('accepts a well-formed rect list', () => {
+    expect(
+      parseSelectionRects([
+        { x: 1, y: 2, w: 3, h: 4 },
+        { x: 10, y: 20, w: 30, h: 40 },
+      ]),
+    ).toEqual([
+      { x: 1, y: 2, w: 3, h: 4 },
+      { x: 10, y: 20, w: 30, h: 40 },
+    ]);
+  });
+
+  it('treats an empty array as a valid "clear" payload', () => {
+    expect(parseSelectionRects([])).toEqual([]);
+  });
+
+  it('drops malformed entries instead of failing the whole list', () => {
+    expect(
+      parseSelectionRects([
+        { x: 1, y: 2, w: 3, h: 4 },
+        { x: 'a', y: 2, w: 3, h: 4 },
+        { x: 1, y: 2, w: -3, h: 4 },
+        { x: 1, y: 2, w: 3, h: Number.NaN },
+        null,
+        { x: 5, y: 6, w: 7, h: 8 },
+      ]),
+    ).toEqual([
+      { x: 1, y: 2, w: 3, h: 4 },
+      { x: 5, y: 6, w: 7, h: 8 },
+    ]);
+  });
+
+  it('caps the number of rects to bound the payload', () => {
+    const many = Array.from({ length: MAX_SELECTION_RECTS + 25 }, () => ({
+      x: 0,
+      y: 0,
+      w: 1,
+      h: 1,
+    }));
+    expect(parseSelectionRects(many)).toHaveLength(MAX_SELECTION_RECTS);
+  });
+
+  it('rejects non-array payloads', () => {
+    expect(parseSelectionRects(null)).toBeNull();
+    expect(parseSelectionRects({ x: 1 })).toBeNull();
+    expect(parseSelectionRects('rects')).toBeNull();
+  });
+});
+
 describe('parseAgentMessage', () => {
   it('requires the agent source tag', () => {
     expect(parseAgentMessage({ type: 'ready' })).toBeNull();
@@ -126,6 +178,24 @@ describe('parseAgentMessage', () => {
     expect(out).toEqual({ type: 'input', event: { kind: 'click', x: 1, y: 2 } });
     expect(
       parseAgentMessage({ source: STAGE_AGENT_SOURCE, type: 'input', event: { kind: 'x' } }),
+    ).toBeNull();
+  });
+
+  it('parses a selection message and sanitizes the rects', () => {
+    expect(
+      parseAgentMessage({
+        source: STAGE_AGENT_SOURCE,
+        type: 'selection',
+        rects: [{ x: 1, y: 2, w: 3, h: 4 }],
+      }),
+    ).toEqual({ type: 'selection', rects: [{ x: 1, y: 2, w: 3, h: 4 }] });
+    // An empty list is a valid "clear" message.
+    expect(
+      parseAgentMessage({ source: STAGE_AGENT_SOURCE, type: 'selection', rects: [] }),
+    ).toEqual({ type: 'selection', rects: [] });
+    // A non-array rects payload is rejected.
+    expect(
+      parseAgentMessage({ source: STAGE_AGENT_SOURCE, type: 'selection', rects: 'nope' }),
     ).toBeNull();
   });
 

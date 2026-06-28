@@ -22,6 +22,7 @@ export * from './presenter/usePersistedNumber';
 export * from './presenter/AnnotationOverlay';
 export * from './presenter/Blackout';
 export * from './presenter/LaserPointer';
+export * from './presenter/SelectionOverlay';
 export * from './presenter/Spotlight';
 export * from './presenter/usePresentationSync';
 export * from './presenter/slideRuntime';

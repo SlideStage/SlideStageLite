@@ -46,6 +46,24 @@ export type ForwardedInputEvent =
   | { kind: 'click'; x: number; y: number }
   | { kind: 'scroll'; sx: number; sy: number };
 
+/**
+ * One bounding rectangle (deck logical px) of the presenter's current
+ * text selection, forwarded so the audience window can paint an identical
+ * highlight. Coordinates come from `Range.getClientRects()` inside the
+ * slide iframe, whose viewport equals the deck's logical dimensions, so
+ * they map 1:1 onto the audience `.logical-stage` overlay. Unlike a DOM
+ * range, rects are immune to cross-iframe DOM drift.
+ */
+export interface SelectionRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Defensive upper bound on forwarded selection rects per message. */
+export const MAX_SELECTION_RECTS = 200;
+
 /** host → agent */
 export type HostToAgentMessage =
   | { source: typeof STAGE_HOST_SOURCE; type: 'init'; role: 'presenter' | 'audience'; forwardEvents: boolean }
@@ -58,7 +76,9 @@ export type HostToAgentMessage =
 export type AgentToHostMessage =
   | { type: 'ready' }
   | { type: 'runtime'; runtime: SlideRuntimeState }
-  | { type: 'input'; event: ForwardedInputEvent };
+  | { type: 'input'; event: ForwardedInputEvent }
+  // Presenter → host: rects of the current text selection (or [] to clear).
+  | { type: 'selection'; rects: SelectionRect[] };
 
 const RUNTIME_DRIVERS: ReadonlySet<string> = new Set<string>([
   'reveal',
@@ -122,6 +142,26 @@ export function parseForwardedInputEvent(value: unknown): ForwardedInputEvent | 
   return null;
 }
 
+/**
+ * Validate + sanitize a forwarded selection-rect list from the (untrusted)
+ * slide iframe. Drops malformed entries and caps the count. Returns `null`
+ * only when the payload is not an array; an empty array is valid and tells
+ * the audience to clear its highlight.
+ */
+export function parseSelectionRects(value: unknown): SelectionRect[] | null {
+  if (!Array.isArray(value)) return null;
+  const out: SelectionRect[] = [];
+  for (const raw of value) {
+    if (out.length >= MAX_SELECTION_RECTS) break;
+    if (!isPlainObject(raw)) continue;
+    if (!isFiniteNumber(raw.x) || !isFiniteNumber(raw.y)) continue;
+    if (!isFiniteNumber(raw.w) || !isFiniteNumber(raw.h)) continue;
+    if (raw.w < 0 || raw.h < 0) continue;
+    out.push({ x: raw.x, y: raw.y, w: raw.w, h: raw.h });
+  }
+  return out;
+}
+
 /** Validate an inbound agent → host message; returns null if invalid. */
 export function parseAgentMessage(value: unknown): AgentToHostMessage | null {
   if (!isPlainObject(value)) return null;
@@ -136,6 +176,10 @@ export function parseAgentMessage(value: unknown): AgentToHostMessage | null {
     case 'input': {
       const event = parseForwardedInputEvent(value.event);
       return event ? { type: 'input', event } : null;
+    }
+    case 'selection': {
+      const rects = parseSelectionRects(value.rects);
+      return rects ? { type: 'selection', rects } : null;
     }
     default:
       return null;

@@ -14,6 +14,7 @@ import type { PresenterApi } from '../presenter/usePresenter';
 import type {
   AudiencePresentationState,
   ForwardedInputEvent,
+  SelectionRect,
   SlideRuntimeState,
 } from '../presenter/usePresentationSync';
 import { useSlideBridge } from '../presenter/useSlideBridge';
@@ -192,8 +193,14 @@ export function DeckViewer(props: DeckViewerProps) {
   // agent. Reset on every slide change — the freshly-loaded slide starts
   // at step 0 until its agent reports.
   const [runtime, setRuntime] = useState<SlideRuntimeState | null>(null);
+  // Bounding rects of the presenter's text selection, reported by the
+  // active slide's agent and mirrored to the audience window.
+  const [selectionRects, setSelectionRects] = useState<SelectionRect[]>([]);
   useEffect(() => {
     setRuntime(null);
+    // Clear any stale selection immediately on navigation; the newly
+    // mounted slide's agent re-reports an empty selection once it inits.
+    setSelectionRects([]);
   }, [currentIndex, deck.fingerprint]);
 
   const onInputEventRef = useRef(audience?.onInputEvent);
@@ -207,6 +214,7 @@ export function DeckViewer(props: DeckViewerProps) {
     forwardEvents: true,
     onRuntimeReport: setRuntime,
     onInputEvent: (event) => onInputEventRef.current?.(event),
+    onSelection: setSelectionRects,
   });
   const bridgeRef = useRef(bridge);
   bridgeRef.current = bridge;
@@ -304,6 +312,7 @@ export function DeckViewer(props: DeckViewerProps) {
       spotlightRadius: presenter.state.spotlightRadius,
       pointer: audiencePointer,
       runtime,
+      selection: selectionRects.length > 0 ? selectionRects : null,
     }),
     [
       audiencePointer,
@@ -312,6 +321,7 @@ export function DeckViewer(props: DeckViewerProps) {
       presenter.state.spotlightRadius,
       presenter.state.tool,
       runtime,
+      selectionRects,
     ],
   );
 

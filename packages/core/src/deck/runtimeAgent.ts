@@ -13,7 +13,7 @@
 // `allow-same-origin`). The host injects it; the author's HTML never has
 // to know about it.
 //
-// Two responsibilities:
+// Three responsibilities:
 //   1. Step sync (Strategy A) — detect a "stepping" model for the slide
 //      (custom `window.SlideStage` hook > reveal.js > impress.js >
 //      generic `.fragment`), report its state to the host, and drive it
@@ -22,6 +22,11 @@
 //   2. Best-effort passthrough (Strategy A+) — when NO stepping model is
 //      detected, forward click + scroll from the presenter iframe and
 //      replay them in the audience iframe.
+//   3. Selection mirroring — on the presenter, watch `selectionchange`
+//      and forward the bounding rects of the highlighted text so the
+//      audience window can paint an identical selection highlight. Rects
+//      (not a DOM range) cross the wire; the audience draws them on an
+//      overlay, immune to cross-iframe DOM drift.
 //
 // The message shapes here MUST stay in sync with the validators in
 // `@slidestage/ui/presenter/slideRuntime` (the host side). Both ends are
@@ -47,6 +52,9 @@ export const STAGE_RUNTIME_AGENT_SOURCE = `(function () {
   var lastSentJSON = '';
   var scrollScheduled = false;
   var pollTimer = 0;
+  var selectionBound = false; // presenter: selectionchange listener attached
+  var lastSelJSON = '';       // presenter: dedupe identical selection reports
+  var selScheduled = false;   // presenter: rAF coalescing for selectionchange
 
   function num(v) { return typeof v === 'number' && isFinite(v) ? v : 0; }
 
@@ -304,6 +312,56 @@ export const STAGE_RUNTIME_AGENT_SOURCE = `(function () {
     } catch (e) {}
   }
 
+  // ---------------- text selection (presenter) ----------------
+
+  // Collect the bounding rects of the current selection in iframe viewport
+  // (CSS px) coordinates. The slide iframe's viewport equals the deck's
+  // logical dimensions, so these map 1:1 onto the audience overlay. An
+  // empty array is a valid result and means "no selection / cleared".
+  function selectionRects() {
+    var out = [];
+    try {
+      var sel = window.getSelection ? window.getSelection() : null;
+      if (!sel || sel.isCollapsed || !sel.rangeCount) return out;
+      for (var r = 0; r < sel.rangeCount; r++) {
+        var rng = sel.getRangeAt(r);
+        var list = rng && rng.getClientRects ? rng.getClientRects() : null;
+        if (!list) continue;
+        for (var i = 0; i < list.length; i++) {
+          var rc = list[i];
+          if (!rc || rc.width <= 0 || rc.height <= 0) continue;
+          out.push({ x: Math.round(num(rc.left)), y: Math.round(num(rc.top)), w: Math.round(num(rc.width)), h: Math.round(num(rc.height)) });
+          if (out.length >= 200) return out;
+        }
+      }
+    } catch (e) {}
+    return out;
+  }
+
+  function reportSelection() {
+    if (role !== 'presenter') return;
+    var rects = selectionRects();
+    var j;
+    try { j = JSON.stringify(rects); } catch (e) { j = ''; }
+    if (j === lastSelJSON) return;
+    lastSelJSON = j;
+    post({ type: 'selection', rects: rects });
+  }
+
+  function scheduleSelection() {
+    if (selScheduled) return;
+    selScheduled = true;
+    var raf = window.requestAnimationFrame || function (cb) { return setTimeout(cb, 16); };
+    raf(function () { selScheduled = false; reportSelection(); });
+  }
+
+  function enableSelectionCapture() {
+    if (selectionBound || role !== 'presenter') return;
+    selectionBound = true;
+    try { document.addEventListener('selectionchange', scheduleSelection, true); } catch (e) {}
+    scheduleSelection();
+  }
+
   // ---------------- init / driver discovery ----------------
 
   function startDiscovery() {
@@ -331,6 +389,7 @@ export const STAGE_RUNTIME_AGENT_SOURCE = `(function () {
         role = d.role === 'audience' ? 'audience' : 'presenter';
         forwardEvents = !!d.forwardEvents;
         startDiscovery();
+        enableSelectionCapture();
         break;
       case 'step':
         if (driver) {

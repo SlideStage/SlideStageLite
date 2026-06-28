@@ -2,14 +2,16 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { LoadedDeck, Manifest } from '@slidestage/core/deck/types';
 import { pickTransport, type SyncTransport } from './transport';
 import {
+  MAX_SELECTION_RECTS,
   parseForwardedInputEvent,
   parseSlideRuntimeState,
   type ForwardedInputEvent,
+  type SelectionRect,
   type SlideRuntimeState,
 } from './slideRuntime';
 import type { Point, PresenterState, Stroke, Tool } from './types';
 
-export type { ForwardedInputEvent, SlideRuntimeState } from './slideRuntime';
+export type { ForwardedInputEvent, SelectionRect, SlideRuntimeState } from './slideRuntime';
 
 export type AudienceRole = 'presenter' | 'audience';
 
@@ -31,6 +33,13 @@ export interface AudiencePresentationState {
    * presenters (or slides without a step model) round-trip cleanly.
    */
   runtime?: SlideRuntimeState | null;
+  /**
+   * Bounding rects (deck logical px) of the presenter's current text
+   * selection, mirrored so the audience window paints the same highlight.
+   * `null`/absent means no selection. Optional + nullable so older
+   * presenters (or slides with nothing selected) round-trip cleanly.
+   */
+  selection?: SelectionRect[] | null;
 }
 
 export type SerializedAudienceDeck = Pick<
@@ -143,6 +152,25 @@ function isPoint(value: unknown): value is Point {
   return isPlainObject(value) && typeof value.x === 'number' && typeof value.y === 'number';
 }
 
+/**
+ * Strict check for a selection-rect array crossing the (unauthenticated)
+ * sync channel. Unlike the lenient agent-boundary sanitizer
+ * (`parseSelectionRects`), this rejects the whole payload on any malformed
+ * rect so a forged `presentation` message can't smuggle bogus geometry.
+ */
+function isValidSelection(value: unknown): boolean {
+  if (!Array.isArray(value)) return false;
+  if (value.length > MAX_SELECTION_RECTS) return false;
+  for (const rect of value) {
+    if (!isPlainObject(rect)) return false;
+    if (typeof rect.x !== 'number' || !Number.isFinite(rect.x)) return false;
+    if (typeof rect.y !== 'number' || !Number.isFinite(rect.y)) return false;
+    if (typeof rect.w !== 'number' || !Number.isFinite(rect.w) || rect.w < 0) return false;
+    if (typeof rect.h !== 'number' || !Number.isFinite(rect.h) || rect.h < 0) return false;
+  }
+  return true;
+}
+
 function isAudiencePresentationState(value: unknown): value is AudiencePresentationState {
   if (!isPlainObject(value)) return false;
   if (typeof value.currentIndex !== 'number' || !Number.isFinite(value.currentIndex)) return false;
@@ -161,6 +189,11 @@ function isAudiencePresentationState(value: unknown): value is AudiencePresentat
   // SlideRuntimeState so a forged payload can't drive the iframe agent.
   if (value.runtime !== undefined && value.runtime !== null) {
     if (parseSlideRuntimeState(value.runtime) === null) return false;
+  }
+  // `selection` is optional + nullable; when present it must be a bounded
+  // array of well-formed rects.
+  if (value.selection !== undefined && value.selection !== null) {
+    if (!isValidSelection(value.selection)) return false;
   }
   return true;
 }

@@ -10,6 +10,7 @@ import { useUiTranslator } from '../i18n/translator';
 import { AnnotationOverlay } from '../presenter/AnnotationOverlay';
 import { Blackout } from '../presenter/Blackout';
 import { LaserPointer } from '../presenter/LaserPointer';
+import { SelectionOverlay } from '../presenter/SelectionOverlay';
 import { Spotlight } from '../presenter/Spotlight';
 import {
   deserializeAudienceDeck,
@@ -27,6 +28,7 @@ const INITIAL_PRESENTATION: AudiencePresentationState = {
   strokesByIdx: {},
   spotlightRadius: 180,
   pointer: null,
+  selection: null,
 };
 
 /**
@@ -312,6 +314,11 @@ export function AudienceView({
         }
         sandbox={iframeSandbox}
       >
+        <SelectionOverlay
+          rects={presentation.selection ?? null}
+          width={deck.manifest.dimensions.width}
+          height={deck.manifest.dimensions.height}
+        />
         <AnnotationOverlay
           tool="mouse"
           color="#FF3B30"

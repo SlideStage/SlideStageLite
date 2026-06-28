@@ -264,3 +264,43 @@ describe('parseAudienceMessage — in-slide runtime sync', () => {
     expect(parseAudienceMessage({ type: 'input-event' })).toBeNull();
   });
 });
+
+describe('parseAudienceMessage — text selection mirroring', () => {
+  it('round-trips a presentation carrying valid selection rects', () => {
+    const presentation = {
+      ...makeAudiencePresentation(1, makePresenterState(), null),
+      selection: [
+        { x: 10, y: 20, w: 120, h: 32 },
+        { x: 10, y: 52, w: 80, h: 32 },
+      ],
+    };
+    expect(parseAudienceMessage({ type: 'presentation', presentation })).toEqual({
+      type: 'presentation',
+      presentation,
+    });
+  });
+
+  it('accepts a presentation with null selection (nothing highlighted)', () => {
+    const presentation = {
+      ...makeAudiencePresentation(0, makePresenterState(), null),
+      selection: null,
+    };
+    expect(parseAudienceMessage({ type: 'presentation', presentation })).not.toBeNull();
+  });
+
+  it('rejects a presentation whose selection rects are forged / malformed', () => {
+    const presentation = {
+      ...makeAudiencePresentation(0, makePresenterState(), null),
+      selection: [{ x: 1, y: 2, w: -3, h: 'x' }],
+    };
+    expect(parseAudienceMessage({ type: 'presentation', presentation })).toBeNull();
+  });
+
+  it('rejects a presentation whose selection is not an array', () => {
+    const presentation = {
+      ...makeAudiencePresentation(0, makePresenterState(), null),
+      selection: { x: 1, y: 2, w: 3, h: 4 },
+    };
+    expect(parseAudienceMessage({ type: 'presentation', presentation })).toBeNull();
+  });
+});

@@ -23,6 +23,7 @@ export default defineConfig({
     'src/presenter/AnnotationOverlay.tsx',
     'src/presenter/Blackout.tsx',
     'src/presenter/LaserPointer.tsx',
+    'src/presenter/SelectionOverlay.tsx',
     'src/presenter/Spotlight.tsx',
     'src/presenter/Toolbar.tsx',
     'src/presenter/types.ts',

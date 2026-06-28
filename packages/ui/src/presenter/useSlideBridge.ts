@@ -3,6 +3,7 @@ import {
   parseAgentMessage,
   STAGE_HOST_SOURCE,
   type ForwardedInputEvent,
+  type SelectionRect,
   type SlideRuntimeState,
 } from './slideRuntime';
 
@@ -31,6 +32,12 @@ export interface UseSlideBridgeOptions {
   onRuntimeReport?: (runtime: SlideRuntimeState) => void;
   /** Presenter only: called when the slide agent forwards an interaction. */
   onInputEvent?: (event: ForwardedInputEvent) => void;
+  /**
+   * Presenter only: called when the slide agent reports the current text
+   * selection (rects in deck logical px). An empty array means the
+   * selection was cleared.
+   */
+  onSelection?: (rects: SelectionRect[]) => void;
   /** Audience only: the step state to drive the iframe to. */
   targetRuntime?: SlideRuntimeState | null;
 }
@@ -65,6 +72,7 @@ export function useSlideBridge(opts: UseSlideBridgeOptions): SlideBridgeApi {
     forwardEvents = false,
     onRuntimeReport,
     onInputEvent,
+    onSelection,
     targetRuntime = null,
   } = opts;
 
@@ -77,6 +85,8 @@ export function useSlideBridge(opts: UseSlideBridgeOptions): SlideBridgeApi {
   onRuntimeReportRef.current = onRuntimeReport;
   const onInputEventRef = useRef(onInputEvent);
   onInputEventRef.current = onInputEvent;
+  const onSelectionRef = useRef(onSelection);
+  onSelectionRef.current = onSelection;
   const targetRuntimeRef = useRef<SlideRuntimeState | null>(targetRuntime);
   targetRuntimeRef.current = targetRuntime;
 
@@ -118,6 +128,8 @@ export function useSlideBridge(opts: UseSlideBridgeOptions): SlideBridgeApi {
         onRuntimeReportRef.current?.(msg.runtime);
       } else if (msg.type === 'input') {
         onInputEventRef.current?.(msg.event);
+      } else if (msg.type === 'selection') {
+        onSelectionRef.current?.(msg.rects);
       }
     };
     window.addEventListener('message', handler);
