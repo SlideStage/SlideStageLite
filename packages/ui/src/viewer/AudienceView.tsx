@@ -17,6 +17,7 @@ import {
   type AudienceMessage,
   type AudiencePresentationState,
 } from '../presenter/usePresentationSync';
+import { useSlideBridge } from '../presenter/useSlideBridge';
 import { DeckStage } from './DeckStage';
 import { chooseUseSrcdoc } from './viewMath';
 
@@ -90,6 +91,7 @@ export function AudienceView({
     INITIAL_PRESENTATION,
   );
   const [isFullscreen, setIsFullscreen] = useState(true);
+  const audienceRootRef = useRef<HTMLElement | null>(null);
 
   // Mirror the OS-level fullscreen state into React so the toggle
   // button shows the correct icon even when the user enters/exits
@@ -159,6 +161,19 @@ export function AudienceView({
     }
   }, [audienceWindowAdapter]);
 
+  // Bridge to the audience slide iframe: drives it to the presenter's
+  // in-slide step (Strategy A) and replays forwarded interactions for
+  // step-less slides (Strategy A+).
+  const bridge = useSlideBridge({
+    role: 'audience',
+    hostRef: audienceRootRef,
+    currentIndex: presentation.currentIndex,
+    reacquireKey: deck?.fingerprint ?? null,
+    targetRuntime: presentation.runtime ?? null,
+  });
+  const bridgeRef = useRef(bridge);
+  bridgeRef.current = bridge;
+
   const handleMessage = useCallback((msg: AudienceMessage) => {
     switch (msg.type) {
       case 'hello':
@@ -174,6 +189,10 @@ export function AudienceView({
         break;
       case 'presentation':
         setPresentation(msg.presentation);
+        setPresenterAlive(true);
+        break;
+      case 'input-event':
+        bridgeRef.current.replayInputEvent(msg.event);
         setPresenterAlive(true);
         break;
       default:
@@ -268,6 +287,7 @@ export function AudienceView({
 
   return (
     <main
+      ref={audienceRootRef}
       className="audience-view"
       aria-label={t('audience.aria')}
       data-testid="audience-view"

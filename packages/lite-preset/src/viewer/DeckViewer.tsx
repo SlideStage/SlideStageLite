@@ -13,6 +13,7 @@ import {
   usePresentationSync,
   type AudienceMessage,
   type AudiencePresentationState,
+  type ForwardedInputEvent,
 } from '@slidestage/ui/presenter/usePresentationSync';
 import {
   DeckViewer as UiDeckViewer,
@@ -238,6 +239,12 @@ export function DeckViewer({
     sync.send({ type: 'presentation', presentation: audiencePresentation });
   }, [sync, audiencePresentation]);
 
+  // Relay best-effort (A+) interactions forwarded from the active slide
+  // to the audience window as transient `input-event` messages.
+  const handleInputEvent = useCallback((event: ForwardedInputEvent) => {
+    syncRef.current.send({ type: 'input-event', event });
+  }, []);
+
   // ---------- Audience window spawn ----------
 
   const audienceWindowRef = useRef<Window | null>(null);
@@ -395,6 +402,7 @@ export function DeckViewer({
       audience={{
         connected: audienceConnected,
         onPresentationChange: setAudiencePresentation,
+        onInputEvent: handleInputEvent,
         onOpenWindow: openAudienceWindow,
       }}
       exportPdf={{

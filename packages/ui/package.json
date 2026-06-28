@@ -43,6 +43,8 @@
     "./presenter/LaserPointer": "./src/presenter/LaserPointer.tsx",
     "./presenter/Spotlight": "./src/presenter/Spotlight.tsx",
     "./presenter/usePresentationSync": "./src/presenter/usePresentationSync.ts",
+    "./presenter/slideRuntime": "./src/presenter/slideRuntime.ts",
+    "./presenter/useSlideBridge": "./src/presenter/useSlideBridge.ts",
     "./presenter/transport": "./src/presenter/transport/index.ts",
     "./presenter/transport/broadcastChannel": "./src/presenter/transport/broadcastChannel.ts",
     "./presenter/transport/tauriEvent": "./src/presenter/transport/tauriEvent.ts",
@@ -215,6 +217,16 @@
         "types": "./dist/presenter/usePresentationSync.d.ts",
         "import": "./dist/presenter/usePresentationSync.js",
         "default": "./dist/presenter/usePresentationSync.js"
+      },
+      "./presenter/slideRuntime": {
+        "types": "./dist/presenter/slideRuntime.d.ts",
+        "import": "./dist/presenter/slideRuntime.js",
+        "default": "./dist/presenter/slideRuntime.js"
+      },
+      "./presenter/useSlideBridge": {
+        "types": "./dist/presenter/useSlideBridge.d.ts",
+        "import": "./dist/presenter/useSlideBridge.js",
+        "default": "./dist/presenter/useSlideBridge.js"
       },
       "./presenter/transport": {
         "types": "./dist/presenter/transport/index.d.ts",

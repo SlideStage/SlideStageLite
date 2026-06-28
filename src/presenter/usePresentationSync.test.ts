@@ -216,3 +216,51 @@ describe('parseAudienceMessage (DSS-CAND-012 schema validation)', () => {
     expect(parseAudienceMessage({ type: 'hello', role: 'attacker' })).toBeNull();
   });
 });
+
+describe('parseAudienceMessage — in-slide runtime sync', () => {
+  const runtime = {
+    driver: 'reveal' as const,
+    index: 1,
+    count: 3,
+    canPrev: true,
+    canNext: true,
+    data: { h: 1 },
+  };
+
+  it('round-trips a presentation carrying valid runtime state', () => {
+    const presentation = {
+      ...makeAudiencePresentation(1, makePresenterState(), null),
+      runtime,
+    };
+    expect(parseAudienceMessage({ type: 'presentation', presentation })).toEqual({
+      type: 'presentation',
+      presentation,
+    });
+  });
+
+  it('accepts a presentation with null runtime (slide has no step model)', () => {
+    const presentation = {
+      ...makeAudiencePresentation(0, makePresenterState(), null),
+      runtime: null,
+    };
+    expect(parseAudienceMessage({ type: 'presentation', presentation })).not.toBeNull();
+  });
+
+  it('rejects a presentation whose runtime is forged / malformed', () => {
+    const presentation = {
+      ...makeAudiencePresentation(0, makePresenterState(), null),
+      runtime: { driver: 'reveal', index: 'NaN' },
+    };
+    expect(parseAudienceMessage({ type: 'presentation', presentation })).toBeNull();
+  });
+
+  it('parses an input-event message and re-validates the event', () => {
+    expect(
+      parseAudienceMessage({ type: 'input-event', event: { kind: 'click', x: 5, y: 6 } }),
+    ).toEqual({ type: 'input-event', event: { kind: 'click', x: 5, y: 6 } });
+    expect(
+      parseAudienceMessage({ type: 'input-event', event: { kind: 'nope' } }),
+    ).toBeNull();
+    expect(parseAudienceMessage({ type: 'input-event' })).toBeNull();
+  });
+});

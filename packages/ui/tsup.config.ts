@@ -29,6 +29,8 @@ export default defineConfig({
     'src/presenter/usePersistedNumber.ts',
     'src/presenter/usePresentationSync.ts',
     'src/presenter/usePresenter.ts',
+    'src/presenter/slideRuntime.ts',
+    'src/presenter/useSlideBridge.ts',
     'src/presenter/transport/broadcastChannel.ts',
     'src/presenter/transport/index.ts',
     'src/presenter/transport/tauriEvent.ts',

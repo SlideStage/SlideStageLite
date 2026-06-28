@@ -11,7 +11,12 @@ import type { LoadedDeck } from '@slidestage/core/deck/types';
 import { useUiTranslator } from '../i18n/translator';
 import type { Point, Stroke } from '../presenter/types';
 import type { PresenterApi } from '../presenter/usePresenter';
-import type { AudiencePresentationState } from '../presenter/usePresentationSync';
+import type {
+  AudiencePresentationState,
+  ForwardedInputEvent,
+  SlideRuntimeState,
+} from '../presenter/usePresentationSync';
+import { useSlideBridge } from '../presenter/useSlideBridge';
 import { DeckViewerHeader, type DeckViewerExport } from './DeckViewerHeader';
 import { NotesPanel } from './NotesPanel';
 import { Overview } from './Overview';
@@ -53,6 +58,12 @@ export interface DeckViewerAudienceProps {
    * component is intentionally transport-agnostic.
    */
   onPresentationChange: (next: AudiencePresentationState) => void;
+  /**
+   * Fires when the active slide forwards a best-effort interaction
+   * (Strategy A+ — slides with no step model). The wrapper relays it to
+   * the audience over the sync transport as a transient `input-event`.
+   */
+  onInputEvent?: (event: ForwardedInputEvent) => void;
   /**
    * Called when the user clicks "Open audience window". The wrapper
    * decides whether to spawn a Tauri WebviewWindow, a Web popup, or
@@ -177,10 +188,85 @@ export function DeckViewer(props: DeckViewerProps) {
     setElapsedMs(0);
   }, []);
 
+  // In-slide step/animation state reported by the active slide's runtime
+  // agent. Reset on every slide change — the freshly-loaded slide starts
+  // at step 0 until its agent reports.
+  const [runtime, setRuntime] = useState<SlideRuntimeState | null>(null);
+  useEffect(() => {
+    setRuntime(null);
+  }, [currentIndex, deck.fingerprint]);
+
+  const onInputEventRef = useRef(audience?.onInputEvent);
+  onInputEventRef.current = audience?.onInputEvent;
+
+  const bridge = useSlideBridge({
+    role: 'presenter',
+    hostRef: stageHostRef,
+    currentIndex,
+    reacquireKey: deck.fingerprint,
+    forwardEvents: true,
+    onRuntimeReport: setRuntime,
+    onInputEvent: (event) => onInputEventRef.current?.(event),
+  });
+  const bridgeRef = useRef(bridge);
+  bridgeRef.current = bridge;
+  const runtimeRef = useRef(runtime);
+  runtimeRef.current = runtime;
+
   const slide = deck.manifest.slides[currentIndex];
   const nextSlide = deck.manifest.slides[currentIndex + 1] ?? null;
-  const canGoPrev = currentIndex > 0;
-  const canGoNext = currentIndex < deck.manifest.totalSlides - 1;
+  const stepHasNext = runtime?.canNext ?? false;
+  const stepHasPrev = runtime?.canPrev ?? false;
+  const canGoPrev = currentIndex > 0 || stepHasPrev;
+  const canGoNext = currentIndex < deck.manifest.totalSlides - 1 || stepHasNext;
+
+  // Step-aware navigation: advance the in-slide animation first, and only
+  // change slides once the slide's steps are exhausted.
+  const goForward = useCallback(() => {
+    if (runtimeRef.current?.canNext) {
+      bridgeRef.current.sendStep('next');
+      return;
+    }
+    onNavigate(currentIndex + 1);
+  }, [currentIndex, onNavigate]);
+
+  const goBack = useCallback(() => {
+    if (runtimeRef.current?.canPrev) {
+      bridgeRef.current.sendStep('prev');
+      return;
+    }
+    onNavigate(currentIndex - 1);
+  }, [currentIndex, onNavigate]);
+
+  // Intercept navigation keys in the capture phase so we can consume them
+  // for in-slide stepping BEFORE the host's slide-level keydown handler
+  // (LiteApp, bubble phase) advances the slide. When there is no step to
+  // consume we let the event through untouched.
+  useEffect(() => {
+    if (showOverview) return undefined;
+    const onKeyCapture = (event: KeyboardEvent): void => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable) {
+        return;
+      }
+      const rt = runtimeRef.current;
+      if (!rt) return;
+      const forward = event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ';
+      const back = event.key === 'ArrowLeft' || event.key === 'PageUp';
+      if (forward && rt.canNext) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        bridgeRef.current.sendStep('next');
+      } else if (back && rt.canPrev) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        bridgeRef.current.sendStep('prev');
+      }
+    };
+    window.addEventListener('keydown', onKeyCapture, true);
+    return () => window.removeEventListener('keydown', onKeyCapture, true);
+  }, [showOverview]);
   const nextSlideUrl = nextSlide ? deck.slideUrls[currentIndex + 1] : null;
   const useSrcdoc = chooseUseSrcdoc({ deck, isTauriHost, iframeSandbox });
   const nextSlideHtml = useSrcdoc && nextSlide ? deck.slideHtml[currentIndex + 1] : undefined;
@@ -217,6 +303,7 @@ export function DeckViewer(props: DeckViewerProps) {
       strokesByIdx: broadcastStrokes,
       spotlightRadius: presenter.state.spotlightRadius,
       pointer: audiencePointer,
+      runtime,
     }),
     [
       audiencePointer,
@@ -224,6 +311,7 @@ export function DeckViewer(props: DeckViewerProps) {
       currentIndex,
       presenter.state.spotlightRadius,
       presenter.state.tool,
+      runtime,
     ],
   );
 
@@ -351,8 +439,8 @@ export function DeckViewer(props: DeckViewerProps) {
           totalSlides={deck.manifest.totalSlides}
           canGoPrev={canGoPrev}
           canGoNext={canGoNext}
-          onNavigatePrev={() => onNavigate(currentIndex - 1)}
-          onNavigateNext={() => onNavigate(currentIndex + 1)}
+          onNavigatePrev={goBack}
+          onNavigateNext={goForward}
           onCloseDeck={onCloseDeck}
           showOverview={showOverview}
           onToggleOverview={onToggleOverview}
@@ -407,8 +495,8 @@ export function DeckViewer(props: DeckViewerProps) {
         totalSlides={deck.manifest.totalSlides}
         canGoPrev={canGoPrev}
         canGoNext={canGoNext}
-        onNavigatePrev={() => onNavigate(currentIndex - 1)}
-        onNavigateNext={() => onNavigate(currentIndex + 1)}
+        onNavigatePrev={goBack}
+        onNavigateNext={goForward}
         onSwitchToSingle={() => layout.onModeChange('single')}
         showOverview={showOverview}
         onToggleOverview={onToggleOverview}

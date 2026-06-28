@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { LoadedDeck, Manifest } from '@slidestage/core/deck/types';
 import { pickTransport, type SyncTransport } from './transport';
+import {
+  parseForwardedInputEvent,
+  parseSlideRuntimeState,
+  type ForwardedInputEvent,
+  type SlideRuntimeState,
+} from './slideRuntime';
 import type { Point, PresenterState, Stroke, Tool } from './types';
+
+export type { ForwardedInputEvent, SlideRuntimeState } from './slideRuntime';
 
 export type AudienceRole = 'presenter' | 'audience';
 
@@ -16,6 +24,13 @@ export interface AudiencePresentationState {
   strokesByIdx: Record<number, Stroke[]>;
   spotlightRadius: number;
   pointer: AudiencePointer | null;
+  /**
+   * In-slide step/animation state reported by the active slide's runtime
+   * agent. Lets the audience iframe be driven to the same fragment/step
+   * the presenter is on. Optional + nullable so snapshots from older
+   * presenters (or slides without a step model) round-trip cleanly.
+   */
+  runtime?: SlideRuntimeState | null;
 }
 
 export type SerializedAudienceDeck = Pick<
@@ -48,7 +63,11 @@ export type AudienceMessage =
   | { type: 'goodbye'; role: AudienceRole }
   | { type: 'request-snapshot' }
   | { type: 'snapshot'; snapshot: AudienceSnapshot }
-  | { type: 'presentation'; presentation: AudiencePresentationState };
+  | { type: 'presentation'; presentation: AudiencePresentationState }
+  // Transient best-effort (A+) interaction forwarded presenter → audience
+  // for slides that have no step model. Not part of the retained snapshot
+  // — replaying a stale click on reconnect would be wrong.
+  | { type: 'input-event'; event: ForwardedInputEvent };
 
 export const DEFAULT_AUDIENCE_CHANNEL = 'slidestage-lite-audience';
 
@@ -138,6 +157,11 @@ function isAudiencePresentationState(value: unknown): value is AudiencePresentat
     if (pointer.tool !== 'laser' && pointer.tool !== 'spotlight') return false;
     if (!isPoint(pointer.point)) return false;
   }
+  // `runtime` is optional + nullable; when present it must be a valid
+  // SlideRuntimeState so a forged payload can't drive the iframe agent.
+  if (value.runtime !== undefined && value.runtime !== null) {
+    if (parseSlideRuntimeState(value.runtime) === null) return false;
+  }
   return true;
 }
 
@@ -185,6 +209,10 @@ export function parseAudienceMessage(data: unknown): AudienceMessage | null {
       return isAudiencePresentationState(data.presentation)
         ? { type: 'presentation', presentation: data.presentation }
         : null;
+    case 'input-event': {
+      const event = parseForwardedInputEvent(data.event);
+      return event ? { type: 'input-event', event } : null;
+    }
     case 'snapshot': {
       const snapshot = data.snapshot;
       if (!isPlainObject(snapshot)) return null;

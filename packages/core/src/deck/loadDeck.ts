@@ -3,6 +3,7 @@ import { parseManifest } from './manifestSchema';
 import { normalizePackagePath } from './pathSafety';
 import { safeUnzipSync } from './safeUnzip';
 import { rewriteHtmlAssetReferences, stripExternalLinkReferences } from './rewriteHtml';
+import { injectRuntimeAgent } from './runtimeAgent';
 import {
   DEFAULT_INLINE_BUDGET_BYTES,
   DeckLoadError,
@@ -282,6 +283,13 @@ function createSlideContents(
               : rewritten;
           })();
 
+    // Inject the in-iframe runtime agent so the host can mirror in-slide
+    // step/animation state and interactions to the audience window. We
+    // skip the disabled-srcdoc placeholder (it is never painted), but we
+    // still inject into the transport-served copy below for those decks.
+    const srcdocHtml =
+      dataUrls === null ? dataRewritten : injectRuntimeAgent(dataRewritten);
+
     if (!virtualUrlFor) {
       // No transport: iframe will navigate to a blob: of the
       // data-inlined HTML. Modern Chrome allows that initial navigation
@@ -290,10 +298,10 @@ function createSlideContents(
       // — the loader rejects `inlineMode: 'auto'` + oversized + no
       // transport up front (E_TOO_LARGE_FOR_INLINE).
       const blobUrl = URL.createObjectURL(
-        new Blob([dataRewritten], { type: 'text/html;charset=utf-8' }),
+        new Blob([srcdocHtml], { type: 'text/html;charset=utf-8' }),
       );
       objectUrls.push(blobUrl);
-      return { url: blobUrl, html: dataRewritten, publishedBytes: null };
+      return { url: blobUrl, html: srcdocHtml, publishedBytes: null };
     }
 
     // Transport (Service Worker) is available: rewrite asset references
@@ -302,16 +310,18 @@ function createSlideContents(
     // hosts that turn the SW off later. When dataRewritten is the
     // placeholder we still emit the virtual-URL flavour for the
     // transport — that is the *only* renderable copy of the slide.
-    const virtualRewritten = rewriteHtmlAssetReferences(
-      html,
-      path,
-      (assetPath) => virtualUrlFor(assetPath) ?? null,
-      textLookup,
+    const virtualRewritten = injectRuntimeAgent(
+      rewriteHtmlAssetReferences(
+        html,
+        path,
+        (assetPath) => virtualUrlFor(assetPath) ?? null,
+        textLookup,
+      ),
     );
 
     return {
       url: virtualUrlFor(path),
-      html: dataRewritten,
+      html: srcdocHtml,
       publishedBytes: textEncoder.encode(virtualRewritten),
     };
   });

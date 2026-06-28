@@ -22,6 +22,7 @@
     "./deck/manifestSchema": "./src/deck/manifestSchema.ts",
     "./deck/pathSafety": "./src/deck/pathSafety.ts",
     "./deck/rewriteHtml": "./src/deck/rewriteHtml.ts",
+    "./deck/runtimeAgent": "./src/deck/runtimeAgent.ts",
     "./deck/safeUnzip": "./src/deck/safeUnzip.ts",
     "./deck/trustCapabilities": "./src/deck/trustCapabilities.ts",
     "./deck/types": "./src/deck/types.ts",
@@ -96,6 +97,11 @@
         "types": "./dist/deck/rewriteHtml.d.ts",
         "import": "./dist/deck/rewriteHtml.js",
         "default": "./dist/deck/rewriteHtml.js"
+      },
+      "./deck/runtimeAgent": {
+        "types": "./dist/deck/runtimeAgent.d.ts",
+        "import": "./dist/deck/runtimeAgent.js",
+        "default": "./dist/deck/runtimeAgent.js"
       },
       "./deck/safeUnzip": {
         "types": "./dist/deck/safeUnzip.d.ts",
