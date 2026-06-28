@@ -64,6 +64,14 @@ concurrency:
   group: release-macos-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
+# Run the bundled JS actions (checkout / setup-node / cache /
+# upload-artifact / pnpm-action-setup) on Node 24 now. They still declare
+# Node 20, which GitHub force-migrates on 2026-06-16; opting in early
+# clears the deprecation warning and confirms forward-compat.
+# https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build:
     runs-on: macos-14 # Apple Silicon; cross-builds x86_64 too

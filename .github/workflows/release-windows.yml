@@ -37,6 +37,12 @@ on:
 permissions:
   contents: write # required for `gh release upload`
 
+# Run bundled JS actions on Node 24 now; they still ship as Node 20, which
+# GitHub force-migrates on 2026-06-16. Clears the deprecation warning.
+# https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build:
     runs-on: windows-latest
