@@ -8,13 +8,16 @@ import {
   type DragEvent,
 } from 'react';
 import { Download, Play, X } from 'lucide-react';
-import {
-  convertFolderSource,
-  convertSource,
-  createNetworkFetcher,
-  type ConvertMode,
-  type ConvertResult,
-  type MirrorProgress,
+// The converter engine (source detection, splitters, HTML rewriting,
+// packStage, mirror pipeline) is a large dependency subtree that most
+// sessions never touch — it is only needed once the user actually clicks
+// "Convert". Import it dynamically inside `runConvert` so it lands in a
+// lazy chunk instead of the main bundle; only the types are imported
+// statically (erased at build time).
+import type {
+  ConvertMode,
+  ConvertResult,
+  MirrorProgress,
 } from '@slidestage/core/converter';
 import { DeckLoadError } from '@slidestage/core/deck/types';
 import { useI18n } from '../i18n/I18nProvider';
@@ -177,6 +180,9 @@ export function ConverterPanel({ onConvertedReady, onClose }: ConverterPanelProp
     setError(null);
     setMirrorProgress(null);
     try {
+      const { convertSource, convertFolderSource, createNetworkFetcher } = await import(
+        '@slidestage/core/converter'
+      );
       const opts = {
         mode: mode === 'auto' ? undefined : (mode as ConvertMode),
         report: true,

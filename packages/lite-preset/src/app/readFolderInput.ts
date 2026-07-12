@@ -1,4 +1,7 @@
-import { shouldSkipFolderPath } from '@slidestage/core/converter';
+// Deep import on purpose: pulling this one helper from the converter
+// barrel would statically drag the entire converter engine into the main
+// bundle and defeat ConverterPanel's lazy `import('@slidestage/core/converter')`.
+import { shouldSkipFolderPath } from '@slidestage/core/converter/folderFilter';
 
 export interface FolderEntries {
   name: string;
