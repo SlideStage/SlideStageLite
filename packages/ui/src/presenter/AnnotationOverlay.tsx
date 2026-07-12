@@ -93,7 +93,9 @@ export function AnnotationOverlay({
 
   const handlePointerMove = (event: PointerEvent<SVGSVGElement>) => {
     const point = pointFromEvent(event);
-    if (tool === 'eraser') {
+    // Erase only while a button/contact is actually down — merely hovering
+    // the slide with the eraser selected must not wipe annotations.
+    if (tool === 'eraser' && event.buttons !== 0) {
       onErase(point);
     }
 

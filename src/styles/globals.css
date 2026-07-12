@@ -1091,6 +1091,22 @@ code {
   background: rgba(255, 255, 255, 0.16);
 }
 
+/* Error flavor of the notice chip: shown while a deck is open and a
+ * subsequent open attempt fails (desktop file-open of a corrupt deck,
+ * denied trust prompt, ...). Same layout, red accent. */
+.auto-elevated-notice.deck-error-notice {
+  border-color: rgba(248, 113, 113, 0.6);
+}
+.auto-elevated-notice.deck-error-notice .auto-elevated-notice-icon {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+/* When the auto-elevated notice is also visible, stack the error chip
+ * below it instead of overlapping at the same fixed offset. */
+.auto-elevated-notice + .deck-error-notice {
+  top: 56px;
+}
+
 /* GitHub Release update banner (landing surface, Tauri-only). Visually
  * sibling to .auto-elevated-notice but anchored beneath the app header
  * instead of as a floating chip so it does not occlude the deck

@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
-import { ExternalLink, ShieldCheck, Sparkles, UploadCloud, Wand2 } from 'lucide-react';
+import {
+  ExternalLink,
+  ShieldCheck,
+  Sparkles,
+  TriangleAlert,
+  UploadCloud,
+  Wand2,
+} from 'lucide-react';
 import { loadDeck } from '@slidestage/core/deck/loadDeck';
 import {
   BASE_SANDBOX_TOKEN,
@@ -359,14 +366,25 @@ export function LiteApp() {
         return;
       }
 
+      // Never hijack browser/OS-level combos (Cmd+O opens a file, Ctrl+S
+      // saves, Alt+Arrow navigates history, ...). Shifted letters are
+      // reserved for the presenter tool shortcuts (Shift+S = spotlight —
+      // see usePresenterShortcuts), so the letter cases below additionally
+      // require the unshifted key.
+      if (event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+
       switch (event.key) {
         case 'O':
         case 'o':
+          if (event.shiftKey) break;
           event.preventDefault();
           setShowOverview((value) => !value);
           break;
         case 'S':
         case 's':
+          if (event.shiftKey) break;
           event.preventDefault();
           setShowNotes((value) => !value);
           break;
@@ -432,6 +450,29 @@ export function LiteApp() {
             </button>
           </aside>
         ) : null}
+        {error ? (
+          // A deck is already on screen, so the landing page's error alert
+          // is unreachable — without this notice a failed open (desktop
+          // file-open of a corrupt deck, denied trust prompt, ...) would
+          // fail silently while the previous deck stays up.
+          <aside
+            className="auto-elevated-notice deck-error-notice"
+            role="alert"
+            data-testid="deck-open-error"
+          >
+            <span className="auto-elevated-notice-icon" aria-hidden>
+              <TriangleAlert size={16} />
+            </span>
+            <span className="auto-elevated-notice-text">{error}</span>
+            <button
+              type="button"
+              className="auto-elevated-notice-dismiss"
+              onClick={() => setError(null)}
+            >
+              {t('viewer.notice.dismiss')}
+            </button>
+          </aside>
+        ) : null}
         <DeckViewer
           deck={deck}
           currentIndex={currentIndex}
@@ -447,6 +488,9 @@ export function LiteApp() {
             setDeck(null);
             setIframeSandbox(BASE_SANDBOX_TOKEN);
             setAutoElevatedNotice(null);
+            // Don't carry a stale in-deck failure notice onto the landing
+            // page's alert slot.
+            setError(null);
           }}
         />
         {pendingTrust ? (

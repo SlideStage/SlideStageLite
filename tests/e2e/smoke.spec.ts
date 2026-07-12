@@ -327,6 +327,34 @@ test('highlighter respects active color selection and spotlight uses dark mask',
   expect(bg).toContain('rgba(0, 0, 0, 0.85)');
 });
 
+test('Shift+S selects spotlight instead of toggling the speaker panel', async ({ page }) => {
+  await page.goto('/');
+  await page
+    .getByLabel(/Open \.stage/i)
+    .setInputFiles(resolve('tests/fixtures/valid-basic.stage'));
+
+  // Single-window mode is where the S (speaker panel) shortcut has a
+  // visible effect, so the historical Shift+S double-fire (spotlight AND
+  // speaker panel) is observable here.
+  await page.getByTestId('open-single-view').click();
+  await expect(page.getByTestId('deck-viewer')).toBeVisible();
+  await expect(page.getByTestId('speaker-panel')).toHaveCount(0);
+
+  await page.keyboard.press('Shift+S');
+  await expect(page.getByTestId('tool-spotlight')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('speaker-panel')).toHaveCount(0);
+
+  // Modifier combos stay with the browser — Alt+O must not open the
+  // overview overlay.
+  await page.keyboard.press('Alt+o');
+  await expect(page.getByRole('region', { name: 'Overview' })).toHaveCount(0);
+
+  // The documented plain keys still work.
+  await page.keyboard.press('Escape'); // spotlight → mouse
+  await page.keyboard.press('s');
+  await expect(page.getByTestId('speaker-panel')).toBeVisible();
+});
+
 test('persists side / notes resize across reloads', async ({ page }) => {
   await page.goto('/');
   await page

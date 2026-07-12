@@ -185,9 +185,18 @@ export function usePresenterShortcuts(api: PresenterApi, currentSlideIdx: number
       }
 
       const key = event.key;
-      if ((event.ctrlKey || event.metaKey) && key.toLowerCase() === 'z' && !event.shiftKey) {
+      const primaryModifier = event.ctrlKey || event.metaKey;
+      if (primaryModifier && key.toLowerCase() === 'z' && !event.shiftKey) {
         event.preventDefault();
         undo(currentSlideIdx);
+        return;
+      }
+      // Everything below is a bare-key or Shift+key shortcut. Never fire
+      // while a system-level modifier is held — otherwise Cmd+B
+      // (bookmarks), Ctrl+W (close tab), Cmd+Shift+S (save as), Cmd+1..5
+      // (tab switch), and Cmd+[ (history back) would trigger presenter
+      // tools instead of their native actions.
+      if (primaryModifier || event.altKey) {
         return;
       }
       if (event.shiftKey && (key === 'Delete' || key === 'Backspace')) {
