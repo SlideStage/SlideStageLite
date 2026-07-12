@@ -90,7 +90,7 @@ jobs:
         run: pnpm -r --filter "./packages/*" build
 
       - name: Vitest (unit + jsdom)
-        # 194+ unit tests across root + packages, including the design-token
+        # 650+ unit tests across root + packages, including the design-token
         # twin contract and Footer beian env matrix.
         run: pnpm test:unit
 
@@ -149,11 +149,14 @@ jobs:
 
       - name: Run Playwright (Chromium)
         # Pinned to an empty VITE_BEIAN_* baseline so local .env's don't
-        # pollute the run; playwright config spins up the Vite dev server.
+        # pollute the run. These are the four names Footer.tsx actually
+        # reads; playwright.config.ts pins the same set on the dev server
+        # it spawns, so this block is belt-and-suspenders.
         env:
-          VITE_BEIAN_ICP: ""
-          VITE_BEIAN_GONGAN: ""
-          VITE_BEIAN_GONGAN_URL: ""
+          VITE_BEIAN_ICP_TEXT: ""
+          VITE_BEIAN_ICP_URL: ""
+          VITE_BEIAN_MPS_TEXT: ""
+          VITE_BEIAN_MPS_URL: ""
         run: pnpm test:e2e
 
       - name: Upload Playwright report on failure
