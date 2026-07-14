@@ -10,6 +10,58 @@ This project follows [Semantic Versioning](https://semver.org/). Until
 
 ---
 
+## 0.5.1 — 2026-07-14
+
+Patch release for the 0.5.0 editing feature: desktop file saves now
+actually work, multi-font sentences are fully editable, and quitting
+with unexported edits asks first. Existing desktop users pick this up
+through the in-app updater on next launch.
+
+### Fixed
+
+- **Desktop "Export copy" / "Export PDF" now write to disk.** The Tauri
+  capability file was missing the filesystem write permission, so both
+  exports silently failed right after the native save dialog on macOS
+  and Windows. Writes stay scoped to the exact path picked in the
+  dialog. Export failures — should they ever happen again — now surface
+  as a dismissible red notice instead of only a button tooltip.
+- **Mixed-font sentences are fully editable.** Text runs that share an
+  element with differently-styled siblings (e.g. the plain half of
+  `投资组合实证分析` next to its accent-styled half) previously could not
+  be edited — only the styled `<span>` leaf could. Edit mode now
+  resolves the click to the exact text run under the pointer and edits
+  just that run, leaving sibling styling untouched. Emptying a run
+  entirely is treated as cancel to keep later edits stable.
+- **"Install Now" in the manual update check works again.** The confirm
+  dialog permission was never granted, so the menu-driven update flow
+  silently answered "Later" for every click.
+
+### Added
+
+- **Unsaved-edit reminders.** Edits made this session that were not yet
+  exported to a `.stage` copy now prompt before they leave the screen:
+  closing the window or quitting the desktop app (red button, Cmd+W,
+  Cmd+Q, App menu → Quit), closing the tab on the web (native
+  `beforeunload`), and closing the deck back to the landing page. Edits
+  always persist on-device either way; the reminder is about the file
+  on disk not containing them yet.
+
+### Download for your device
+
+| Your device | Download |
+| --- | --- |
+| macOS — Apple Silicon (M1/M2/M3/M4) | [`SlideStageLite-0.5.1-macOS-AppleSilicon.dmg`](https://github.com/SlideStage/SlideStageLite/releases/download/v0.5.1/SlideStageLite-0.5.1-macOS-AppleSilicon.dmg) |
+| macOS — Intel | [`SlideStageLite-0.5.1-macOS-Intel.dmg`](https://github.com/SlideStage/SlideStageLite/releases/download/v0.5.1/SlideStageLite-0.5.1-macOS-Intel.dmg) |
+| Windows 10/11 (64-bit) | [`SlideStageLite-0.5.1-Windows-x64-setup.exe`](https://github.com/SlideStage/SlideStageLite/releases/download/v0.5.1/SlideStageLite-0.5.1-Windows-x64-setup.exe) |
+
+Not sure which Mac? Apple menu → About This Mac — if the chip reads
+"Apple M…" choose Apple Silicon, otherwise choose Intel.
+
+Existing 0.5.0 desktop users will see the in-app update banner on next
+launch and can install in place.
+
+---
+
 ## 0.5.0 — 2026-07-14
 
 In-place slide text editing lands in the viewer: flip on Edit mode,
