@@ -31,6 +31,23 @@ export interface UseDeckEditsOptions {
   onRequestReload: () => Promise<void> | void;
 }
 
+export interface DeckEditsApi extends DeckViewerEditingApi {
+  /**
+   * True when edits changed during this session and were not yet
+   * exported to a `.stage` copy. Edits always persist locally
+   * (localStorage), so this flag drives "you haven't saved to a file"
+   * exit prompts, not data-loss protection. Cleared by a successful
+   * export or a discard; a cancelled export dialog keeps it set.
+   */
+  unsaved: boolean;
+  /**
+   * Clear {@link DeckViewerEditing.exportError}. Drives the dismiss
+   * button of the visible export-failure notice (the header keeps the
+   * error as a tooltip, but a tooltip alone proved too easy to miss).
+   */
+  onDismissExportError: () => void;
+}
+
 /**
  * Edit-session state for the lite DeckViewer: hydrates stored patches per
  * deck fingerprint, records agent-reported edits (chaining same-element
@@ -41,7 +58,7 @@ export function useDeckEdits({
   deck,
   getSourceFile,
   onRequestReload,
-}: UseDeckEditsOptions): DeckViewerEditingApi {
+}: UseDeckEditsOptions): DeckEditsApi {
   const { t } = useI18n();
 
   const [active, setActive] = useState(false);
@@ -49,6 +66,7 @@ export function useDeckEdits({
   const [storageFull, setStorageFull] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [unsaved, setUnsaved] = useState(false);
 
   // Mirrors kept in refs so callbacks stay stable and StrictMode's
   // double-invoked updaters never double-fire side effects (persist,
@@ -73,6 +91,7 @@ export function useDeckEdits({
     setStorageFull(false);
     setExportBusy(false);
     setExportError(null);
+    setUnsaved(false);
   }, [deck.fingerprint]);
 
   const onEdit = useCallback(
@@ -86,6 +105,9 @@ export function useDeckEdits({
       editsRef.current = next;
       dirtyRef.current = true;
       setEdits(next);
+      // Editing everything back to the original leaves nothing to
+      // export, so there is nothing "unsaved" either.
+      setUnsaved(countDeckEdits(next) > 0);
       setStorageFull(!saveDeckEdits(deck.fingerprint, next));
     },
     [deck.fingerprint],
@@ -114,6 +136,7 @@ export function useDeckEdits({
     setStorageFull(false);
     setExportError(null);
     dirtyRef.current = false;
+    setUnsaved(false);
     void onRequestReloadRef.current?.();
   }, [deck.fingerprint, t]);
 
@@ -126,7 +149,9 @@ export function useDeckEdits({
         if (!file) throw new Error(t('errors.editExport'));
         const source = new Uint8Array(await file.arrayBuffer());
         const result = buildEditedStageBytes(source, deck.manifest, editsRef.current);
-        await saveStageFile(result.bytes, editedStageFilename(deck.fileName));
+        const saved = await saveStageFile(result.bytes, editedStageFilename(deck.fileName));
+        // A cancelled save dialog leaves the edits unexported on purpose.
+        if (saved) setUnsaved(false);
       } catch (err) {
         setExportError(err instanceof Error ? err.message : t('errors.editExport'));
       } finally {
@@ -134,6 +159,10 @@ export function useDeckEdits({
       }
     })();
   }, [deck.fileName, deck.manifest, t]);
+
+  const onDismissExportError = useCallback(() => {
+    setExportError(null);
+  }, []);
 
   const editCount = useMemo(() => countDeckEdits(edits), [edits]);
 
@@ -148,5 +177,7 @@ export function useDeckEdits({
     exportError,
     onDiscard,
     storageFull,
+    unsaved,
+    onDismissExportError,
   };
 }

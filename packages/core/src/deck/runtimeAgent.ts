@@ -35,6 +35,17 @@
 //      patches and re-applies them at load time via
 //      `applySlidePatchesToHtml`.
 //
+//      Mixed-content elements (e.g. `<h1>投资组合<span>实证分析</span></h1>`)
+//      are handled per text run: the click is resolved to the direct
+//      text node under the pointer via caretPositionFromPoint /
+//      caretRangeFromPoint, that node is temporarily wrapped in a
+//      contentEditable span, and the commit posts the patch with a
+//      `textNode` index so only that run is rewritten — sibling
+//      elements (differently-styled runs) stay untouched. Emptying a
+//      run entirely is treated as cancel: an empty text node would
+//      vanish on the next serialize → reparse and shift the indices of
+//      every later patch on the same element.
+//
 // The message shapes here MUST stay in sync with the validators in
 // `@slidestage/ui/presenter/slideRuntime` (the host side). Both ends are
 // hand-written because this side ships as a string, not as imported TS.
@@ -64,9 +75,11 @@ export const STAGE_RUNTIME_AGENT_SOURCE = `(function () {
   var selScheduled = false;   // presenter: rAF coalescing for selectionchange
   var editMode = false;       // presenter: host-toggled text edit mode
   var editBound = false;      // presenter: edit listeners attached
-  var editEl = null;          // element currently contentEditable
+  var editEl = null;          // element currently contentEditable (leaf, or run wrapper)
   var editPrevText = '';      // its text when editing began
   var editPrevOutline = '';   // its inline outline when editing began
+  var editRunParent = null;   // text-run edit: the mixed-content container
+  var editRunIndex = -1;      // text-run edit: index among the container's direct text nodes
   var hoverEl = null;         // edit mode: currently outlined hover target
   var hoverPrevOutline = '';
 
@@ -381,19 +394,21 @@ export const STAGE_RUNTIME_AGENT_SOURCE = `(function () {
 
   // ---------------- text edit mode (presenter) ----------------
 
+  // Tags that never take part in text editing, as leaf or run container.
+  function deniedEditTag(tag) {
+    return tag === 'html' || tag === 'body' || tag === 'head' || tag === 'script' ||
+        tag === 'style' || tag === 'svg' || tag === 'iframe' || tag === 'canvas' ||
+        tag === 'video' || tag === 'audio' || tag === 'img' || tag === 'input' ||
+        tag === 'textarea' || tag === 'select' || tag === 'br' || tag === 'hr';
+  }
+
   // An element qualifies for in-place editing when it is a "pure text
   // leaf": no element children, at least one non-whitespace text node.
   // Editing assigns textContent only, so structure cannot be damaged.
   function isEditableLeaf(el) {
     if (!el || el.nodeType !== 1) return false;
     var tag = el.tagName ? String(el.tagName).toLowerCase() : '';
-    if (!tag) return false;
-    if (tag === 'html' || tag === 'body' || tag === 'head' || tag === 'script' ||
-        tag === 'style' || tag === 'svg' || tag === 'iframe' || tag === 'canvas' ||
-        tag === 'video' || tag === 'audio' || tag === 'img' || tag === 'input' ||
-        tag === 'textarea' || tag === 'select' || tag === 'br' || tag === 'hr') {
-      return false;
-    }
+    if (!tag || deniedEditTag(tag)) return false;
     var kids = el.childNodes;
     var hasText = false;
     for (var i = 0; i < kids.length; i++) {
@@ -402,6 +417,73 @@ export const STAGE_RUNTIME_AGENT_SOURCE = `(function () {
       if (n.nodeType === 3 && /\\S/.test(n.nodeValue || '')) hasText = true;
     }
     return hasText;
+  }
+
+  // A mixed-content element whose direct text runs may be edited one at
+  // a time: not denied, has BOTH element children and at least one
+  // non-whitespace direct text node. (Pure-text leaves take the simpler
+  // whole-element path above.)
+  function isRunContainer(el) {
+    if (!el || el.nodeType !== 1) return false;
+    var tag = el.tagName ? String(el.tagName).toLowerCase() : '';
+    if (!tag || deniedEditTag(tag)) return false;
+    var kids = el.childNodes;
+    var hasText = false;
+    var hasEl = false;
+    for (var i = 0; i < kids.length; i++) {
+      var n = kids[i];
+      if (n.nodeType === 1) hasEl = true;
+      if (n.nodeType === 3 && /\\S/.test(n.nodeValue || '')) hasText = true;
+    }
+    return hasEl && hasText;
+  }
+
+  // Text node under a viewport point. caretPositionFromPoint is the
+  // standard API; WebKit (Tauri's WKWebView) ships the older
+  // caretRangeFromPoint, so try both.
+  function caretNodeAt(x, y) {
+    try {
+      if (document.caretPositionFromPoint) {
+        var p = document.caretPositionFromPoint(x, y);
+        if (p) return p.offsetNode || null;
+      }
+    } catch (e) {}
+    try {
+      if (document.caretRangeFromPoint) {
+        var r = document.caretRangeFromPoint(x, y);
+        if (r) return r.startContainer || null;
+      }
+    } catch (e2) {}
+    return null;
+  }
+
+  // Index of node among the direct text-node children of parent
+  // (whitespace-only nodes included — parity with the host's patch
+  // application, which counts the same way on the static HTML).
+  function textRunIndex(parent, node) {
+    var kids = parent.childNodes;
+    var idx = 0;
+    for (var i = 0; i < kids.length; i++) {
+      var k = kids[i];
+      if (k === node) return k.nodeType === 3 ? idx : -1;
+      if (k.nodeType === 3) idx++;
+    }
+    return -1;
+  }
+
+  // Resolve a click on/inside a mixed-content element to the direct
+  // text-node run under the pointer. Returns { parent, node } or null.
+  function findEditableRun(target, x, y) {
+    var n = caretNodeAt(x, y);
+    if (!n || n.nodeType !== 3) return null;
+    if (!/\\S/.test(n.nodeValue || '')) return null;
+    var p = n.parentElement;
+    if (!p || !isRunContainer(p)) return null;
+    // The caret may snap to text outside the clicked element (padding /
+    // whitespace clicks). Accept the hit only when it stays inside the
+    // click target, or the target is an ancestor of the run's parent.
+    if (target && target.nodeType === 1 && target !== p && !target.contains(p)) return null;
+    return { parent: p, node: n };
   }
 
   function findEditable(start) {
@@ -454,12 +536,34 @@ export const STAGE_RUNTIME_AGENT_SOURCE = `(function () {
   function commitEdit(cancel) {
     var el = editEl;
     if (!el) return;
+    var runParent = editRunParent;
+    var runIndex = editRunIndex;
     editEl = null;
-    try { el.removeAttribute('contenteditable'); } catch (e) {}
-    try { el.style.outline = editPrevOutline; } catch (e) {}
+    editRunParent = null;
+    editRunIndex = -1;
     var before = editPrevText;
     editPrevText = '';
+    var prevOutline = editPrevOutline;
     editPrevOutline = '';
+    if (runParent) {
+      // Text-run edit: unwrap the temporary span, leaving exactly one
+      // text node at the original position. An emptied run is restored
+      // (see the header comment — empty text nodes break run indices).
+      var runAfter = textOf(el);
+      var keep = cancel || runAfter === '' ? before : runAfter;
+      try {
+        runParent.insertBefore(document.createTextNode(keep), el);
+        runParent.removeChild(el);
+      } catch (e) { return; }
+      if (keep === before) return;
+      if (before.length > 10000 || runAfter.length > 10000) return;
+      var runSel = selectorFor(runParent);
+      if (!runSel || runSel.length > 1000 || runIndex < 0) return;
+      post({ type: 'edit', edit: { selector: runSel, before: before, after: runAfter, textNode: runIndex } });
+      return;
+    }
+    try { el.removeAttribute('contenteditable'); } catch (e) {}
+    try { el.style.outline = prevOutline; } catch (e) {}
     if (cancel) {
       try { el.textContent = before; } catch (e) {}
       return;
@@ -478,13 +582,7 @@ export const STAGE_RUNTIME_AGENT_SOURCE = `(function () {
     post({ type: 'edit', edit: { selector: sel, before: before, after: after } });
   }
 
-  function beginEdit(el) {
-    if (editEl === el) return;
-    commitEdit(false);
-    if (hoverEl === el) clearEditHover();
-    editEl = el;
-    editPrevText = textOf(el);
-    editPrevOutline = el.style ? (el.style.outline || '') : '';
+  function focusEditable(el) {
     var applied = false;
     try { el.contentEditable = 'plaintext-only'; applied = el.isContentEditable === true; } catch (e) {}
     if (!applied) {
@@ -492,6 +590,42 @@ export const STAGE_RUNTIME_AGENT_SOURCE = `(function () {
     }
     try { el.style.outline = '2px dashed rgba(56, 189, 173, 0.95)'; } catch (e) {}
     try { el.focus(); } catch (e) {}
+  }
+
+  function beginEdit(el) {
+    if (editEl === el) return;
+    commitEdit(false);
+    if (hoverEl === el) clearEditHover();
+    editEl = el;
+    editPrevText = textOf(el);
+    editPrevOutline = el.style ? (el.style.outline || '') : '';
+    focusEditable(el);
+  }
+
+  // Begin editing one direct text run of a mixed-content element by
+  // wrapping the text node in a temporary contentEditable span. The
+  // wrapper never survives the edit (commitEdit unwraps it), so the
+  // recorded patch stays pure text keyed by the parent's selector plus
+  // the run index.
+  function beginTextRunEdit(parent, node) {
+    commitEdit(false);
+    if (hoverEl === parent) clearEditHover();
+    var idx = textRunIndex(parent, node);
+    if (idx < 0) return;
+    var sel = selectorFor(parent);
+    if (!sel || sel.length > 1000) return;
+    var wrap = document.createElement('span');
+    wrap.setAttribute('data-slidestage-editwrap', '1');
+    try {
+      parent.insertBefore(wrap, node);
+      wrap.appendChild(node);
+    } catch (e) { return; }
+    editEl = wrap;
+    editRunParent = parent;
+    editRunIndex = idx;
+    editPrevText = textOf(wrap);
+    editPrevOutline = '';
+    focusEditable(wrap);
   }
 
   function setEditMode(on) {
@@ -513,14 +647,24 @@ export const STAGE_RUNTIME_AGENT_SOURCE = `(function () {
       document.addEventListener('click', function (e) {
         if (!editMode) return;
         var t = findEditable(e.target);
-        if (!t) return;
+        if (t) {
+          e.preventDefault();
+          e.stopPropagation();
+          beginEdit(t);
+          return;
+        }
+        var run = findEditableRun(e.target, num(e.clientX), num(e.clientY));
+        if (!run) return;
         e.preventDefault();
         e.stopPropagation();
-        beginEdit(t);
+        beginTextRunEdit(run.parent, run.node);
       }, true);
       document.addEventListener('mouseover', function (e) {
         if (!editMode) return;
         var t = findEditable(e.target);
+        if (!t && e.target && e.target.nodeType === 1 && isRunContainer(e.target)) {
+          t = e.target;
+        }
         if (t === hoverEl) return;
         clearEditHover();
         if (t && t !== editEl) {

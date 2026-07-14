@@ -45,6 +45,8 @@ export interface DeckPdfExportApi {
   error: string | null;
   /** Kick off an export run. No-op when unavailable or already busy. */
   exportPdf: () => void;
+  /** Clear the error state (dismisses the visible failure notice). */
+  dismissError: () => void;
 }
 
 function isAbortError(err: unknown): boolean {
@@ -160,7 +162,12 @@ export function useDeckPdfExport(deck: LoadedDeck): DeckPdfExportApi {
     })();
   }, [available, deck]);
 
+  const dismissError = useCallback(() => {
+    setError(null);
+    setPhase((current) => (current === 'error' ? 'idle' : current));
+  }, []);
+
   const busy = phase === 'capturing' || phase === 'assembling' || phase === 'saving';
 
-  return { available, phase, busy, current, total, error, exportPdf };
+  return { available, phase, busy, current, total, error, exportPdf, dismissError };
 }

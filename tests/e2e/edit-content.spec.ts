@@ -33,6 +33,17 @@ function coverFrame(page: Page) {
 test('edits slide text in place, persists it, and exports a working copy', async ({
   page,
 }) => {
+  // Unexported session edits arm a beforeunload prompt; accepting it lets
+  // the mid-test reloads proceed. (Registering ANY dialog listener turns
+  // off Playwright's auto-dismiss, so the discard confirm() below is
+  // accepted explicitly by its own once-handler.)
+  let beforeUnloadPrompts = 0;
+  page.on('dialog', (dialog) => {
+    if (dialog.type() === 'beforeunload') {
+      beforeUnloadPrompts += 1;
+      void dialog.accept();
+    }
+  });
   await openFixture(page);
   const heading = coverFrame(page).getByRole('heading', { name: 'Lite Fixture Deck' });
   await expect(heading).toBeVisible();
@@ -66,7 +77,10 @@ test('edits slide text in place, persists it, and exports a working copy', async
   ).toBeVisible();
 
   // --- 3. The patch persists across a full reopen ---------------------
+  // The reload leaves unexported session edits behind, so the unsaved
+  // guard must raise a (accepted above) beforeunload prompt.
   await page.reload();
+  expect(beforeUnloadPrompts).toBe(1);
   await page.getByLabel(/Open \.stage/i).setInputFiles(resolve(FIXTURE));
   await expect(
     coverFrame(page).getByRole('heading', { name: EDITED_TITLE }),
@@ -110,6 +124,57 @@ test('edits slide text in place, persists it, and exports a working copy', async
     Object.keys(window.localStorage).filter((k) => k.startsWith('slidestage-lite:edits:')),
   );
   expect(stored).toEqual([]);
+});
+
+test('edits one text run of a mixed-font paragraph without touching siblings', async ({
+  page,
+}) => {
+  page.on('dialog', (dialog) => {
+    if (dialog.type() === 'beforeunload') void dialog.accept();
+  });
+  await openFixture(page);
+  const frame = coverFrame(page);
+  const tagline = frame.locator('p.tagline');
+  await expect(tagline).toHaveText('Mixed intro styled run tail text');
+
+  await page.getByTestId('edit-toggle').click();
+  await expect(page.getByTestId('edit-mode-hint')).toBeVisible();
+
+  // Click on the LEADING run ("Mixed intro ") — the paragraph itself is
+  // mixed content, so the old leaf-only editor ignored it entirely.
+  const box = await tagline.boundingBox();
+  if (!box) throw new Error('tagline not laid out');
+  await tagline.click({ position: { x: 10, y: box.height / 2 } });
+
+  // The run is wrapped in a temporary editable span.
+  const wrap = frame.locator('[data-slidestage-editwrap]');
+  await expect(wrap).toHaveAttribute('contenteditable', /plaintext-only|true/);
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('Rewritten intro ');
+  await page.keyboard.press('Enter');
+
+  // Commit unwraps the span and records the patch on the host.
+  await expect(frame.locator('[data-slidestage-editwrap]')).toHaveCount(0);
+  await expect(page.getByTestId('export-edited')).toBeVisible();
+  await expect(tagline).toHaveText('Rewritten intro styled run tail text');
+  // The styled sibling run is untouched.
+  await expect(tagline.locator('strong')).toHaveText('styled run');
+
+  // Exit edit mode → silent reload applies the patch at load time.
+  await page.getByTestId('edit-toggle').click();
+  await expect(page.getByTestId('edit-mode-hint')).toHaveCount(0);
+  await expect(coverFrame(page).locator('p.tagline')).toHaveText(
+    'Rewritten intro styled run tail text',
+  );
+  await expect(coverFrame(page).locator('p.tagline strong')).toHaveText('styled run');
+  await expect(page.getByTestId('edits-failed-notice')).toHaveCount(0);
+
+  // Clean up so later tests start from pristine storage.
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page.getByTestId('discard-edits').click();
+  await expect(coverFrame(page).locator('p.tagline')).toHaveText(
+    'Mixed intro styled run tail text',
+  );
 });
 
 test('Escape cancels an in-flight edit without recording a patch', async ({ page }) => {

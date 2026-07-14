@@ -132,4 +132,55 @@ describe('upsertDeckEdit', () => {
     expect(next[3]).toEqual([patch(p1, 'x', 'y')]);
     expect(countDeckEdits(next)).toBe(2);
   });
+
+  it('keys text-run patches by selector + textNode, never cross-chaining runs', () => {
+    const run = (textNode: number, before: string, after: string) => ({
+      selector: h1,
+      before,
+      after,
+      textNode,
+    });
+    // Two different runs of the SAME element: independent patches.
+    const first = upsertDeckEdit({}, 0, run(0, '投资组合', '资产配置')).edits;
+    const second = upsertDeckEdit(first, 0, run(1, '年度报告', '期末汇报')).edits;
+    expect(second[0]).toHaveLength(2);
+
+    // A whole-leaf patch on the same selector (no textNode) is a third target.
+    const third = upsertDeckEdit(second, 0, patch(h1, 'Old', 'New')).edits;
+    expect(third[0]).toHaveLength(3);
+
+    // Chaining stays per-run: run 0 advances, keeping its original anchor.
+    const fourth = upsertDeckEdit(third, 0, run(0, '资产配置', '组合优化')).edits;
+    expect(fourth[0]).toContainEqual(run(0, '投资组合', '组合优化'));
+    expect(fourth[0]).toContainEqual(run(1, '年度报告', '期末汇报'));
+
+    // Editing run 0 back to its original removes only that patch.
+    const fifth = upsertDeckEdit(fourth, 0, run(0, '组合优化', '投资组合')).edits;
+    expect(fifth[0]).toHaveLength(2);
+    expect(fifth[0]).not.toContainEqual(run(0, '投资组合', '组合优化'));
+  });
+
+  it('round-trips textNode patches through the store', () => {
+    const edits: StoredDeckEdits = {
+      0: [{ selector: h1, before: '投资组合', after: '资产配置', textNode: 0 }],
+    };
+    expect(saveDeckEdits(FP, edits)).toBe(true);
+    expect(loadDeckEdits(FP)).toEqual(edits);
+  });
+
+  it('drops malformed textNode patches on hydrate', () => {
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({
+        0: [
+          { selector: h1, before: 'a', after: 'b', textNode: -2 },
+          { selector: h1, before: 'a', after: '', textNode: 0 },
+          { selector: h1, before: 'a', after: 'b', textNode: 1 },
+        ],
+      }),
+    );
+    expect(loadDeckEdits(FP)).toEqual({
+      0: [{ selector: h1, before: 'a', after: 'b', textNode: 1 }],
+    });
+  });
 });

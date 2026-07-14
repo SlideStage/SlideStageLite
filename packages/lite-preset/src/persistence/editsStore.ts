@@ -104,11 +104,13 @@ export interface UpsertDeckEditResult {
 }
 
 /**
- * Merge one committed edit into the map. Same-element edits chain: the
+ * Merge one committed edit into the map. Same-target edits chain: the
  * stored patch keeps the ORIGINAL `before` text (what the static HTML
  * contains) and only its `after` advances, so re-applying at load time
  * still matches the anchor. Editing an element back to its original text
- * removes the patch entirely.
+ * removes the patch entirely. A "target" is the selector plus, for
+ * text-run edits inside mixed-content elements, the run's `textNode`
+ * index — two runs of the same element must never chain onto each other.
  */
 export function upsertDeckEdit(
   edits: StoredDeckEdits,
@@ -120,7 +122,9 @@ export function upsertDeckEdit(
   }
 
   const slidePatches = [...(edits[slideIndex] ?? [])];
-  const existingIndex = slidePatches.findIndex((p) => p.selector === patch.selector);
+  const existingIndex = slidePatches.findIndex(
+    (p) => p.selector === patch.selector && p.textNode === patch.textNode,
+  );
 
   if (existingIndex >= 0) {
     const original = slidePatches[existingIndex].before;
@@ -131,6 +135,7 @@ export function upsertDeckEdit(
         selector: patch.selector,
         before: original,
         after: patch.after,
+        ...(patch.textNode !== undefined ? { textNode: patch.textNode } : {}),
       };
     }
   } else {

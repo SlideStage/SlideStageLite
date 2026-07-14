@@ -15,6 +15,7 @@
 import {
   MAX_SLIDE_PATCH_SELECTOR_LENGTH,
   MAX_SLIDE_PATCH_TEXT_LENGTH,
+  MAX_SLIDE_PATCH_TEXT_NODE_INDEX,
   SLIDE_PATCH_SELECTOR_RE,
   type SlideTextPatch,
 } from '@slidestage/core/deck/slidePatches';
@@ -196,7 +197,7 @@ export function parseSelectionRects(value: unknown): SelectionRect[] | null {
  */
 export function parseSlideEdit(value: unknown): SlideEdit | null {
   if (!isPlainObject(value)) return null;
-  const { selector, before, after } = value;
+  const { selector, before, after, textNode } = value;
   if (typeof selector !== 'string' || typeof before !== 'string' || typeof after !== 'string') {
     return null;
   }
@@ -206,7 +207,15 @@ export function parseSlideEdit(value: unknown): SlideEdit | null {
     return null;
   }
   if (before === after) return null;
-  return { selector, before, after };
+  if (textNode === undefined) return { selector, before, after };
+  // Text-run edit: the index addresses one direct text-node child of the
+  // selected element. Empty replacements are rejected — an empty text
+  // node vanishes on serialize → reparse and would shift sibling run
+  // indices (the agent enforces the same rule).
+  if (typeof textNode !== 'number' || !Number.isInteger(textNode)) return null;
+  if (textNode < 0 || textNode > MAX_SLIDE_PATCH_TEXT_NODE_INDEX) return null;
+  if (after.length === 0) return null;
+  return { selector, before, after, textNode };
 }
 
 /** Validate an inbound agent → host message; returns null if invalid. */

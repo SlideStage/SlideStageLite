@@ -25,6 +25,16 @@ export interface SlideTextPatch {
   before: string;
   /** Replacement text content. */
   after: string;
+  /**
+   * When present, the patch targets ONE direct text-node child of the
+   * selected element (index among ALL of its direct text-node children,
+   * in DOM order) instead of the element's whole `textContent`. This is
+   * how edits to mixed-content elements are recorded — e.g. the leading
+   * run of `<h1>投资组合<span>实证分析</span></h1>` — without touching the
+   * sibling element children. Application sets `nodeValue` of exactly
+   * that text node; the anchor check against `before` still applies.
+   */
+  textNode?: number;
 }
 
 /**
@@ -42,6 +52,9 @@ export const MAX_SLIDE_PATCH_TEXT_LENGTH = 10000;
 /** Upper bound for the structural selector, matched by the edit agent. */
 export const MAX_SLIDE_PATCH_SELECTOR_LENGTH = 1000;
 
+/** Upper bound for a text-node index within one element. */
+export const MAX_SLIDE_PATCH_TEXT_NODE_INDEX = 9999;
+
 /** Validate an untrusted value as a {@link SlideTextPatch}. */
 export function isValidSlideTextPatch(value: unknown): value is SlideTextPatch {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
@@ -53,6 +66,15 @@ export function isValidSlideTextPatch(value: unknown): value is SlideTextPatch {
   if (!SLIDE_PATCH_SELECTOR_RE.test(patch.selector)) return false;
   if (patch.before.length > MAX_SLIDE_PATCH_TEXT_LENGTH) return false;
   if (patch.after.length > MAX_SLIDE_PATCH_TEXT_LENGTH) return false;
+  if (patch.textNode !== undefined) {
+    if (typeof patch.textNode !== 'number' || !Number.isInteger(patch.textNode)) return false;
+    if (patch.textNode < 0 || patch.textNode > MAX_SLIDE_PATCH_TEXT_NODE_INDEX) return false;
+    // Text-run patches must never empty the node: an empty text node
+    // disappears on serialize → reparse, which would shift the indices
+    // every later patch on the same element relies on. The agent
+    // enforces the same rule (empty commit = cancel).
+    if (patch.after.length === 0) return false;
+  }
   return true;
 }
 
@@ -67,6 +89,17 @@ export interface ApplySlidePatchesResult {
 
 function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
+}
+
+const TEXT_NODE_TYPE = 3;
+
+/** Direct text-node children of `el`, in DOM order (whitespace-only included). */
+function directTextNodes(el: Element): Text[] {
+  const out: Text[] = [];
+  for (const node of Array.from(el.childNodes)) {
+    if (node.nodeType === TEXT_NODE_TYPE) out.push(node as Text);
+  }
+  return out;
 }
 
 function serializeDoctype(doctype: DocumentType | null): string {
@@ -129,6 +162,31 @@ export function applySlidePatchesToHtml(
       el = null;
     }
     if (!el) {
+      failed += 1;
+      continue;
+    }
+    if (patch.textNode !== undefined) {
+      // Text-run patch: target one direct text-node child, leave sibling
+      // elements (differently-styled runs) untouched.
+      const node = directTextNodes(el)[patch.textNode];
+      if (!node) {
+        failed += 1;
+        continue;
+      }
+      const currentValue = node.nodeValue ?? '';
+      if (currentValue === patch.after) {
+        applied += 1;
+        continue;
+      }
+      if (
+        currentValue === patch.before ||
+        collapseWhitespace(currentValue) === collapseWhitespace(patch.before)
+      ) {
+        node.nodeValue = patch.after;
+        applied += 1;
+        mutated = true;
+        continue;
+      }
       failed += 1;
       continue;
     }

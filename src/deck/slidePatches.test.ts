@@ -174,6 +174,85 @@ describe('applySlidePatchesToHtml', () => {
   });
 });
 
+// Mixed-content elements: `<h1>投资组合<span>实证分析</span></h1>` — the
+// leading run and the styled span are edited independently. `textNode`
+// indexes the element's direct text-node children.
+const mixedHtml = `<!DOCTYPE html>
+<html>
+  <head><meta charset="utf-8"><title>Mixed</title></head>
+  <body>
+    <main>
+      <h1>投资组合<span>实证分析</span>年度报告</h1>
+    </main>
+  </body>
+</html>`;
+
+const H1_SELECTOR = 'body>main:nth-of-type(1)>h1:nth-of-type(1)';
+
+describe('applySlidePatchesToHtml — textNode (mixed-content) patches', () => {
+  it('rewrites only the targeted text run, leaving sibling elements intact', () => {
+    const result = applySlidePatchesToHtml(mixedHtml, [
+      { selector: H1_SELECTOR, before: '投资组合', after: '资产配置', textNode: 0 },
+    ]);
+    expect(result.applied).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(result.html).toContain('资产配置<span>实证分析</span>年度报告');
+  });
+
+  it('addresses later runs of the same element by index', () => {
+    const result = applySlidePatchesToHtml(mixedHtml, [
+      { selector: H1_SELECTOR, before: '年度报告', after: '期末汇报', textNode: 1 },
+    ]);
+    expect(result.applied).toBe(1);
+    expect(result.html).toContain('投资组合<span>实证分析</span>期末汇报');
+  });
+
+  it('applies runs and whole-leaf patches on the same element tree together', () => {
+    const result = applySlidePatchesToHtml(mixedHtml, [
+      { selector: H1_SELECTOR, before: '投资组合', after: '资产配置', textNode: 0 },
+      { selector: `${H1_SELECTOR}>span:nth-of-type(1)`, before: '实证分析', after: '回测分析' },
+    ]);
+    expect(result.applied).toBe(2);
+    expect(result.html).toContain('资产配置<span>回测分析</span>年度报告');
+  });
+
+  it('fails a run patch whose index resolves no text node', () => {
+    const result = applySlidePatchesToHtml(mixedHtml, [
+      { selector: H1_SELECTOR, before: '投资组合', after: '资产配置', textNode: 7 },
+    ]);
+    expect(result.applied).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(result.html).toBe(mixedHtml);
+  });
+
+  it('fails a run patch whose before anchor mismatches, without mutating', () => {
+    const result = applySlidePatchesToHtml(mixedHtml, [
+      { selector: H1_SELECTOR, before: '别的文字', after: '资产配置', textNode: 0 },
+    ]);
+    expect(result.applied).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(result.html).toBe(mixedHtml);
+  });
+
+  it('is idempotent: a run already carrying `after` counts as applied', () => {
+    const patch = { selector: H1_SELECTOR, before: '投资组合', after: '资产配置', textNode: 0 };
+    const first = applySlidePatchesToHtml(mixedHtml, [patch]);
+    const second = applySlidePatchesToHtml(first.html, [patch]);
+    expect(second.applied).toBe(1);
+    expect(second.failed).toBe(0);
+    expect(second.html).toBe(first.html);
+  });
+
+  it('keeps run markup inert — HTML in `after` is escaped on serialize', () => {
+    const result = applySlidePatchesToHtml(mixedHtml, [
+      { selector: H1_SELECTOR, before: '投资组合', after: '<b>x</b>', textNode: 0 },
+    ]);
+    expect(result.applied).toBe(1);
+    expect(result.html).not.toContain('<b>x</b>');
+    expect(result.html).toContain('&lt;b&gt;');
+  });
+});
+
 describe('isValidSlideTextPatch / selector grammar', () => {
   const good = {
     selector: 'body>main:nth-of-type(1)>h1:nth-of-type(2)',
@@ -216,5 +295,21 @@ describe('isValidSlideTextPatch / selector grammar', () => {
     expect(
       isValidSlideTextPatch({ ...good, before: 'x'.repeat(MAX_SLIDE_PATCH_TEXT_LENGTH) }),
     ).toBe(true);
+  });
+
+  it('validates the optional textNode index', () => {
+    expect(isValidSlideTextPatch({ ...good, textNode: 0 })).toBe(true);
+    expect(isValidSlideTextPatch({ ...good, textNode: 9999 })).toBe(true);
+    expect(isValidSlideTextPatch({ ...good, textNode: -1 })).toBe(false);
+    expect(isValidSlideTextPatch({ ...good, textNode: 1.5 })).toBe(false);
+    expect(isValidSlideTextPatch({ ...good, textNode: 10000 })).toBe(false);
+    expect(isValidSlideTextPatch({ ...good, textNode: '0' })).toBe(false);
+  });
+
+  it('rejects run patches that would empty the text node (index drift)', () => {
+    // Emptying a leaf element is fine (the element persists)...
+    expect(isValidSlideTextPatch({ ...good, after: '' })).toBe(true);
+    // ...but an emptied text node vanishes on serialize → reparse.
+    expect(isValidSlideTextPatch({ ...good, after: '', textNode: 0 })).toBe(false);
   });
 });

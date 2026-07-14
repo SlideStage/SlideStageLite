@@ -1121,6 +1121,22 @@ code {
   top: 56px;
 }
 
+/* Export-failure flavor (edited-copy / PDF): red accent like
+ * .deck-error-notice, but rendered from inside the viewer's overlay slot
+ * (the error state lives in viewer-scoped hooks). Anchored one slot
+ * below the app-level notices so simultaneous chips never overlap. */
+.auto-elevated-notice.export-error-notice {
+  top: 56px;
+  border-color: rgba(248, 113, 113, 0.6);
+}
+.auto-elevated-notice.export-error-notice .auto-elevated-notice-icon {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+.export-error-notice + .export-error-notice {
+  top: 104px;
+}
+
 /* Floating hint shown while slide text edit mode is active. Fixed near
  * the bottom so it never disturbs the stage layout in either view mode. */
 .edit-mode-hint {

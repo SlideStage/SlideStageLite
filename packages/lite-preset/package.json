@@ -28,6 +28,7 @@
     "./viewer/DeckViewer": "./src/viewer/DeckViewer.tsx",
     "./viewer/AudienceView": "./src/viewer/AudienceView.tsx",
     "./viewer/useDeckEdits": "./src/viewer/useDeckEdits.ts",
+    "./viewer/useUnsavedExitGuard": "./src/viewer/useUnsavedExitGuard.ts",
     "./export/useDeckPdfExport": "./src/export/useDeckPdfExport.ts",
     "./export/slidePdfCapture": "./src/export/slidePdfCapture.ts",
     "./export/buildSlidesPdf": "./src/export/buildSlidesPdf.ts",
@@ -47,6 +48,7 @@
     "./desktop/fileOpen": "./src/desktop/fileOpen.ts",
     "./desktop/monitors": "./src/desktop/monitors.ts",
     "./desktop/audienceWindow": "./src/desktop/audienceWindow.ts",
+    "./desktop/closeGuard": "./src/desktop/closeGuard.ts",
     "./desktop/openExternal": "./src/desktop/openExternal.ts",
     "./desktop/thumbnailCache": "./src/desktop/thumbnailCache.ts",
     "./desktop/thumbnailCapture": "./src/desktop/thumbnailCapture.ts",
@@ -167,6 +169,11 @@
         "import": "./dist/viewer/useDeckEdits.js",
         "default": "./dist/viewer/useDeckEdits.js"
       },
+      "./viewer/useUnsavedExitGuard": {
+        "types": "./dist/viewer/useUnsavedExitGuard.d.ts",
+        "import": "./dist/viewer/useUnsavedExitGuard.js",
+        "default": "./dist/viewer/useUnsavedExitGuard.js"
+      },
       "./export/useDeckPdfExport": {
         "types": "./dist/export/useDeckPdfExport.d.ts",
         "import": "./dist/export/useDeckPdfExport.js",
@@ -261,6 +268,11 @@
         "types": "./dist/desktop/audienceWindow.d.ts",
         "import": "./dist/desktop/audienceWindow.js",
         "default": "./dist/desktop/audienceWindow.js"
+      },
+      "./desktop/closeGuard": {
+        "types": "./dist/desktop/closeGuard.d.ts",
+        "import": "./dist/desktop/closeGuard.js",
+        "default": "./dist/desktop/closeGuard.js"
       },
       "./desktop/openExternal": {
         "types": "./dist/desktop/openExternal.d.ts",

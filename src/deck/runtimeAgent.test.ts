@@ -69,4 +69,14 @@ describe('injectRuntimeAgent', () => {
     // The edit selector generator must emit body-rooted paths.
     expect(STAGE_RUNTIME_AGENT_SOURCE).toContain("'body>' + parts.join('>')");
   });
+
+  it('carries the mixed-content text-run editing machinery', () => {
+    // Direct text runs of mixed elements (e.g. multi-font headings) are
+    // resolved via the caret-from-point APIs, edited inside a temporary
+    // wrapper span, and reported with a textNode index.
+    expect(STAGE_RUNTIME_AGENT_SOURCE).toContain('caretPositionFromPoint');
+    expect(STAGE_RUNTIME_AGENT_SOURCE).toContain('caretRangeFromPoint');
+    expect(STAGE_RUNTIME_AGENT_SOURCE).toContain('data-slidestage-editwrap');
+    expect(STAGE_RUNTIME_AGENT_SOURCE).toContain('textNode: runIndex');
+  });
 });

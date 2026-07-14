@@ -110,6 +110,33 @@ describe('buildEditedStageBytes', () => {
     expect(Array.from(a.bytes)).toEqual(Array.from(b.bytes));
   });
 
+  it('bakes text-run (textNode) patches into mixed-content slides', () => {
+    const mixedSlide =
+      '<!doctype html><html><body><main><h1>投资组合<span>实证分析</span></h1></main></body></html>';
+    const zip = zipSync({
+      'manifest.json': asPlainUint8(strToU8(manifestJson)),
+      'shared/theme.css': asPlainUint8(cssBytes),
+      'slides/01.html': asPlainUint8(strToU8(mixedSlide)),
+      'slides/02.html': asPlainUint8(strToU8(slideTwo)),
+    });
+    const result = buildEditedStageBytes(zip, manifest, {
+      0: [
+        {
+          selector: 'body>main:nth-of-type(1)>h1:nth-of-type(1)',
+          before: '投资组合',
+          after: '资产配置',
+          textNode: 0,
+        },
+      ],
+    });
+    expect(result.applied).toBe(1);
+    expect(result.failed).toBe(0);
+    const out = unzipSync(result.bytes);
+    const html = new TextDecoder().decode(out['slides/01.html']);
+    expect(html).toContain('资产配置<span>实证分析</span>');
+    expect(html).not.toContain('投资组合');
+  });
+
   it('throws on a non-zip source', () => {
     expect(() =>
       buildEditedStageBytes(strToU8('not a zip'), manifest, { 0: [editH1] }),

@@ -53,27 +53,28 @@ function saveViaBrowser(bytes: Uint8Array, filename: string): void {
   }
 }
 
-async function saveViaTauri(bytes: Uint8Array, filename: string): Promise<void> {
+async function saveViaTauri(bytes: Uint8Array, filename: string): Promise<boolean> {
   const { save } = await import('@tauri-apps/plugin-dialog');
   const path = await save({
     defaultPath: filename,
     filters: [{ name: 'SlideStage deck', extensions: ['stage'] }],
   });
   // User cancelled the dialog.
-  if (!path) return;
+  if (!path) return false;
   const { writeFile } = await import('@tauri-apps/plugin-fs');
   await writeFile(path, bytes);
+  return true;
 }
 
 /**
  * Save `bytes` under `filename` using the host-appropriate flow. Resolves
- * once the download has been triggered (Web) or the file written / dialog
- * cancelled (Tauri).
+ * `true` once the download has been triggered (Web) or the file written
+ * (Tauri); `false` when the user cancelled the Tauri save dialog.
  */
-export async function saveStageFile(bytes: Uint8Array, filename: string): Promise<void> {
+export async function saveStageFile(bytes: Uint8Array, filename: string): Promise<boolean> {
   if (isTauri()) {
-    await saveViaTauri(bytes, filename);
-    return;
+    return saveViaTauri(bytes, filename);
   }
   saveViaBrowser(bytes, filename);
+  return true;
 }

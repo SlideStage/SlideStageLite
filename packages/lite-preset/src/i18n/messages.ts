@@ -177,10 +177,21 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
       'The edit limit for this deck is reached — new edits are no longer saved.',
     'viewer.editing.discardConfirm':
       'Discard all local edits for this deck? Slides return to their original text.',
+    'viewer.editing.unsavedExitTitle': 'Edits not exported',
+    'viewer.editing.unsavedExitBody':
+      'Your slide text edits have not been exported to a .stage file yet. They stay ' +
+      'saved on this device and re-apply when this file is reopened, but the file ' +
+      'itself is unchanged. Quit anyway?',
+    'viewer.editing.unsavedExitConfirm': 'Quit anyway',
+    'viewer.editing.unsavedExitCancel': 'Cancel',
+    'viewer.editing.unsavedCloseConfirm':
+      'Your slide text edits have not been exported to a .stage file yet. They stay ' +
+      'saved on this device and re-apply when this file is reopened. Close this deck?',
     'viewer.notice.editsFailed':
       '{n} local edits could not be applied to this deck. The rest are active; ' +
       'the slide content itself is unchanged.',
     'errors.editExport': 'Failed to export the edited copy.',
+    'errors.pdfExport': 'Failed to export the PDF.',
 
     'viewer.monitorPicker.title': 'Where should the audience window open?',
     'viewer.monitorPicker.desc':
@@ -452,9 +463,17 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
       '该演示的编辑容量已达上限——新的修改将不再保存。',
     'viewer.editing.discardConfirm':
       '要放弃该演示的全部本地编辑吗？幻灯片文字将恢复原状。',
+    'viewer.editing.unsavedExitTitle': '修改尚未导出',
+    'viewer.editing.unsavedExitBody':
+      '幻灯片文字修改尚未导出为 .stage 文件。修改会保留在本机，重新打开该文件时自动恢复，但文件本身未包含这些修改。仍要退出吗？',
+    'viewer.editing.unsavedExitConfirm': '仍要退出',
+    'viewer.editing.unsavedExitCancel': '取消',
+    'viewer.editing.unsavedCloseConfirm':
+      '幻灯片文字修改尚未导出为 .stage 文件。修改会保留在本机，重新打开该文件时自动恢复。要关闭当前演示吗？',
     'viewer.notice.editsFailed':
       '{n} 处本地编辑未能应用到当前演示。其余编辑仍然生效；幻灯片内容本身未受影响。',
     'errors.editExport': '导出已编辑副本失败。',
+    'errors.pdfExport': '导出 PDF 失败。',
 
     'viewer.monitorPicker.title': '在哪个显示器打开观众窗？',
     'viewer.monitorPicker.desc':

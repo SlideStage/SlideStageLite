@@ -10,7 +10,7 @@ const tokensCss = `
     p { font-size: 36px; }
   `;
 
-function buildSlideHtml(title, body) {
+function buildSlideHtml(title, body, extra = '') {
   return `
     <!doctype html>
     <html>
@@ -22,13 +22,20 @@ function buildSlideHtml(title, body) {
         <main class="slide">
           <div>
             <h1>${title}</h1>
-            <p>${body}</p>
+            <p>${body}</p>${extra}
           </div>
         </main>
       </body>
     </html>
   `;
 }
+
+// Mixed-content paragraph on the cover slide: a styled inline run between
+// two plain text runs, mirroring multi-font headings in real decks. The
+// edit-mode e2e (edit-content.spec.ts) targets the leading text run to
+// pin per-run (textNode) editing.
+const MIXED_RUNS_EXTRA =
+  '\n            <p class="tagline">Mixed intro <strong>styled run</strong> tail text</p>';
 
 async function emit(zipName, files) {
   const bytes = zipSync(files, { level: 9 });
@@ -117,7 +124,11 @@ async function buildValidBasic() {
     'manifest.json': strToU8(`${JSON.stringify(manifest, null, 2)}\n`),
     'shared/tokens.css': strToU8(tokensCss),
     'slides/01-cover.html': strToU8(
-      buildSlideHtml('Lite Fixture Deck', 'Slide 1 rendered from a local .stage file.'),
+      buildSlideHtml(
+        'Lite Fixture Deck',
+        'Slide 1 rendered from a local .stage file.',
+        MIXED_RUNS_EXTRA,
+      ),
     ),
     'slides/02-details.html': strToU8(
       buildSlideHtml('Details Slide', 'Slide 2 proves navigation works.'),

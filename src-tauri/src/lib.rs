@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use serde::Serialize;
@@ -28,6 +29,16 @@ struct PendingFiles(Mutex<Vec<String>>);
 /// cannot turn the command into an arbitrary local-file read (DSS-CAND-002).
 #[derive(Default)]
 struct AllowedDeckPaths(Mutex<HashSet<PathBuf>>);
+
+/// Raised by the front-end (`set_unsaved_edits`) while the open deck has
+/// text edits that were not exported to a `.stage` copy yet. The custom
+/// `quit` menu item (macOS App menu / Cmd+Q) consults it: when raised,
+/// quitting is deferred to the front-end (`app:confirm-quit`) so a native
+/// ask-dialog can confirm; when down, the app exits immediately without a
+/// JS round-trip. Window close is guarded separately in JS through the
+/// close-requested event.
+#[derive(Default)]
+struct UnsavedEdits(AtomicBool);
 
 /// True when `path` ends in a case-insensitive `.stage` extension.
 fn has_stage_extension(path: &Path) -> bool {
@@ -125,6 +136,14 @@ async fn read_deck_bytes(app: AppHandle, path: String) -> Result<Vec<u8>, String
         resolve_allowed_read(&path, &allowed)?
     };
     std::fs::read(&canonical).map_err(|e| format!("failed to read {}: {}", path, e))
+}
+
+/// Mirror of the front-end's "unexported edits exist" flag — see
+/// [`UnsavedEdits`]. Called whenever the flag changes and lowered again
+/// when the deck viewer unmounts.
+#[tauri::command]
+fn set_unsaved_edits(app: AppHandle, unsaved: bool) {
+    app.state::<UnsavedEdits>().0.store(unsaved, Ordering::SeqCst);
 }
 
 /// Drain the in-memory queue of `.stage` paths that arrived before the
@@ -501,6 +520,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(PendingFiles::default())
         .manage(AllowedDeckPaths::default())
+        .manage(UnsavedEdits::default())
         .setup(|app| {
             // Windows / Linux: file path arrives via argv. macOS uses
             // RunEvent::Opened (handled below in the .run callback).
@@ -538,7 +558,20 @@ pub fn run() {
                 let hide_others = PredefinedMenuItem::hide_others(handle, None)?;
                 let show_all = PredefinedMenuItem::show_all(handle, None)?;
                 let sep_d = PredefinedMenuItem::separator(handle)?;
-                let quit = PredefinedMenuItem::quit(handle, None)?;
+                // Custom item instead of PredefinedMenuItem::quit: the
+                // predefined one sends `terminate:` straight to NSApp,
+                // which tao cannot intercept, so an unsaved-edits
+                // confirmation would be impossible. This item routes
+                // through on_menu_event below where the UnsavedEdits
+                // flag decides between exiting and asking the front-end
+                // to confirm first.
+                let quit = MenuItem::with_id(
+                    handle,
+                    "quit",
+                    "Quit SlideStage Lite",
+                    true,
+                    Some("CmdOrCtrl+Q"),
+                )?;
 
                 let app_submenu = Submenu::with_id_and_items(
                     handle,
@@ -657,6 +690,20 @@ pub fn run() {
                     eprintln!("failed to emit menu:check-update: {err}");
                 }
             }
+            if event.id().as_ref() == "quit" {
+                let unsaved = app.state::<UnsavedEdits>().0.load(Ordering::SeqCst);
+                if unsaved {
+                    // Defer to the front-end for a locale-aware confirm
+                    // dialog. If the emit fails there is no listener to
+                    // ask — exit rather than trapping the user.
+                    if let Err(err) = app.emit("app:confirm-quit", ()) {
+                        eprintln!("failed to emit app:confirm-quit: {err}");
+                        app.exit(0);
+                    }
+                } else {
+                    app.exit(0);
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             read_deck_bytes,
@@ -668,6 +715,7 @@ pub fn run() {
             thumbnail_cache_list,
             thumbnail_cache_clear,
             set_check_update_menu_state,
+            set_unsaved_edits,
         ])
         .build(tauri::generate_context!())
         .expect("error while building SlideStage Lite Desktop");

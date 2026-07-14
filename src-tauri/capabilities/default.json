@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Baseline capabilities: main + audience windows can manage their lifecycle, emit/listen events, query monitors, open external URLs via the OS, read deck files the user explicitly chose via dialog or file-association, show native message dialogs (used by the Check for Updates menu trigger), and run the in-app auto-updater (download + signature-verified install + relaunch).",
+  "description": "Baseline capabilities: main + audience windows can manage their lifecycle, emit/listen events, query monitors, open external URLs via the OS, read deck files the user explicitly chose via dialog or file-association, write files to paths the user picked in a native save dialog (edited-copy / PDF export), show native message / ask / confirm dialogs (Check for Updates menu trigger, unsaved-edits exit guard), and run the in-app auto-updater (download + signature-verified install + relaunch).",
   "windows": ["main", "audience-*"],
   "permissions": [
     "core:default",
@@ -26,7 +26,10 @@
     "core:app:allow-version",
     "core:app:allow-name",
     "dialog:default",
+    "dialog:allow-ask",
+    "dialog:allow-confirm",
     "fs:allow-read-file",
+    "fs:allow-write-file",
     "fs:default",
     "deep-link:default",
     "opener:default",

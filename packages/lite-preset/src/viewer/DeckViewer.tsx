@@ -4,7 +4,9 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from 'react';
+import { TriangleAlert } from 'lucide-react';
 import type { LoadedDeck } from '@slidestage/core/deck/types';
 import { usePersistedNumber } from '@slidestage/ui/presenter/usePersistedNumber';
 import { usePresenter, usePresenterShortcuts } from '@slidestage/ui/presenter/usePresenter';
@@ -24,9 +26,11 @@ import { MonitorPicker } from '../desktop/MonitorPicker';
 import { listMonitors, type MonitorInfo } from '../desktop/monitors';
 import { useThumbnailCapture } from '../desktop/useThumbnailCapture';
 import { useDeckPdfExport } from '../export/useDeckPdfExport';
+import { useI18n } from '../i18n/I18nProvider';
 import { loadAnnotations, saveAnnotations } from '../persistence/annotationStore';
 import { loadNotes, saveNotes, type StoredNotes } from '../persistence/notesStore';
 import { useDeckEdits } from './useDeckEdits';
+import { useUnsavedExitGuard } from './useUnsavedExitGuard';
 
 const SIDE_WIDTH_KEY = 'slidestage-lite:side-w';
 const NOTES_HEIGHT_KEY = 'slidestage-lite:notes-h';
@@ -159,6 +163,26 @@ export function DeckViewer({
   // In-place text edit session: stored patches, edit-mode toggle,
   // edited-copy export, discard, and the exit-of-edit-mode reload.
   const editing = useDeckEdits({ deck, getSourceFile, onRequestReload });
+
+  // Remind the user about unexported edits before the window / app / deck
+  // goes away (web beforeunload, desktop close + quit interception).
+  useUnsavedExitGuard(editing.unsaved);
+
+  const { t } = useI18n();
+  const editingUnsavedRef = useRef(editing.unsaved);
+  editingUnsavedRef.current = editing.unsaved;
+  const onCloseDeckRef = useRef(onCloseDeck);
+  onCloseDeckRef.current = onCloseDeck;
+  const handleCloseDeck = useCallback(() => {
+    if (
+      editingUnsavedRef.current &&
+      typeof window !== 'undefined' &&
+      !window.confirm(t('viewer.editing.unsavedCloseConfirm'))
+    ) {
+      return;
+    }
+    onCloseDeckRef.current();
+  }, [t]);
 
   // Hydrate annotations from localStorage on deck change.
   useEffect(() => {
@@ -399,6 +423,47 @@ export function DeckViewer({
     );
   }, [availableMonitors, handleMonitorCancel, handleMonitorPicked, monitorPickerOpen]);
 
+  // Visible export-failure notices (edited-copy + PDF). The header keeps
+  // the error as a button tooltip, but a tooltip alone proved too easy to
+  // miss — the missing-fs-permission incident shipped precisely because
+  // the failure was invisible.
+  const exportErrorNotice = (() => {
+    const notices: ReactNode[] = [];
+    if (editing.exportError) {
+      const fallback = t('errors.editExport');
+      notices.push(
+        <ExportErrorNotice
+          key="stage"
+          testId="export-error-notice"
+          text={
+            editing.exportError === fallback
+              ? fallback
+              : `${fallback} ${editing.exportError}`
+          }
+          dismissLabel={t('viewer.notice.dismiss')}
+          onDismiss={editing.onDismissExportError}
+        />,
+      );
+    }
+    if (pdfExport.phase === 'error' && pdfExport.error) {
+      const fallback = t('errors.pdfExport');
+      notices.push(
+        <ExportErrorNotice
+          key="pdf"
+          testId="pdf-export-error-notice"
+          text={
+            pdfExport.error === fallback
+              ? fallback
+              : `${fallback} ${pdfExport.error}`
+          }
+          dismissLabel={t('viewer.notice.dismiss')}
+          onDismiss={pdfExport.dismissError}
+        />,
+      );
+    }
+    return notices.length > 0 ? notices : null;
+  })();
+
   return (
     <UiDeckViewer
       deck={deck}
@@ -411,7 +476,7 @@ export function DeckViewer({
       onToggleOverview={onToggleOverview}
       onCloseNotes={onCloseNotes}
       onToggleNotes={onToggleNotes}
-      onCloseDeck={onCloseDeck}
+      onCloseDeck={handleCloseDeck}
       layout={{
         mode: viewMode,
         onModeChange: handleModeChange,
@@ -443,7 +508,45 @@ export function DeckViewer({
         onExport: pdfExport.exportPdf,
       }}
       editing={editing}
-      slots={{ overlay: monitorPickerOverlay }}
+      slots={{
+        overlay: (
+          <>
+            {monitorPickerOverlay}
+            {exportErrorNotice}
+          </>
+        ),
+      }}
     />
+  );
+}
+
+interface ExportErrorNoticeProps {
+  testId: string;
+  text: string;
+  dismissLabel: string;
+  onDismiss: () => void;
+}
+
+/**
+ * Floating red chip mirroring LiteApp's `deck-error-notice` styling, but
+ * mounted through the viewer's overlay slot (the error state lives in
+ * viewer-scoped hooks). Positioned below the app-level notice slot so
+ * simultaneous chips never overlap.
+ */
+function ExportErrorNotice({ testId, text, dismissLabel, onDismiss }: ExportErrorNoticeProps) {
+  return (
+    <aside
+      className="auto-elevated-notice export-error-notice"
+      role="alert"
+      data-testid={testId}
+    >
+      <span className="auto-elevated-notice-icon" aria-hidden>
+        <TriangleAlert size={16} />
+      </span>
+      <span className="auto-elevated-notice-text">{text}</span>
+      <button type="button" className="auto-elevated-notice-dismiss" onClick={onDismiss}>
+        {dismissLabel}
+      </button>
+    </aside>
   );
 }

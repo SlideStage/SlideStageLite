@@ -270,4 +270,25 @@ describe('parseSlideEdit', () => {
       parseSlideEdit({ ...valid, after: 'x'.repeat(MAX_SLIDE_PATCH_TEXT_LENGTH) }),
     ).not.toBeNull();
   });
+
+  it('passes through a valid textNode run index', () => {
+    expect(parseSlideEdit({ ...valid, textNode: 0 })).toEqual({ ...valid, textNode: 0 });
+    expect(parseSlideEdit({ ...valid, textNode: 9999 })).not.toBeNull();
+    // Absent textNode stays absent — a whole-leaf edit must not grow one.
+    expect(parseSlideEdit(valid)).not.toHaveProperty('textNode');
+  });
+
+  it('rejects malformed textNode indices', () => {
+    expect(parseSlideEdit({ ...valid, textNode: -1 })).toBeNull();
+    expect(parseSlideEdit({ ...valid, textNode: 0.5 })).toBeNull();
+    expect(parseSlideEdit({ ...valid, textNode: 10000 })).toBeNull();
+    expect(parseSlideEdit({ ...valid, textNode: '1' })).toBeNull();
+    expect(parseSlideEdit({ ...valid, textNode: Number.NaN })).toBeNull();
+  });
+
+  it('rejects run edits that would empty the text node', () => {
+    expect(parseSlideEdit({ ...valid, after: '', textNode: 0 })).toBeNull();
+    // Emptying a whole leaf element stays allowed.
+    expect(parseSlideEdit({ ...valid, after: '' })).not.toBeNull();
+  });
 });

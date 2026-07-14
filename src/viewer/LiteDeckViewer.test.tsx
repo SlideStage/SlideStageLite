@@ -11,7 +11,7 @@
  *     hydrated.
  *   - Notes overrides are read on mount.
  */
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeckViewer } from '@slidestage/lite-preset/viewer/DeckViewer';
 import { I18nProvider } from '@slidestage/lite-preset/i18n/I18nProvider';
@@ -157,6 +157,52 @@ describe('<DeckViewer /> lite-preset wrapper', () => {
     const parsed = JSON.parse(persisted!);
     expect(parsed[0]).toHaveLength(1);
     expect(parsed[0][0].tool).toBe('pen');
+  });
+
+  it('surfaces a dismissible notice when the edited-copy export fails', async () => {
+    // Stored edits make the export button render; a null source file
+    // makes the export fail with the i18n fallback message.
+    window.localStorage.setItem(
+      'slidestage-lite:edits:fp-abc',
+      JSON.stringify({
+        0: [
+          {
+            selector: 'body>main:nth-of-type(1)>h1:nth-of-type(1)',
+            before: 'Old',
+            after: 'New',
+          },
+        ],
+      }),
+    );
+
+    const { getByTestId, queryByTestId } = render(
+      <I18nProvider>
+        <DeckViewer
+          deck={makeDeck()}
+          currentIndex={0}
+          showOverview={false}
+          showNotes={false}
+          onNavigate={vi.fn()}
+          onCloseOverview={vi.fn()}
+          onToggleOverview={vi.fn()}
+          onCloseNotes={vi.fn()}
+          onToggleNotes={vi.fn()}
+          onCloseDeck={vi.fn()}
+          getSourceFile={() => null}
+          onRequestReload={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(queryByTestId('export-error-notice')).toBeNull();
+    fireEvent.click(getByTestId('export-edited'));
+
+    await waitFor(() => expect(queryByTestId('export-error-notice')).not.toBeNull());
+    const notice = getByTestId('export-error-notice');
+    expect(notice.textContent).toContain('Failed to export the edited copy.');
+
+    fireEvent.click(notice.querySelector('.auto-elevated-notice-dismiss')!);
+    await waitFor(() => expect(queryByTestId('export-error-notice')).toBeNull());
   });
 
   it('reads notes overrides from localStorage on mount', () => {
