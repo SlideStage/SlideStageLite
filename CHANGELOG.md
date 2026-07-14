@@ -10,6 +10,61 @@ This project follows [Semantic Versioning](https://semver.org/). Until
 
 ---
 
+## 0.5.0 — 2026-07-14
+
+In-place slide text editing lands in the viewer: flip on Edit mode,
+click any text in the rendered slide, and retype it — locally, without
+touching the `.stage` file. Export an edited copy when you want to
+share the result. Existing desktop users pick this up through the
+in-app updater on next launch — same minisign keypair, no reinstall.
+
+### Highlights — Edit slide text in place
+
+- **Edit mode in the viewer.** A new "Edit" toggle in the deck viewer
+  header (single-window and presenter layouts) makes pure-text elements
+  inside the sandboxed slide iframe click-to-edit: Enter or clicking
+  elsewhere commits, Esc cancels. Hovering outlines what is editable.
+- **Local-first persistence.** Every commit is stored as a text patch
+  (structural selector + before/after text) keyed by the deck's content
+  fingerprint under `slidestage-lite:edits:<fingerprint>` (capped at
+  500 patches / 1 MiB per deck). The `.stage` bytes are never modified,
+  so trust grants, annotations, and speaker notes keep working
+  unchanged. Patches re-apply at load time and flow into every render
+  surface — presenter, audience window, thumbnails, PDF export.
+- **Export an edited copy.** When edits exist, "Export copy" repacks
+  the original archive with the patches baked into the slide HTML and
+  saves `<name>.edited.stage` (web download or native save dialog on
+  desktop). Untouched entries — manifest.json included — survive
+  byte-for-byte. The copy is a new file with a new fingerprint, so it
+  re-runs the trust prompt on first open. "Discard all edits" restores
+  the original text everywhere.
+- **Fails safe.** Patches whose target no longer matches (e.g. decks
+  whose scripts rebuild the DOM) are skipped — never corrupting the
+  slide — and surface as an "N edits could not be applied" notice.
+  Text-only by design: edits assign `textContent`, so no markup can be
+  injected. EN + zh-CN strings throughout.
+- **Shared surface.** The capability is threaded through
+  `@slidestage/core` (patch engine + `transformSlideHtml` load hook +
+  runtime-agent edit mode), the `@slidestage/ui` viewer header and
+  slide bridge, and `@slidestage/lite-preset` (edits store, edit
+  session, copy export) so downstream consumers inherit it.
+
+### Download for your device
+
+| Your device | Download |
+| --- | --- |
+| macOS — Apple Silicon (M1/M2/M3/M4) | [`SlideStageLite-0.5.0-macOS-AppleSilicon.dmg`](https://github.com/SlideStage/SlideStageLite/releases/download/v0.5.0/SlideStageLite-0.5.0-macOS-AppleSilicon.dmg) |
+| macOS — Intel | [`SlideStageLite-0.5.0-macOS-Intel.dmg`](https://github.com/SlideStage/SlideStageLite/releases/download/v0.5.0/SlideStageLite-0.5.0-macOS-Intel.dmg) |
+| Windows 10/11 (64-bit) | [`SlideStageLite-0.5.0-Windows-x64-setup.exe`](https://github.com/SlideStage/SlideStageLite/releases/download/v0.5.0/SlideStageLite-0.5.0-Windows-x64-setup.exe) |
+
+Not sure which Mac? Apple menu → About This Mac — if the chip reads
+"Apple M…" choose Apple Silicon, otherwise choose Intel.
+
+Existing 0.4.x desktop users will see the in-app update banner on next
+launch and can install in place.
+
+---
+
 ## 0.4.0 — 2026-06-06
 
 Client-side PDF export lands in the viewer: turn any inlined `.stage`
