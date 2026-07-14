@@ -1,6 +1,6 @@
 {
   "name": "@slidestage/lite-preset",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "type": "module",
   "description": "Default Lite feature preset: i18n, local persistence, app shell.",
   "license": "UNLICENSED",
