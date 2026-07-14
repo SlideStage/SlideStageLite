@@ -60,3 +60,31 @@ export function packStage(
 export function bytesFromString(value: string): Uint8Array {
   return encoder.encode(value);
 }
+
+/**
+ * Re-pack an already-unzipped `.stage` archive verbatim.
+ *
+ * Unlike {@link packStage}, the manifest entry is NOT re-serialized from a
+ * parsed object — every entry (including `manifest.json`) is written back
+ * byte-for-byte as provided. Use this when only a subset of entries was
+ * intentionally modified (e.g. exporting an edited copy where just the
+ * patched slide HTML changed) and everything else must survive untouched,
+ * including producer metadata the schema parser would have dropped.
+ *
+ * `mtimeMs` should be a stable timestamp (e.g. `Date.parse(manifest.createdAt)`)
+ * so byte-identical inputs repack to byte-identical outputs.
+ */
+export function packStageEntries(
+  entries: Map<string, Uint8Array>,
+  options: { mtimeMs?: number } = {},
+): Uint8Array {
+  const mtime = options.mtimeMs ?? 0;
+  const files: AsyncZippable = {};
+
+  for (const [path, bytes] of entries) {
+    const safePath = normalizePackagePath(path);
+    files[safePath] = [asPlainUint8(bytes), { mtime }];
+  }
+
+  return zipSync(files, { level: 9, mtime });
+}

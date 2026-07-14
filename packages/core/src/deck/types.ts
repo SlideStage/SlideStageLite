@@ -126,6 +126,33 @@ export interface LoadDeckOptions {
    * known-bad CJK-mirror cases (40 MiB+ of fonts).
    */
   inlineBudgetBytes?: number;
+  /**
+   * Load-time slide HTML transform. Called once per slide with the raw
+   * (decoded, un-rewritten) HTML *before* asset-reference rewriting and
+   * runtime-agent injection, so the result flows into every render
+   * flavor — inlined `srcdoc`, transport-published bytes, thumbnails,
+   * and anything derived from them (audience window, PDF export).
+   *
+   * The transform must be pure string→string. A thrown error is treated
+   * as "no transform" for that slide (fail-open) so a buggy hook can
+   * never brick deck loading. The `.stage` archive bytes are NOT
+   * touched: `fingerprint` (and thus all per-deck persistence) is
+   * computed from the original package.
+   *
+   * Lite uses this to apply locally-stored text edits
+   * (`applySlidePatchesToHtml`); the hook itself is edition-agnostic.
+   */
+  transformSlideHtml?: (html: string, context: TransformSlideHtmlContext) => string;
+}
+
+/** Context handed to {@link LoadDeckOptions.transformSlideHtml}. */
+export interface TransformSlideHtmlContext {
+  /** Zero-based slide index in manifest order. */
+  index: number;
+  /** Normalized package path of the slide HTML entry. */
+  path: string;
+  /** Content fingerprint (sha256 hex of the zip bytes) of the deck. */
+  fingerprint: string;
 }
 
 /**

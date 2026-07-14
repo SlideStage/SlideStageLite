@@ -4,6 +4,7 @@ import {
   STAGE_HOST_SOURCE,
   type ForwardedInputEvent,
   type SelectionRect,
+  type SlideEdit,
   type SlideRuntimeState,
 } from './slideRuntime';
 
@@ -21,13 +22,20 @@ export interface UseSlideBridgeOptions {
   currentIndex: number;
   /**
    * Extra key that also forces re-acquisition of the iframe window — e.g.
-   * the deck fingerprint, so the bridge re-attaches when a deck first
-   * mounts or is swapped without the slide index changing.
+   * the LoadedDeck object identity, so the bridge re-attaches when a deck
+   * first mounts, is swapped, or is silently reloaded (same fingerprint,
+   * fresh iframes) without the slide index changing.
    */
-  reacquireKey?: string | number | null;
+  reacquireKey?: unknown;
   enabled?: boolean;
   /** Presenter only: forward click/scroll for slides without a step model. */
   forwardEvents?: boolean;
+  /**
+   * Presenter only: turn the in-slide text edit mode on/off. Sent with
+   * `init` (so freshly navigated slides inherit the mode) and pushed as
+   * an `edit-mode` command when it changes on an attached slide.
+   */
+  editMode?: boolean;
   /** Presenter only: called when the slide agent reports new step state. */
   onRuntimeReport?: (runtime: SlideRuntimeState) => void;
   /** Presenter only: called when the slide agent forwards an interaction. */
@@ -38,6 +46,8 @@ export interface UseSlideBridgeOptions {
    * selection was cleared.
    */
   onSelection?: (rects: SelectionRect[]) => void;
+  /** Presenter only: called when the slide agent commits a text edit. */
+  onEdit?: (edit: SlideEdit) => void;
   /** Audience only: the step state to drive the iframe to. */
   targetRuntime?: SlideRuntimeState | null;
 }
@@ -70,9 +80,11 @@ export function useSlideBridge(opts: UseSlideBridgeOptions): SlideBridgeApi {
     reacquireKey = null,
     enabled = true,
     forwardEvents = false,
+    editMode = false,
     onRuntimeReport,
     onInputEvent,
     onSelection,
+    onEdit,
     targetRuntime = null,
   } = opts;
 
@@ -81,19 +93,29 @@ export function useSlideBridge(opts: UseSlideBridgeOptions): SlideBridgeApi {
   roleRef.current = role;
   const forwardRef = useRef(forwardEvents);
   forwardRef.current = forwardEvents;
+  const editModeRef = useRef(editMode);
+  editModeRef.current = editMode;
   const onRuntimeReportRef = useRef(onRuntimeReport);
   onRuntimeReportRef.current = onRuntimeReport;
   const onInputEventRef = useRef(onInputEvent);
   onInputEventRef.current = onInputEvent;
   const onSelectionRef = useRef(onSelection);
   onSelectionRef.current = onSelection;
+  const onEditRef = useRef(onEdit);
+  onEditRef.current = onEdit;
   const targetRuntimeRef = useRef<SlideRuntimeState | null>(targetRuntime);
   targetRuntimeRef.current = targetRuntime;
 
   const sendInit = useCallback((win: Window) => {
     try {
       win.postMessage(
-        { source: STAGE_HOST_SOURCE, type: 'init', role: roleRef.current, forwardEvents: forwardRef.current },
+        {
+          source: STAGE_HOST_SOURCE,
+          type: 'init',
+          role: roleRef.current,
+          forwardEvents: forwardRef.current,
+          editMode: editModeRef.current,
+        },
         '*',
       );
     } catch {
@@ -130,6 +152,8 @@ export function useSlideBridge(opts: UseSlideBridgeOptions): SlideBridgeApi {
         onInputEventRef.current?.(msg.event);
       } else if (msg.type === 'selection') {
         onSelectionRef.current?.(msg.rects);
+      } else if (msg.type === 'edit') {
+        onEditRef.current?.(msg.edit);
       }
     };
     window.addEventListener('message', handler);
@@ -180,6 +204,20 @@ export function useSlideBridge(opts: UseSlideBridgeOptions): SlideBridgeApi {
       // ignore
     }
   }, [enabled, role, targetRuntime, currentIndex]);
+
+  // Presenter: mirror edit-mode changes onto the attached slide. Fresh
+  // slides get the flag via `init`; this covers toggles that happen while
+  // a slide is already attached.
+  useEffect(() => {
+    if (!enabled || role !== 'presenter') return;
+    const win = activeWinRef.current;
+    if (!win) return;
+    try {
+      win.postMessage({ source: STAGE_HOST_SOURCE, type: 'edit-mode', enabled: editMode }, '*');
+    } catch {
+      // ignore
+    }
+  }, [enabled, role, editMode]);
 
   const sendStep = useCallback((action: 'next' | 'prev') => {
     const win = activeWinRef.current;

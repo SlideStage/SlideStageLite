@@ -9,6 +9,7 @@ export {
 export * from './i18n/messages';
 export * from './i18n/I18nProvider';
 export * from './persistence/annotationStore';
+export * from './persistence/editsStore';
 export * from './persistence/notesStore';
 export * from './persistence/trustStore';
 export { runLegacyMigration } from './persistence/legacyMigration';

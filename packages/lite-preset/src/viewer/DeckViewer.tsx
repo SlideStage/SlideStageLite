@@ -26,6 +26,7 @@ import { useThumbnailCapture } from '../desktop/useThumbnailCapture';
 import { useDeckPdfExport } from '../export/useDeckPdfExport';
 import { loadAnnotations, saveAnnotations } from '../persistence/annotationStore';
 import { loadNotes, saveNotes, type StoredNotes } from '../persistence/notesStore';
+import { useDeckEdits } from './useDeckEdits';
 
 const SIDE_WIDTH_KEY = 'slidestage-lite:side-w';
 const NOTES_HEIGHT_KEY = 'slidestage-lite:notes-h';
@@ -71,6 +72,17 @@ interface DeckViewerProps {
   onCloseNotes: () => void;
   onToggleNotes: () => void;
   onCloseDeck: () => void;
+  /**
+   * Returns the original `File` this deck was opened from (LiteApp keeps
+   * it). Feeds the edited-copy export.
+   */
+  getSourceFile: () => File | null;
+  /**
+   * Silently reload the current deck from its source file (same bytes →
+   * same fingerprint) so patched slide HTML reaches every render surface
+   * after an edit session.
+   */
+  onRequestReload: () => Promise<void> | void;
 }
 
 /**
@@ -102,6 +114,8 @@ export function DeckViewer({
   onCloseNotes,
   onToggleNotes,
   onCloseDeck,
+  getSourceFile,
+  onRequestReload,
 }: DeckViewerProps) {
   const presenter = usePresenter();
   usePresenterShortcuts(presenter, currentIndex);
@@ -141,6 +155,10 @@ export function DeckViewer({
   // Client-side "Export PDF": rasterizes every slide and assembles a
   // one-slide-per-page PDF. Lazy — nothing runs until the user clicks.
   const pdfExport = useDeckPdfExport(deck);
+
+  // In-place text edit session: stored patches, edit-mode toggle,
+  // edited-copy export, discard, and the exit-of-edit-mode reload.
+  const editing = useDeckEdits({ deck, getSourceFile, onRequestReload });
 
   // Hydrate annotations from localStorage on deck change.
   useEffect(() => {
@@ -238,6 +256,16 @@ export function DeckViewer({
     if (!audiencePresentation) return;
     sync.send({ type: 'presentation', presentation: audiencePresentation });
   }, [sync, audiencePresentation]);
+
+  // Push a fresh snapshot when the deck OBJECT changes while an audience
+  // window is connected. Covers the silent same-fingerprint reload after
+  // an edit session: `presentation` messages carry no slide HTML, so
+  // without this the audience would keep rendering the pre-edit srcdoc
+  // until it reconnected.
+  useEffect(() => {
+    if (!audienceConnected) return;
+    sendSnapshot(syncRef.current, audiencePresentationRef.current);
+  }, [deck, audienceConnected, sendSnapshot]);
 
   // Relay best-effort (A+) interactions forwarded from the active slide
   // to the audience window as transient `input-event` messages.
@@ -414,6 +442,7 @@ export function DeckViewer({
         error: pdfExport.error,
         onExport: pdfExport.exportPdf,
       }}
+      editing={editing}
       slots={{ overlay: monitorPickerOverlay }}
     />
   );

@@ -27,6 +27,13 @@
 //      audience window can paint an identical selection highlight. Rects
 //      (not a DOM range) cross the wire; the audience draws them on an
 //      overlay, immune to cross-iframe DOM drift.
+//   4. Edit mode (presenter only, host-toggled) — clicking a pure-text
+//      leaf element turns it contentEditable; commit on blur/Enter,
+//      cancel on Escape. Each commit posts an `edit` message carrying a
+//      structural selector (`body>tag:nth-of-type(n)>...`) plus the
+//      before/after TEXT (never HTML). The host persists these as
+//      patches and re-applies them at load time via
+//      `applySlidePatchesToHtml`.
 //
 // The message shapes here MUST stay in sync with the validators in
 // `@slidestage/ui/presenter/slideRuntime` (the host side). Both ends are
@@ -55,6 +62,13 @@ export const STAGE_RUNTIME_AGENT_SOURCE = `(function () {
   var selectionBound = false; // presenter: selectionchange listener attached
   var lastSelJSON = '';       // presenter: dedupe identical selection reports
   var selScheduled = false;   // presenter: rAF coalescing for selectionchange
+  var editMode = false;       // presenter: host-toggled text edit mode
+  var editBound = false;      // presenter: edit listeners attached
+  var editEl = null;          // element currently contentEditable
+  var editPrevText = '';      // its text when editing began
+  var editPrevOutline = '';   // its inline outline when editing began
+  var hoverEl = null;         // edit mode: currently outlined hover target
+  var hoverPrevOutline = '';
 
   function num(v) { return typeof v === 'number' && isFinite(v) ? v : 0; }
 
@@ -274,6 +288,9 @@ export const STAGE_RUNTIME_AGENT_SOURCE = `(function () {
     if (role !== 'presenter' || !forwardEvents) return;
     try {
       document.addEventListener('click', function (e) {
+        // Edit-mode clicks select an element to edit; mirroring them to
+        // the audience would replay a meaningless interaction there.
+        if (editMode) return;
         post({ type: 'input', event: { kind: 'click', x: num(e.clientX), y: num(e.clientY) } });
       }, true);
       window.addEventListener('scroll', function () {
@@ -362,6 +379,176 @@ export const STAGE_RUNTIME_AGENT_SOURCE = `(function () {
     scheduleSelection();
   }
 
+  // ---------------- text edit mode (presenter) ----------------
+
+  // An element qualifies for in-place editing when it is a "pure text
+  // leaf": no element children, at least one non-whitespace text node.
+  // Editing assigns textContent only, so structure cannot be damaged.
+  function isEditableLeaf(el) {
+    if (!el || el.nodeType !== 1) return false;
+    var tag = el.tagName ? String(el.tagName).toLowerCase() : '';
+    if (!tag) return false;
+    if (tag === 'html' || tag === 'body' || tag === 'head' || tag === 'script' ||
+        tag === 'style' || tag === 'svg' || tag === 'iframe' || tag === 'canvas' ||
+        tag === 'video' || tag === 'audio' || tag === 'img' || tag === 'input' ||
+        tag === 'textarea' || tag === 'select' || tag === 'br' || tag === 'hr') {
+      return false;
+    }
+    var kids = el.childNodes;
+    var hasText = false;
+    for (var i = 0; i < kids.length; i++) {
+      var n = kids[i];
+      if (n.nodeType === 1) return false;
+      if (n.nodeType === 3 && /\\S/.test(n.nodeValue || '')) hasText = true;
+    }
+    return hasText;
+  }
+
+  function findEditable(start) {
+    var el = start;
+    var hops = 0;
+    while (el && hops < 4) {
+      if (isEditableLeaf(el)) return el;
+      el = el.parentElement;
+      hops++;
+    }
+    return null;
+  }
+
+  // Structural selector from body down to the element:
+  // body>tag:nth-of-type(i)>... Matches SLIDE_PATCH_SELECTOR_RE on the
+  // host side; anything fancier is rejected there.
+  function selectorFor(el) {
+    var parts = [];
+    var cur = el;
+    while (cur && cur.tagName && String(cur.tagName).toLowerCase() !== 'body' && cur.parentElement) {
+      var tag = String(cur.tagName).toLowerCase();
+      if (!/^[a-z][a-z0-9-]*$/.test(tag)) return '';
+      var idx = 1;
+      var sib = cur;
+      while ((sib = sib.previousElementSibling)) {
+        if (sib.tagName && String(sib.tagName).toLowerCase() === tag) idx++;
+      }
+      parts.unshift(tag + ':nth-of-type(' + idx + ')');
+      cur = cur.parentElement;
+    }
+    if (!cur || !cur.tagName || String(cur.tagName).toLowerCase() !== 'body') return '';
+    return parts.length ? 'body>' + parts.join('>') : '';
+  }
+
+  function clearEditHover() {
+    if (!hoverEl) return;
+    try { hoverEl.style.outline = hoverPrevOutline; } catch (e) {}
+    hoverEl = null;
+    hoverPrevOutline = '';
+  }
+
+  function textOf(el) {
+    var t = '';
+    try { t = el.textContent == null ? '' : String(el.textContent); } catch (e) {}
+    return t;
+  }
+
+  // End the current edit. cancel=true restores the original text and
+  // reports nothing; otherwise a changed text is posted to the host.
+  function commitEdit(cancel) {
+    var el = editEl;
+    if (!el) return;
+    editEl = null;
+    try { el.removeAttribute('contenteditable'); } catch (e) {}
+    try { el.style.outline = editPrevOutline; } catch (e) {}
+    var before = editPrevText;
+    editPrevText = '';
+    editPrevOutline = '';
+    if (cancel) {
+      try { el.textContent = before; } catch (e) {}
+      return;
+    }
+    var after = textOf(el);
+    if (after === before) return;
+    if (before.length > 10000 || after.length > 10000) {
+      try { el.textContent = before; } catch (e) {}
+      return;
+    }
+    var sel = selectorFor(el);
+    if (!sel || sel.length > 1000) {
+      try { el.textContent = before; } catch (e) {}
+      return;
+    }
+    post({ type: 'edit', edit: { selector: sel, before: before, after: after } });
+  }
+
+  function beginEdit(el) {
+    if (editEl === el) return;
+    commitEdit(false);
+    if (hoverEl === el) clearEditHover();
+    editEl = el;
+    editPrevText = textOf(el);
+    editPrevOutline = el.style ? (el.style.outline || '') : '';
+    var applied = false;
+    try { el.contentEditable = 'plaintext-only'; applied = el.isContentEditable === true; } catch (e) {}
+    if (!applied) {
+      try { el.setAttribute('contenteditable', 'true'); } catch (e) {}
+    }
+    try { el.style.outline = '2px dashed rgba(56, 189, 173, 0.95)'; } catch (e) {}
+    try { el.focus(); } catch (e) {}
+  }
+
+  function setEditMode(on) {
+    if (role !== 'presenter') return;
+    var want = !!on;
+    if (editMode === want) return;
+    if (!want) {
+      commitEdit(false);
+      clearEditHover();
+    }
+    editMode = want;
+    if (want) bindEditListeners();
+  }
+
+  function bindEditListeners() {
+    if (editBound) return;
+    editBound = true;
+    try {
+      document.addEventListener('click', function (e) {
+        if (!editMode) return;
+        var t = findEditable(e.target);
+        if (!t) return;
+        e.preventDefault();
+        e.stopPropagation();
+        beginEdit(t);
+      }, true);
+      document.addEventListener('mouseover', function (e) {
+        if (!editMode) return;
+        var t = findEditable(e.target);
+        if (t === hoverEl) return;
+        clearEditHover();
+        if (t && t !== editEl) {
+          hoverEl = t;
+          hoverPrevOutline = t.style ? (t.style.outline || '') : '';
+          try { t.style.outline = '1px dashed rgba(56, 189, 173, 0.6)'; } catch (e2) {}
+        }
+      }, true);
+      document.addEventListener('focusout', function (e) {
+        if (!editMode || !editEl) return;
+        if (e.target === editEl) commitEdit(false);
+      }, true);
+      document.addEventListener('keydown', function (e) {
+        if (!editMode || !editEl) return;
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          commitEdit(true);
+        } else if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          var el = editEl;
+          try { el.blur(); } catch (e2) { commitEdit(false); }
+        }
+      }, true);
+    } catch (e) {}
+  }
+
   // ---------------- init / driver discovery ----------------
 
   function startDiscovery() {
@@ -390,6 +577,10 @@ export const STAGE_RUNTIME_AGENT_SOURCE = `(function () {
         forwardEvents = !!d.forwardEvents;
         startDiscovery();
         enableSelectionCapture();
+        setEditMode(!!d.editMode);
+        break;
+      case 'edit-mode':
+        setEditMode(!!d.enabled);
         break;
       case 'step':
         if (driver) {

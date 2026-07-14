@@ -1107,6 +1107,42 @@ code {
   top: 56px;
 }
 
+/* "N edits could not be applied" flavor: amber accent — informational,
+ * not an error (the deck renders fine, only stale patches were skipped). */
+.auto-elevated-notice.edits-failed-notice {
+  border-color: rgba(251, 191, 36, 0.55);
+}
+.auto-elevated-notice.edits-failed-notice .auto-elevated-notice-icon {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+/* Stack below a sibling notice instead of overlapping the fixed slot. */
+.auto-elevated-notice + .edits-failed-notice {
+  top: 56px;
+}
+
+/* Floating hint shown while slide text edit mode is active. Fixed near
+ * the bottom so it never disturbs the stage layout in either view mode. */
+.edit-mode-hint {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: min(720px, calc(100vw - 32px));
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 173, 0.55);
+  background: rgba(9, 18, 24, 0.92);
+  color: var(--text, #e6edf3);
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
 /* GitHub Release update banner (landing surface, Tauri-only). Visually
  * sibling to .auto-elevated-notice but anchored beneath the app header
  * instead of as a floating chip so it does not occlude the deck

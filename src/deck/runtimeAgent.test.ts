@@ -58,4 +58,15 @@ describe('injectRuntimeAgent', () => {
     expect(STAGE_RUNTIME_AGENT_SOURCE).not.toMatch(/data:/);
     expect(injectRuntimeAgent('<body>x</body>')).not.toMatch(/data:/);
   });
+
+  it('carries the edit-mode protocol handlers', () => {
+    // Wire-level contract markers for the text-edit feature: the host
+    // sends `edit-mode`, the agent posts `edit` payloads with the
+    // structural selector fields validated by parseSlideEdit.
+    expect(STAGE_RUNTIME_AGENT_SOURCE).toContain("case 'edit-mode':");
+    expect(STAGE_RUNTIME_AGENT_SOURCE).toContain("type: 'edit'");
+    expect(STAGE_RUNTIME_AGENT_SOURCE).toContain(':nth-of-type(');
+    // The edit selector generator must emit body-rooted paths.
+    expect(STAGE_RUNTIME_AGENT_SOURCE).toContain("'body>' + parts.join('>')");
+  });
 });

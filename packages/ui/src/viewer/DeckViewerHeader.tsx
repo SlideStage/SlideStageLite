@@ -4,10 +4,13 @@ import {
   ChevronRight,
   Download,
   ExternalLink,
+  FileDown,
   Grid3X3,
+  Pencil,
   Presentation,
   Radio,
   StickyNote,
+  Undo2,
 } from 'lucide-react';
 import { useUiTranslator } from '../i18n/translator';
 
@@ -32,6 +35,31 @@ export interface DeckViewerExport {
   /** Last error message, surfaced as the button tooltip on failure. */
   error?: string | null;
   onExport: () => void;
+}
+
+/**
+ * In-place slide text editing integration. The host preset owns patch
+ * persistence, deck reload, and copy export; the header only renders the
+ * toggle and (when edits exist) the export / discard actions.
+ */
+export interface DeckViewerEditing {
+  /** True while edit mode is active. */
+  active: boolean;
+  onToggle: () => void;
+  /** True when local edits exist for this deck. */
+  hasEdits: boolean;
+  /** Number of stored edits (label / tooltip context). */
+  editCount: number;
+  /** Export an edited `.stage` copy of the deck. */
+  onExportCopy: () => void;
+  /** True while the copy export is running. */
+  exportBusy: boolean;
+  /** Last export error, surfaced as the button tooltip. */
+  exportError?: string | null;
+  /** Drop every stored edit for this deck. */
+  onDiscard: () => void;
+  /** True when the per-deck edit budget is exhausted (new edits are dropped). */
+  storageFull: boolean;
 }
 
 export interface DeckViewerHeaderProps {
@@ -62,6 +90,11 @@ export interface DeckViewerHeaderProps {
    * rendered. Shared by both header variants.
    */
   exportPdf?: DeckViewerExport;
+  /**
+   * Optional slide text editing integration. When omitted, no edit
+   * controls are rendered. Shared by both header variants.
+   */
+  editing?: DeckViewerEditing;
   /** Only used by variant === 'single'. */
   showNotes?: boolean;
   /** Only used by variant === 'single'. */
@@ -86,6 +119,10 @@ export function DeckViewerHeader(props: DeckViewerHeaderProps) {
 
   const exportButton = props.exportPdf ? (
     <ExportPdfButton {...props.exportPdf} t={t} tFormat={tFormat} />
+  ) : null;
+
+  const editingControls = props.editing ? (
+    <EditingControls {...props.editing} t={t} tFormat={tFormat} />
   ) : null;
 
   return (
@@ -152,6 +189,7 @@ export function DeckViewerHeader(props: DeckViewerHeaderProps) {
         <Grid3X3 className="btn-icon" aria-hidden size={16} />
         {t('viewer.action.overview')}
       </button>
+      {editingControls}
       {exportButton}
       {isPresenter ? (
         <button
@@ -197,6 +235,74 @@ export function DeckViewerHeader(props: DeckViewerHeaderProps) {
         </>
       )}
     </header>
+  );
+}
+
+interface EditingControlsProps extends DeckViewerEditing {
+  t: (key: string) => string;
+  tFormat: (key: string, vars?: Readonly<Record<string, string | number>>) => string;
+}
+
+function EditingControls({
+  active,
+  onToggle,
+  hasEdits,
+  editCount,
+  onExportCopy,
+  exportBusy,
+  exportError,
+  onDiscard,
+  storageFull,
+  t,
+  tFormat,
+}: EditingControlsProps) {
+  const toggleTitle = storageFull
+    ? t('viewer.editing.storageFull')
+    : t('viewer.editing.toggleHint');
+
+  return (
+    <>
+      <button
+        type="button"
+        className="btn ghost"
+        data-testid="edit-toggle"
+        onClick={onToggle}
+        aria-pressed={active}
+        aria-label={t('viewer.aria.editToggle')}
+        title={toggleTitle}
+      >
+        <Pencil className="btn-icon" aria-hidden size={16} />
+        {active ? t('viewer.action.editDone') : t('viewer.action.edit')}
+      </button>
+      {hasEdits ? (
+        <>
+          <button
+            type="button"
+            className="btn ghost"
+            data-testid="export-edited"
+            onClick={onExportCopy}
+            disabled={exportBusy}
+            aria-label={t('viewer.aria.exportEdited')}
+            title={exportError ?? tFormat('viewer.action.editExportHint', { n: editCount })}
+          >
+            <FileDown className="btn-icon" aria-hidden size={16} />
+            {exportBusy
+              ? t('viewer.action.editExportBusy')
+              : t('viewer.action.editExport')}
+          </button>
+          <button
+            type="button"
+            className="btn ghost icon-only"
+            data-testid="discard-edits"
+            onClick={onDiscard}
+            aria-label={t('viewer.action.editDiscard')}
+            title={t('viewer.action.editDiscard')}
+          >
+            <Undo2 className="btn-icon" aria-hidden size={18} />
+          </button>
+        </>
+      ) : null}
+    </>
   );
 }
 

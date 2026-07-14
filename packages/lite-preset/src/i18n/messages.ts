@@ -138,6 +138,8 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'viewer.aria.speakerPanel': 'speaker notes',
     'viewer.aria.closeSpeaker': 'close speaker view',
     'viewer.aria.exportPdf': 'Export deck to PDF',
+    'viewer.aria.editToggle': 'Toggle slide text editing',
+    'viewer.aria.exportEdited': 'Export an edited copy (.stage)',
 
     'viewer.action.closeDeck': 'Close deck',
     'viewer.action.singleWindow': 'Single window',
@@ -156,6 +158,29 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'viewer.action.openAudience': 'Open audience window',
     'viewer.action.audienceLive': 'Audience window: Live',
     'viewer.action.closeSpeakerS': 'Close (S)',
+
+    'viewer.action.edit': 'Edit',
+    'viewer.action.editDone': 'Done editing',
+    'viewer.action.editExport': 'Export copy',
+    'viewer.action.editExportBusy': 'Exporting…',
+    'viewer.action.editExportHint':
+      'Save a copy of this deck with your {n} local edits baked in. The copy is a ' +
+      'new file, so it will ask for trust again the first time it is opened. The ' +
+      'original file is never modified.',
+    'viewer.action.editDiscard': 'Discard all edits',
+    'viewer.editing.toggleHint':
+      'Click any text in the slide to edit it. Changes are stored locally in this ' +
+      'browser; the .stage file itself is not modified.',
+    'viewer.editing.hint':
+      'Edit mode — click text to change it. Enter or clicking elsewhere saves, Esc cancels.',
+    'viewer.editing.storageFull':
+      'The edit limit for this deck is reached — new edits are no longer saved.',
+    'viewer.editing.discardConfirm':
+      'Discard all local edits for this deck? Slides return to their original text.',
+    'viewer.notice.editsFailed':
+      '{n} local edits could not be applied to this deck. The rest are active; ' +
+      'the slide content itself is unchanged.',
+    'errors.editExport': 'Failed to export the edited copy.',
 
     'viewer.monitorPicker.title': 'Where should the audience window open?',
     'viewer.monitorPicker.desc':
@@ -393,6 +418,8 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'viewer.aria.speakerPanel': '演讲者备注',
     'viewer.aria.closeSpeaker': '关闭演讲者视图',
     'viewer.aria.exportPdf': '导出演示为 PDF',
+    'viewer.aria.editToggle': '切换幻灯片文字编辑模式',
+    'viewer.aria.exportEdited': '导出已编辑副本 (.stage)',
 
     'viewer.action.closeDeck': '关闭演示',
     'viewer.action.singleWindow': '单窗口模式',
@@ -409,6 +436,25 @@ export const messages: Readonly<Record<Locale, MessageDict>> = {
     'viewer.action.openAudience': '打开观众窗口',
     'viewer.action.audienceLive': '观众窗口：已连接',
     'viewer.action.closeSpeakerS': '关闭 (S)',
+
+    'viewer.action.edit': '编辑',
+    'viewer.action.editDone': '完成编辑',
+    'viewer.action.editExport': '导出副本',
+    'viewer.action.editExportBusy': '导出中…',
+    'viewer.action.editExportHint':
+      '将包含 {n} 处本地编辑的演示另存为新的 .stage 副本。副本是新文件，首次打开时会重新进行信任确认；原文件不会被修改。',
+    'viewer.action.editDiscard': '放弃全部编辑',
+    'viewer.editing.toggleHint':
+      '点击幻灯片中的文字即可修改。修改仅保存在本浏览器，不会改动 .stage 文件本身。',
+    'viewer.editing.hint':
+      '编辑模式 —— 点击文字进行修改。回车或点击其他区域保存，Esc 取消。',
+    'viewer.editing.storageFull':
+      '该演示的编辑容量已达上限——新的修改将不再保存。',
+    'viewer.editing.discardConfirm':
+      '要放弃该演示的全部本地编辑吗？幻灯片文字将恢复原状。',
+    'viewer.notice.editsFailed':
+      '{n} 处本地编辑未能应用到当前演示。其余编辑仍然生效；幻灯片内容本身未受影响。',
+    'errors.editExport': '导出已编辑副本失败。',
 
     'viewer.monitorPicker.title': '在哪个显示器打开观众窗？',
     'viewer.monitorPicker.desc':

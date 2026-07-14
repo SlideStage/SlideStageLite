@@ -200,3 +200,121 @@ describe('<DeckViewerHeader /> export PDF button', () => {
     expect(btn.title).toBe('viewer.action.exportPdfUnavailable');
   });
 });
+
+describe('<DeckViewerHeader /> editing controls', () => {
+  function baseEditing(overrides: Record<string, unknown> = {}) {
+    return {
+      active: false,
+      onToggle: vi.fn(),
+      hasEdits: false,
+      editCount: 0,
+      onExportCopy: vi.fn(),
+      exportBusy: false,
+      exportError: null,
+      onDiscard: vi.fn(),
+      storageFull: false,
+      ...overrides,
+    };
+  }
+
+  function renderWithEditing(
+    editing: ReturnType<typeof baseEditing>,
+    variant: 'single' | 'presenter' = 'presenter',
+  ) {
+    render(
+      <DeckViewerHeader
+        variant={variant}
+        title="Deck"
+        currentIndex={0}
+        totalSlides={3}
+        canGoPrev={false}
+        canGoNext
+        onNavigatePrev={vi.fn()}
+        onNavigateNext={vi.fn()}
+        onCloseDeck={vi.fn()}
+        onSwitchToPresenter={vi.fn()}
+        onSwitchToSingle={vi.fn()}
+        showOverview={false}
+        onToggleOverview={vi.fn()}
+        showNotes={false}
+        onToggleNotes={vi.fn()}
+        editing={editing}
+      />,
+    );
+  }
+
+  it('is absent when no editing integration is provided', () => {
+    render(
+      <DeckViewerHeader
+        variant="presenter"
+        title="Deck"
+        currentIndex={0}
+        totalSlides={3}
+        canGoPrev={false}
+        canGoNext
+        onNavigatePrev={vi.fn()}
+        onNavigateNext={vi.fn()}
+        onSwitchToSingle={vi.fn()}
+        showOverview={false}
+        onToggleOverview={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId('edit-toggle')).toBeNull();
+  });
+
+  it('renders the toggle in both variants and fires onToggle', () => {
+    const editing = baseEditing();
+    renderWithEditing(editing, 'presenter');
+    const toggle = screen.getByTestId('edit-toggle');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(toggle);
+    expect(editing.onToggle).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    renderWithEditing(baseEditing(), 'single');
+    expect(screen.getByTestId('edit-toggle')).toBeTruthy();
+  });
+
+  it('reflects the active state on the toggle', () => {
+    renderWithEditing(baseEditing({ active: true }));
+    const toggle = screen.getByTestId('edit-toggle');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(toggle.textContent).toContain('viewer.action.editDone');
+  });
+
+  it('hides export/discard until edits exist', () => {
+    renderWithEditing(baseEditing());
+    expect(screen.queryByTestId('export-edited')).toBeNull();
+    expect(screen.queryByTestId('discard-edits')).toBeNull();
+  });
+
+  it('shows export + discard when edits exist and fires their callbacks', () => {
+    const editing = baseEditing({ hasEdits: true, editCount: 3 });
+    renderWithEditing(editing);
+    fireEvent.click(screen.getByTestId('export-edited'));
+    expect(editing.onExportCopy).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId('discard-edits'));
+    expect(editing.onDiscard).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables export while busy and surfaces the busy label', () => {
+    renderWithEditing(baseEditing({ hasEdits: true, editCount: 1, exportBusy: true }));
+    const btn = screen.getByTestId('export-edited') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(btn.textContent).toContain('viewer.action.editExportBusy');
+  });
+
+  it('surfaces export errors and the storage-full warning as titles', () => {
+    renderWithEditing(
+      baseEditing({ hasEdits: true, editCount: 1, exportError: 'disk exploded' }),
+    );
+    expect((screen.getByTestId('export-edited') as HTMLButtonElement).title).toBe(
+      'disk exploded',
+    );
+    cleanup();
+    renderWithEditing(baseEditing({ storageFull: true }));
+    expect((screen.getByTestId('edit-toggle') as HTMLButtonElement).title).toBe(
+      'viewer.editing.storageFull',
+    );
+  });
+});

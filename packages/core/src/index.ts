@@ -5,5 +5,6 @@ export * from './deck/pathSafety';
 export * from './deck/rewriteHtml';
 export * from './deck/safeUnzip';
 export * from './deck/loadDeck';
+export * from './deck/slidePatches';
 export * from './deck/trustCapabilities';
 export * from './converter';

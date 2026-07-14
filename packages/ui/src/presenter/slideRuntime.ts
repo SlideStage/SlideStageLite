@@ -12,6 +12,13 @@
 // raw payload — validate it here first. The validators are deliberately
 // strict and bounded.
 
+import {
+  MAX_SLIDE_PATCH_SELECTOR_LENGTH,
+  MAX_SLIDE_PATCH_TEXT_LENGTH,
+  SLIDE_PATCH_SELECTOR_RE,
+  type SlideTextPatch,
+} from '@slidestage/core/deck/slidePatches';
+
 /** Source tags so each side ignores its own / unrelated postMessages. */
 export const STAGE_HOST_SOURCE = 'slidestage-host';
 export const STAGE_AGENT_SOURCE = 'slidestage-agent';
@@ -64,12 +71,26 @@ export interface SelectionRect {
 /** Defensive upper bound on forwarded selection rects per message. */
 export const MAX_SELECTION_RECTS = 200;
 
+/**
+ * One committed in-place text edit reported by the agent's edit mode.
+ * Shape-identical to core's {@link SlideTextPatch} — the host persists it
+ * as a patch and re-applies it at load time.
+ */
+export type SlideEdit = SlideTextPatch;
+
 /** host → agent */
 export type HostToAgentMessage =
-  | { source: typeof STAGE_HOST_SOURCE; type: 'init'; role: 'presenter' | 'audience'; forwardEvents: boolean }
+  | {
+      source: typeof STAGE_HOST_SOURCE;
+      type: 'init';
+      role: 'presenter' | 'audience';
+      forwardEvents: boolean;
+      editMode?: boolean;
+    }
   | { source: typeof STAGE_HOST_SOURCE; type: 'step'; action: 'next' | 'prev' }
   | { source: typeof STAGE_HOST_SOURCE; type: 'goto'; runtime: SlideRuntimeState }
   | { source: typeof STAGE_HOST_SOURCE; type: 'replay'; event: ForwardedInputEvent }
+  | { source: typeof STAGE_HOST_SOURCE; type: 'edit-mode'; enabled: boolean }
   | { source: typeof STAGE_HOST_SOURCE; type: 'ping' };
 
 /** agent → host */
@@ -78,7 +99,9 @@ export type AgentToHostMessage =
   | { type: 'runtime'; runtime: SlideRuntimeState }
   | { type: 'input'; event: ForwardedInputEvent }
   // Presenter → host: rects of the current text selection (or [] to clear).
-  | { type: 'selection'; rects: SelectionRect[] };
+  | { type: 'selection'; rects: SelectionRect[] }
+  // Presenter → host: a committed text edit (edit mode only).
+  | { type: 'edit'; edit: SlideEdit };
 
 const RUNTIME_DRIVERS: ReadonlySet<string> = new Set<string>([
   'reveal',
@@ -162,6 +185,30 @@ export function parseSelectionRects(value: unknown): SelectionRect[] | null {
   return out;
 }
 
+/**
+ * Validate a {@link SlideEdit} reported by the (untrusted) slide iframe;
+ * returns null if invalid. Strict on purpose: the selector must match the
+ * structural grammar the agent generates (`body>tag:nth-of-type(n)>...`),
+ * both texts are plain strings under the shared length cap, and the edit
+ * must actually change something. The payload later reaches
+ * `querySelector` (on an inert DOMParser document) and localStorage, so
+ * nothing outside this grammar is allowed through.
+ */
+export function parseSlideEdit(value: unknown): SlideEdit | null {
+  if (!isPlainObject(value)) return null;
+  const { selector, before, after } = value;
+  if (typeof selector !== 'string' || typeof before !== 'string' || typeof after !== 'string') {
+    return null;
+  }
+  if (selector.length === 0 || selector.length > MAX_SLIDE_PATCH_SELECTOR_LENGTH) return null;
+  if (!SLIDE_PATCH_SELECTOR_RE.test(selector)) return null;
+  if (before.length > MAX_SLIDE_PATCH_TEXT_LENGTH || after.length > MAX_SLIDE_PATCH_TEXT_LENGTH) {
+    return null;
+  }
+  if (before === after) return null;
+  return { selector, before, after };
+}
+
 /** Validate an inbound agent → host message; returns null if invalid. */
 export function parseAgentMessage(value: unknown): AgentToHostMessage | null {
   if (!isPlainObject(value)) return null;
@@ -180,6 +227,10 @@ export function parseAgentMessage(value: unknown): AgentToHostMessage | null {
     case 'selection': {
       const rects = parseSelectionRects(value.rects);
       return rects ? { type: 'selection', rects } : null;
+    }
+    case 'edit': {
+      const edit = parseSlideEdit(value.edit);
+      return edit ? { type: 'edit', edit } : null;
     }
     default:
       return null;

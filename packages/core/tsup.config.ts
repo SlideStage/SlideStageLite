@@ -10,6 +10,7 @@ export default defineConfig({
     'src/deck/rewriteHtml.ts',
     'src/deck/runtimeAgent.ts',
     'src/deck/safeUnzip.ts',
+    'src/deck/slidePatches.ts',
     'src/deck/trustCapabilities.ts',
     'src/deck/types.ts',
     'src/converter/buildManifest.ts',

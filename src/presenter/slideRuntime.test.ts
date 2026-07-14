@@ -5,9 +5,11 @@ import {
   parseAgentMessage,
   parseForwardedInputEvent,
   parseSelectionRects,
+  parseSlideEdit,
   parseSlideRuntimeState,
   type SlideRuntimeState,
 } from '@slidestage/ui/presenter/slideRuntime';
+import { MAX_SLIDE_PATCH_TEXT_LENGTH } from '@slidestage/core/deck/slidePatches';
 
 function validRuntime(overrides: Partial<SlideRuntimeState> = {}): SlideRuntimeState {
   return {
@@ -199,7 +201,73 @@ describe('parseAgentMessage', () => {
     ).toBeNull();
   });
 
+  it('parses an edit message and re-validates the payload', () => {
+    const edit = {
+      selector: 'body>main:nth-of-type(1)>h1:nth-of-type(1)',
+      before: 'Old',
+      after: 'New',
+    };
+    expect(
+      parseAgentMessage({ source: STAGE_AGENT_SOURCE, type: 'edit', edit }),
+    ).toEqual({ type: 'edit', edit });
+    expect(
+      parseAgentMessage({
+        source: STAGE_AGENT_SOURCE,
+        type: 'edit',
+        edit: { ...edit, selector: 'h1[onclick]' },
+      }),
+    ).toBeNull();
+  });
+
   it('rejects unknown message types', () => {
     expect(parseAgentMessage({ source: STAGE_AGENT_SOURCE, type: 'step' })).toBeNull();
+  });
+});
+
+describe('parseSlideEdit', () => {
+  const valid = {
+    selector: 'body>main:nth-of-type(1)>div:nth-of-type(2)>p:nth-of-type(3)',
+    before: 'Original',
+    after: 'Edited',
+  };
+
+  it('accepts the structural selector grammar the agent generates', () => {
+    expect(parseSlideEdit(valid)).toEqual(valid);
+    expect(
+      parseSlideEdit({ ...valid, selector: 'body>custom-tag:nth-of-type(4)' }),
+    ).not.toBeNull();
+  });
+
+  it('rejects selectors outside the structural grammar', () => {
+    for (const selector of [
+      '',
+      'body >h1:nth-of-type(1)',
+      'body>h1',
+      'body>h1:nth-child(2)',
+      'html>body>h1:nth-of-type(1)',
+      'body>h1:nth-of-type(1)>*',
+      'body>script:nth-of-type(1);alert(1)',
+    ]) {
+      expect(parseSlideEdit({ ...valid, selector }), selector).toBeNull();
+    }
+  });
+
+  it('rejects non-string fields', () => {
+    expect(parseSlideEdit(null)).toBeNull();
+    expect(parseSlideEdit({ ...valid, before: 7 })).toBeNull();
+    expect(parseSlideEdit({ ...valid, after: null })).toBeNull();
+  });
+
+  it('rejects no-op edits (before === after)', () => {
+    expect(parseSlideEdit({ ...valid, after: valid.before })).toBeNull();
+  });
+
+  it('bounds text length', () => {
+    expect(
+      parseSlideEdit({ ...valid, after: 'x'.repeat(MAX_SLIDE_PATCH_TEXT_LENGTH + 1) }),
+    ).toBeNull();
+    expect(
+      parseSlideEdit({ ...valid, after: 'x'.repeat(MAX_SLIDE_PATCH_TEXT_LENGTH) }),
+    ).not.toBeNull();
   });
 });

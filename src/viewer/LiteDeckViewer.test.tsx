@@ -97,6 +97,8 @@ describe('<DeckViewer /> lite-preset wrapper', () => {
           onCloseNotes={vi.fn()}
           onToggleNotes={vi.fn()}
           onCloseDeck={vi.fn()}
+          getSourceFile={() => null}
+          onRequestReload={vi.fn()}
         />
       </I18nProvider>,
     );
@@ -141,6 +143,8 @@ describe('<DeckViewer /> lite-preset wrapper', () => {
           onCloseNotes={vi.fn()}
           onToggleNotes={vi.fn()}
           onCloseDeck={vi.fn()}
+          getSourceFile={() => null}
+          onRequestReload={vi.fn()}
         />
       </I18nProvider>,
     );
@@ -173,6 +177,8 @@ describe('<DeckViewer /> lite-preset wrapper', () => {
           onCloseNotes={vi.fn()}
           onToggleNotes={vi.fn()}
           onCloseDeck={vi.fn()}
+          getSourceFile={() => null}
+          onRequestReload={vi.fn()}
         />
       </I18nProvider>,
     );

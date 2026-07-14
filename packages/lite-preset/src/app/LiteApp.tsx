@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import {
   ExternalLink,
+  PencilOff,
   ShieldCheck,
   Sparkles,
   TriangleAlert,
@@ -8,6 +9,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import { loadDeck } from '@slidestage/core/deck/loadDeck';
+import { applySlidePatchesToHtml } from '@slidestage/core/deck/slidePatches';
 import {
   BASE_SANDBOX_TOKEN,
   normalizeCapabilities,
@@ -16,6 +18,7 @@ import {
 import {
   DeckLoadError,
   type DeckAssetTransport,
+  type LoadDeckOptions,
   type LoadedDeck,
   type TrustCapability,
 } from '@slidestage/core/deck/types';
@@ -26,6 +29,7 @@ import {
 import { isTauri } from '../desktop/env';
 import { runManualUpdateCheck } from '../desktop/manualUpdateCheck';
 import { useI18n } from '../i18n/I18nProvider';
+import { loadDeckEdits, type StoredDeckEdits } from '../persistence/editsStore';
 import { loadTrustGrant, saveTrustGrant } from '../persistence/trustStore';
 import { AudienceView } from '../viewer/AudienceView';
 import { DeckViewer } from '../viewer/DeckViewer';
@@ -46,6 +50,32 @@ interface PendingTrust {
    *   proceed on explicit consent (never a silent grant).
    */
   reason: 'declared' | 'size';
+  /** Source file, retained for edit-copy export / silent reload. */
+  file: File;
+  /** Stored text edits that failed to apply during this load. */
+  editFailures: number;
+}
+
+/**
+ * Build the load-time slide transform that applies locally-stored text
+ * edits (`slidestage-lite:edits:<fingerprint>`). Edits are hydrated once
+ * per load (the hook fires per slide) and failures are summed via
+ * `onFailed` so the shell can surface "N edits could not be applied".
+ */
+function makeEditsTransform(
+  onFailed: (count: number) => void,
+): NonNullable<LoadDeckOptions['transformSlideHtml']> {
+  let cache: { fingerprint: string; edits: StoredDeckEdits } | null = null;
+  return (html, { index, fingerprint }) => {
+    if (!cache || cache.fingerprint !== fingerprint) {
+      cache = { fingerprint, edits: loadDeckEdits(fingerprint) };
+    }
+    const patches = cache.edits[index];
+    if (!patches || patches.length === 0) return html;
+    const result = applySlidePatchesToHtml(html, patches);
+    if (result.failed > 0) onFailed(result.failed);
+    return result.html;
+  };
 }
 
 /**
@@ -76,7 +106,13 @@ export function LiteApp() {
   // `same-origin-storage` because it exceeded the inline budget.
   // null when not auto-elevated; a {bytes} formatted message otherwise.
   const [autoElevatedNotice, setAutoElevatedNotice] = useState<string | null>(null);
+  // Dismissible chip shown when stored text edits could not be applied
+  // to the loaded deck (selector/anchor mismatch after a deck change).
+  const [editsFailedNotice, setEditsFailedNotice] = useState<string | null>(null);
   const deckRef = useRef<LoadedDeck | null>(null);
+  // Original file of the currently-open deck. Kept so edit mode can
+  // silently reload the same bytes and export an edited copy.
+  const sourceFileRef = useRef<File | null>(null);
   const pendingTrustRef = useRef<PendingTrust | null>(null);
   // Lazily-resolved SW client. We cache the resolution so every
   // `openDeckFile` only awaits the registration once.
@@ -103,9 +139,10 @@ export function LiteApp() {
   const enterDeck = (
     loaded: LoadedDeck,
     granted: ReadonlyArray<TrustCapability>,
-    options: { autoElevatedFor?: 'size' } = {},
+    options: { autoElevatedFor?: 'size'; file: File; editFailures: number },
   ) => {
     deckRef.current?.revoke();
+    sourceFileRef.current = options.file;
     setIframeSandbox(sandboxTokensFor(granted));
     setDeck(loaded);
     setCurrentIndex(0);
@@ -118,6 +155,11 @@ export function LiteApp() {
     } else {
       setAutoElevatedNotice(null);
     }
+    setEditsFailedNotice(
+      options.editFailures > 0
+        ? tFormat('viewer.notice.editsFailed', { n: options.editFailures })
+        : null,
+    );
   };
 
   const getTransport = (): Promise<DeckAssetTransport | null> => {
@@ -127,30 +169,43 @@ export function LiteApp() {
     return transportPromiseRef.current;
   };
 
+  const buildLoadOptions = (
+    transport: DeckAssetTransport | null,
+    onEditApplyFailed: (count: number) => void,
+  ): LoadDeckOptions => ({
+    transport,
+    // Tauri WKWebView stalls ~30s per unreachable external CDN
+    // stylesheet before paint, so we drop them entirely there. On
+    // the Web we keep external <link rel="stylesheet"> tags but
+    // defer them to media="print" + onload swap (handled in
+    // rewriteHtml) so the deck paints immediately and CDN
+    // typography (Google Fonts, etc.) still upgrades the look as
+    // soon as the request lands.
+    stripExternalLinks: isTauri(),
+    // Web: skip data-URL inlining for oversized decks (their
+    // base64 cost crashes the renderer). Tauri has no SW, so we
+    // must always inline there. See loadDeck.ts → inlineMode for
+    // the full reasoning. The default budget (16 MiB raw) gives
+    // typical web-font decks plenty of headroom while still
+    // tripping on the known-bad CJK-mirror cases.
+    inlineMode: isTauri() ? 'always' : 'auto',
+    // Bake locally-stored text edits into every render flavor.
+    transformSlideHtml: makeEditsTransform(onEditApplyFailed),
+  });
+
   const openDeckFile = async (file: File) => {
     setStatus('loading');
     setError(null);
 
     try {
       const transport = await getTransport();
-      // Tauri WKWebView stalls ~30s per unreachable external CDN
-      // stylesheet before paint, so we drop them entirely there. On
-      // the Web we keep external <link rel="stylesheet"> tags but
-      // defer them to media="print" + onload swap (handled in
-      // rewriteHtml) so the deck paints immediately and CDN
-      // typography (Google Fonts, etc.) still upgrades the look as
-      // soon as the request lands.
-      const nextDeck = await loadDeck(file, {
-        transport,
-        stripExternalLinks: isTauri(),
-        // Web: skip data-URL inlining for oversized decks (their
-        // base64 cost crashes the renderer). Tauri has no SW, so we
-        // must always inline there. See loadDeck.ts → inlineMode for
-        // the full reasoning. The default budget (16 MiB raw) gives
-        // typical web-font decks plenty of headroom while still
-        // tripping on the known-bad CJK-mirror cases.
-        inlineMode: isTauri() ? 'always' : 'auto',
-      });
+      let editFailures = 0;
+      const nextDeck = await loadDeck(
+        file,
+        buildLoadOptions(transport, (count) => {
+          editFailures += count;
+        }),
+      );
       // Drop any previously-cached deck bundles from the worker so a
       // long session does not accumulate stale assets in CacheStorage.
       if (transport) {
@@ -173,27 +228,43 @@ export function LiteApp() {
         const sizeCaps: TrustCapability[] = ['same-origin-storage'];
         const remembered = loadTrustGrant(nextDeck.fingerprint, sizeCaps);
         if (remembered) {
-          enterDeck(nextDeck, remembered.capabilities, { autoElevatedFor: 'size' });
+          enterDeck(nextDeck, remembered.capabilities, {
+            autoElevatedFor: 'size',
+            file,
+            editFailures,
+          });
           return;
         }
         pendingTrustRef.current?.deck.revoke();
-        setPendingTrust({ deck: nextDeck, capabilities: sizeCaps, reason: 'size' });
+        setPendingTrust({
+          deck: nextDeck,
+          capabilities: sizeCaps,
+          reason: 'size',
+          file,
+          editFailures,
+        });
         return;
       }
 
       if (requiredCaps.length === 0) {
-        enterDeck(nextDeck, []);
+        enterDeck(nextDeck, [], { file, editFailures });
         return;
       }
 
       const remembered = loadTrustGrant(nextDeck.fingerprint, requiredCaps);
       if (remembered) {
-        enterDeck(nextDeck, remembered.capabilities);
+        enterDeck(nextDeck, remembered.capabilities, { file, editFailures });
         return;
       }
 
       pendingTrustRef.current?.deck.revoke();
-      setPendingTrust({ deck: nextDeck, capabilities: requiredCaps, reason: 'declared' });
+      setPendingTrust({
+        deck: nextDeck,
+        capabilities: requiredCaps,
+        reason: 'declared',
+        file,
+        editFailures,
+      });
     } catch (loadError) {
       const message =
         loadError instanceof DeckLoadError
@@ -208,15 +279,59 @@ export function LiteApp() {
     }
   };
 
+  // Silent in-place reload after an edit session: same bytes → same
+  // fingerprint → trust grants, annotations and notes are untouched, but
+  // freshly transformed slide HTML reaches every render surface. Keeps
+  // the current slide index and sandbox. The old deck is revoked BEFORE
+  // the new load so its fire-and-forget SW unpublish (same deckId!) is
+  // queued ahead of the new publish and cannot delete the fresh bucket.
+  const reloadCurrentDeck = async () => {
+    const file = sourceFileRef.current;
+    const current = deckRef.current;
+    if (!file || !current) return;
+    try {
+      current.revoke();
+    } catch {
+      // ignore
+    }
+    deckRef.current = null;
+    try {
+      const transport = await getTransport();
+      let editFailures = 0;
+      const nextDeck = await loadDeck(
+        file,
+        buildLoadOptions(transport, (count) => {
+          editFailures += count;
+        }),
+      );
+      setDeck(nextDeck);
+      setEditsFailedNotice(
+        editFailures > 0
+          ? tFormat('viewer.notice.editsFailed', { n: editFailures })
+          : null,
+      );
+    } catch (reloadError) {
+      // Same bytes just loaded moments ago, so this is exceptional
+      // (storage yanked mid-session). Fall back to the landing page.
+      setDeck(null);
+      sourceFileRef.current = null;
+      setError(
+        reloadError instanceof DeckLoadError
+          ? `${reloadError.code}: ${reloadError.message}`
+          : t('errors.loadDeckFallback'),
+      );
+    }
+  };
+
   const handleTrustGrant = () => {
     const pending = pendingTrust;
     if (!pending) return;
     saveTrustGrant(pending.deck.fingerprint, pending.capabilities);
-    enterDeck(
-      pending.deck,
-      pending.capabilities,
-      pending.reason === 'size' ? { autoElevatedFor: 'size' } : {},
-    );
+    enterDeck(pending.deck, pending.capabilities, {
+      ...(pending.reason === 'size' ? { autoElevatedFor: 'size' as const } : {}),
+      file: pending.file,
+      editFailures: pending.editFailures,
+    });
   };
 
   const handleTrustCancel = () => {
@@ -450,6 +565,26 @@ export function LiteApp() {
             </button>
           </aside>
         ) : null}
+        {editsFailedNotice ? (
+          <aside
+            className="auto-elevated-notice edits-failed-notice"
+            role="status"
+            aria-live="polite"
+            data-testid="edits-failed-notice"
+          >
+            <span className="auto-elevated-notice-icon" aria-hidden>
+              <PencilOff size={16} />
+            </span>
+            <span className="auto-elevated-notice-text">{editsFailedNotice}</span>
+            <button
+              type="button"
+              className="auto-elevated-notice-dismiss"
+              onClick={() => setEditsFailedNotice(null)}
+            >
+              {t('viewer.notice.dismiss')}
+            </button>
+          </aside>
+        ) : null}
         {error ? (
           // A deck is already on screen, so the landing page's error alert
           // is unreachable — without this notice a failed open (desktop
@@ -486,12 +621,16 @@ export function LiteApp() {
           onToggleNotes={() => setShowNotes((value) => !value)}
           onCloseDeck={() => {
             setDeck(null);
+            sourceFileRef.current = null;
             setIframeSandbox(BASE_SANDBOX_TOKEN);
             setAutoElevatedNotice(null);
+            setEditsFailedNotice(null);
             // Don't carry a stale in-deck failure notice onto the landing
             // page's alert slot.
             setError(null);
           }}
+          getSourceFile={() => sourceFileRef.current}
+          onRequestReload={reloadCurrentDeck}
         />
         {pendingTrust ? (
           <TrustPrompt

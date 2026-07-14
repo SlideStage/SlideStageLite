@@ -27,15 +27,19 @@
     "./app/readFolderInput": "./src/app/readFolderInput.ts",
     "./viewer/DeckViewer": "./src/viewer/DeckViewer.tsx",
     "./viewer/AudienceView": "./src/viewer/AudienceView.tsx",
+    "./viewer/useDeckEdits": "./src/viewer/useDeckEdits.ts",
     "./export/useDeckPdfExport": "./src/export/useDeckPdfExport.ts",
     "./export/slidePdfCapture": "./src/export/slidePdfCapture.ts",
     "./export/buildSlidesPdf": "./src/export/buildSlidesPdf.ts",
     "./export/downloadPdf": "./src/export/downloadPdf.ts",
+    "./export/downloadStage": "./src/export/downloadStage.ts",
+    "./export/exportEditedStage": "./src/export/exportEditedStage.ts",
     "./i18n/I18nProvider": "./src/i18n/I18nProvider.tsx",
     "./i18n/detect": "./src/i18n/detect.ts",
     "./i18n/locales": "./src/i18n/locales.ts",
     "./i18n/messages": "./src/i18n/messages.ts",
     "./persistence/annotationStore": "./src/persistence/annotationStore.ts",
+    "./persistence/editsStore": "./src/persistence/editsStore.ts",
     "./persistence/legacyMigration": "./src/persistence/legacyMigration.ts",
     "./persistence/notesStore": "./src/persistence/notesStore.ts",
     "./persistence/trustStore": "./src/persistence/trustStore.ts",
@@ -158,6 +162,11 @@
         "import": "./dist/viewer/AudienceView.js",
         "default": "./dist/viewer/AudienceView.js"
       },
+      "./viewer/useDeckEdits": {
+        "types": "./dist/viewer/useDeckEdits.d.ts",
+        "import": "./dist/viewer/useDeckEdits.js",
+        "default": "./dist/viewer/useDeckEdits.js"
+      },
       "./export/useDeckPdfExport": {
         "types": "./dist/export/useDeckPdfExport.d.ts",
         "import": "./dist/export/useDeckPdfExport.js",
@@ -177,6 +186,16 @@
         "types": "./dist/export/downloadPdf.d.ts",
         "import": "./dist/export/downloadPdf.js",
         "default": "./dist/export/downloadPdf.js"
+      },
+      "./export/downloadStage": {
+        "types": "./dist/export/downloadStage.d.ts",
+        "import": "./dist/export/downloadStage.js",
+        "default": "./dist/export/downloadStage.js"
+      },
+      "./export/exportEditedStage": {
+        "types": "./dist/export/exportEditedStage.d.ts",
+        "import": "./dist/export/exportEditedStage.js",
+        "default": "./dist/export/exportEditedStage.js"
       },
       "./i18n/I18nProvider": {
         "types": "./dist/i18n/I18nProvider.d.ts",
@@ -202,6 +221,11 @@
         "types": "./dist/persistence/annotationStore.d.ts",
         "import": "./dist/persistence/annotationStore.js",
         "default": "./dist/persistence/annotationStore.js"
+      },
+      "./persistence/editsStore": {
+        "types": "./dist/persistence/editsStore.d.ts",
+        "import": "./dist/persistence/editsStore.js",
+        "default": "./dist/persistence/editsStore.js"
       },
       "./persistence/legacyMigration": {
         "types": "./dist/persistence/legacyMigration.d.ts",

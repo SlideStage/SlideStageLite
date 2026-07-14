@@ -170,7 +170,10 @@ export function AudienceView({
     role: 'audience',
     hostRef: audienceRootRef,
     currentIndex: presentation.currentIndex,
-    reacquireKey: deck?.fingerprint ?? null,
+    // Deck object identity, not fingerprint: a silently-reloaded deck
+    // (text edits committed) keeps its fingerprint but remounts iframes,
+    // so the bridge must re-acquire the fresh contentWindow.
+    reacquireKey: deck ?? null,
     targetRuntime: presentation.runtime ?? null,
   });
   const bridgeRef = useRef(bridge);

@@ -17,8 +17,13 @@ import type {
   SelectionRect,
   SlideRuntimeState,
 } from '../presenter/usePresentationSync';
+import type { SlideEdit } from '../presenter/slideRuntime';
 import { useSlideBridge } from '../presenter/useSlideBridge';
-import { DeckViewerHeader, type DeckViewerExport } from './DeckViewerHeader';
+import {
+  DeckViewerHeader,
+  type DeckViewerEditing,
+  type DeckViewerExport,
+} from './DeckViewerHeader';
 import { NotesPanel } from './NotesPanel';
 import { Overview } from './Overview';
 import { PresenterSideRail } from './PresenterSideRail';
@@ -28,9 +33,19 @@ import { useAudiencePointerTracking } from './useAudiencePointerTracking';
 import { useDeckViewerResize } from './useDeckViewerResize';
 import { chooseUseSrcdoc, strokeHitTest } from './viewMath';
 
-export type { DeckViewerExport } from './DeckViewerHeader';
+export type { DeckViewerEditing, DeckViewerExport } from './DeckViewerHeader';
 
 export type DeckViewerLayoutMode = 'presenter' | 'single';
+
+/**
+ * Slide text editing integration for the full viewer: the header controls
+ * (see {@link DeckViewerEditing}) plus the edit-commit sink that the host
+ * preset persists as patches.
+ */
+export interface DeckViewerEditingApi extends DeckViewerEditing {
+  /** Called when the active slide commits a text edit. */
+  onEdit: (slideIndex: number, edit: SlideEdit) => void;
+}
 
 export interface DeckViewerLayout {
   mode: DeckViewerLayoutMode;
@@ -123,6 +138,12 @@ export interface DeckViewerProps {
   exportPdf?: DeckViewerExport;
 
   /**
+   * In-place slide text editing integration. Pass `undefined` to hide
+   * the edit controls entirely (e.g. audience-only embeds).
+   */
+  editing?: DeckViewerEditingApi;
+
+  /**
    * Optional slot rendered as a sibling of the layout body. Lite-preset
    * uses this to mount the Tauri MonitorPicker only when needed without
    * leaking the desktop concept into the UI layer.
@@ -158,6 +179,7 @@ export function DeckViewer(props: DeckViewerProps) {
     isTauriHost,
     audience,
     exportPdf,
+    editing,
     slots,
   } = props;
 
@@ -206,15 +228,25 @@ export function DeckViewer(props: DeckViewerProps) {
   const onInputEventRef = useRef(audience?.onInputEvent);
   onInputEventRef.current = audience?.onInputEvent;
 
+  const onEditRef = useRef(editing?.onEdit);
+  onEditRef.current = editing?.onEdit;
+  const currentIndexRef = useRef(currentIndex);
+  currentIndexRef.current = currentIndex;
+
   const bridge = useSlideBridge({
     role: 'presenter',
     hostRef: stageHostRef,
     currentIndex,
-    reacquireKey: deck.fingerprint,
+    // Deck object identity, not fingerprint: a silent reload after edit
+    // mode (same bytes → same fingerprint) still remounts the iframes,
+    // and the bridge must re-acquire the fresh contentWindow.
+    reacquireKey: deck,
     forwardEvents: true,
+    editMode: editing?.active ?? false,
     onRuntimeReport: setRuntime,
     onInputEvent: (event) => onInputEventRef.current?.(event),
     onSelection: setSelectionRects,
+    onEdit: (edit) => onEditRef.current?.(currentIndexRef.current, edit),
   });
   const bridgeRef = useRef(bridge);
   bridgeRef.current = bridge;
@@ -433,6 +465,12 @@ export function DeckViewer(props: DeckViewerProps) {
     />
   ) : null;
 
+  const editHint = editing?.active ? (
+    <div className="edit-mode-hint" role="status" data-testid="edit-mode-hint">
+      {t('viewer.editing.hint')}
+    </div>
+  ) : null;
+
   if (layout.mode === 'single') {
     return (
       <section
@@ -441,6 +479,7 @@ export function DeckViewer(props: DeckViewerProps) {
         aria-label={t('viewer.aria.deckViewer')}
         data-testid="deck-viewer"
         data-view-mode="single"
+        data-editing={editing?.active ? 'true' : undefined}
       >
         <DeckViewerHeader
           variant="single"
@@ -455,6 +494,7 @@ export function DeckViewer(props: DeckViewerProps) {
           showOverview={showOverview}
           onToggleOverview={onToggleOverview}
           exportPdf={exportPdf}
+          editing={editing}
           showNotes={showNotes}
           onToggleNotes={onToggleNotes}
           onSwitchToPresenter={() => layout.onModeChange('presenter')}
@@ -483,6 +523,7 @@ export function DeckViewer(props: DeckViewerProps) {
           ) : null}
         </div>
 
+        {editHint}
         {overviewOverlay}
         {slots?.overlay}
       </section>
@@ -496,6 +537,7 @@ export function DeckViewer(props: DeckViewerProps) {
       aria-label={t('viewer.aria.deckViewer')}
       data-testid="presenter-view"
       data-view-mode="presenter"
+      data-editing={editing?.active ? 'true' : undefined}
       style={sectionStyle}
     >
       <DeckViewerHeader
@@ -511,6 +553,7 @@ export function DeckViewer(props: DeckViewerProps) {
         showOverview={showOverview}
         onToggleOverview={onToggleOverview}
         exportPdf={exportPdf}
+        editing={editing}
         audienceConnected={audience?.connected ?? false}
         onOpenAudienceWindow={audience ? () => void audience.onOpenWindow() : undefined}
       />
@@ -559,6 +602,7 @@ export function DeckViewer(props: DeckViewerProps) {
         onChange={handleNotesChange}
       />
 
+      {editHint}
       {overviewOverlay}
       {slots?.overlay}
     </section>

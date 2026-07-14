@@ -736,3 +736,66 @@ describe('loadDeck inlineMode budget', () => {
     expect(deck.totalAssetBytes).toBeLessThan(16 * 1024 * 1024);
   });
 });
+
+describe('loadDeck transformSlideHtml hook', () => {
+  it('is called once per slide with index, path, and fingerprint', async () => {
+    const transport = makeRecordingTransport();
+    const calls: Array<{ index: number; path: string; fingerprint: string }> = [];
+    const deck = await loadDeck(fixtureFile(), {
+      transport,
+      transformSlideHtml: (html, context) => {
+        calls.push({ ...context });
+        return html;
+      },
+    });
+
+    expect(calls).toEqual([
+      { index: 0, path: 'slides/01-cover.html', fingerprint: deck.fingerprint },
+      { index: 1, path: 'slides/02-two.html', fingerprint: deck.fingerprint },
+    ]);
+  });
+
+  it('feeds the transformed HTML into BOTH the srcdoc and the published flavor', async () => {
+    const transport = makeRecordingTransport();
+    const deck = await loadDeck(fixtureFile(), {
+      transport,
+      transformSlideHtml: (html, { index }) =>
+        index === 0 ? html.replace('<h1>Hello</h1>', '<h1>Patched hello</h1>') : html,
+    });
+
+    // srcdoc flavor (data:-inlined) carries the transform.
+    expect(deck.slideHtml[0]).toContain('Patched hello');
+    expect(deck.slideHtml[1]).toContain('Second');
+
+    // Transport-published flavor (virtual URLs) carries it too.
+    const slideOne = transport
+      .publishedFor(deck.deckId)
+      .find((asset) => asset.path === 'slides/01-cover.html');
+    expect(slideOne).toBeDefined();
+    expect(new TextDecoder().decode(slideOne!.bytes)).toContain('Patched hello');
+  });
+
+  it('does not alter the fingerprint (patches never touch archive bytes)', async () => {
+    const transport = makeRecordingTransport();
+    const plain = await loadDeck(fixtureFile(), { transport });
+    const transformed = await loadDeck(fixtureFile(), {
+      transport,
+      transformSlideHtml: (html) => html.replace('Hello', 'Reworded'),
+    });
+    expect(transformed.fingerprint).toBe(plain.fingerprint);
+    expect(transformed.deckId).toBe(plain.deckId);
+  });
+
+  it('fails open: a throwing transform leaves the slide untouched', async () => {
+    const transport = makeRecordingTransport();
+    const deck = await loadDeck(fixtureFile(), {
+      transport,
+      transformSlideHtml: (html, { index }) => {
+        if (index === 0) throw new Error('boom');
+        return html.replace('Second', 'Second (patched)');
+      },
+    });
+    expect(deck.slideHtml[0]).toContain('Hello');
+    expect(deck.slideHtml[1]).toContain('Second (patched)');
+  });
+});

@@ -11,6 +11,7 @@ import {
   type LoadedDeck,
   type Manifest,
   type StageAsset,
+  type TransformSlideHtmlContext,
 } from './types';
 
 // HTML body served when the inline-data-URL pass was skipped (because
@@ -242,17 +243,41 @@ function createSlideContents(
   virtualUrlFor: ((path: string) => string) | null,
   objectUrls: string[],
   stripExternalLinks: boolean,
+  transformSlideHtml:
+    | ((html: string, context: TransformSlideHtmlContext) => string)
+    | null,
+  fingerprint: string,
 ): SlideContent[] {
   const textLookup = makeTextLookup(entries);
 
-  return manifest.slides.map((slide) => {
+  return manifest.slides.map((slide, slideIndex) => {
     const path = normalizePackagePath(slide.file);
     const bytes = entries.get(path);
     if (!bytes) {
       throw new DeckLoadError('E_MISSING_SLIDE', `Slide file is missing: ${slide.file}`);
     }
 
-    const html = decodeUtf8(bytes, path);
+    const rawHtml = decodeUtf8(bytes, path);
+
+    // Host-supplied transform (e.g. Lite's local text edits). Applied to
+    // the raw HTML before asset rewriting + agent injection so BOTH
+    // render flavors (srcdoc and transport-published) carry the result.
+    // Fail-open: a throwing transform must never brick deck loading.
+    let html = rawHtml;
+    if (transformSlideHtml) {
+      try {
+        const transformed = transformSlideHtml(rawHtml, {
+          index: slideIndex,
+          path,
+          fingerprint,
+        });
+        if (typeof transformed === 'string' && transformed.length > 0) {
+          html = transformed;
+        }
+      } catch {
+        html = rawHtml;
+      }
+    }
 
     // srcdoc flavor: every package-internal subresource inlined as
     // data:. Self-contained so it works in opaque-origin iframes
@@ -470,6 +495,8 @@ export async function loadDeck(
       virtualUrlFor,
       objectUrls,
       stripExternalLinks,
+      options.transformSlideHtml ?? null,
+      fingerprint,
     );
 
     if (transport) {
